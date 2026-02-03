@@ -1,0 +1,49 @@
+<?xml version="1.0" ?>
+<robot name="lift" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+
+  <link name="lift_base_link">
+    <!-- visual -->
+    <visual>
+      <geometry>
+        <mesh filename="package://keti_assist_ai_robot_description/meshes/lift/visual/lift_base.stl"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </visual>
+
+    <!-- collision -->
+    <collision>
+      <geometry>
+        <mesh filename="package://keti_assist_ai_robot_description/meshes/lift/visual/lift_base.stl"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </collision>
+  </link>
+
+  <link name="lift_link">
+    <!-- visual -->
+    <visual>
+      <geometry>
+        <mesh filename="package://keti_assist_ai_robot_description/meshes/lift/visual/lift_link.stl"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </visual>
+
+    <!-- collision -->
+    <collision>
+      <geometry>
+        <mesh filename="package://keti_assist_ai_robot_description/meshes/lift/visual/lift_link.stl"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </collision>
+  </link>
+
+  <joint name="lift_joint" type="prismatic">
+    <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+    <parent link="lift_base_link"/>
+    <child link="lift_link"/>
+    <axis xyz="0.0 0.0 1.0"/>
+    <limit upper="0.8" lower="0.0" effort="100" velocity="100"/>
+  </joint>
+
+</robot>
