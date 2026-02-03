@@ -1,0 +1,57 @@
+##############################
+# C++
+##############################
+
+## Prerequisites
+*.dpp
+
+## Compiled Object files
+*.slo
+
+## Fortran module files
+*.smod
+
+## Compiled Static libraries
+*.lai
+
+
+##############################
+# Python
+##############################
+
+## Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+## Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+
+### (reserved) lib/
+### (reserved) lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+##############################
+# CMAKE
+##############################
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
