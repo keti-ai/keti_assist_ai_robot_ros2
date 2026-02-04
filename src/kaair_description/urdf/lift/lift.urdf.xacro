@@ -2,11 +2,14 @@
 <robot name="lift" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
 
+  <xacro:property name="m_to_mm" value="0.001 0.001 0.001"/>
+  <xacro:property name="mesh_path" value="package://kaair_description/meshes/"/>
+
   <link name="lift_base_link">
     <!-- visual -->
     <visual>
       <geometry>
-        <mesh filename="package://keti_assist_ai_robot_description/meshes/lift/visual/lift_base.stl"/>
+        <mesh filename="${mesh_path}lift/visual/lift_base.stl" scale="${m_to_mm}"/>
       </geometry>
       <origin xyz="0 0 0" rpy="0 0 0"/>
     </visual>
@@ -14,7 +17,7 @@
     <!-- collision -->
     <collision>
       <geometry>
-        <mesh filename="package://keti_assist_ai_robot_description/meshes/lift/visual/lift_base.stl"/>
+        <mesh filename="${mesh_path}lift/visual/lift_base.stl" scale="${m_to_mm}"/>
       </geometry>
       <origin xyz="0 0 0" rpy="0 0 0"/>
     </collision>
@@ -24,7 +27,7 @@
     <!-- visual -->
     <visual>
       <geometry>
-        <mesh filename="package://keti_assist_ai_robot_description/meshes/lift/visual/lift_link.stl"/>
+        <mesh filename="${mesh_path}lift/visual/lift_link.stl" scale="${m_to_mm}"/>
       </geometry>
       <origin xyz="0 0 0" rpy="0 0 0"/>
     </visual>
@@ -32,7 +35,7 @@
     <!-- collision -->
     <collision>
       <geometry>
-        <mesh filename="package://keti_assist_ai_robot_description/meshes/lift/visual/lift_link.stl"/>
+        <mesh filename="${mesh_path}lift/visual/lift_link.stl" scale="${m_to_mm}"/>
       </geometry>
       <origin xyz="0 0 0" rpy="0 0 0"/>
     </collision>

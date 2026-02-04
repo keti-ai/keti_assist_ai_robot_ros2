@@ -1,0 +1,7 @@
+{
+    "names": {
+        "xarm_sdk": {
+            "cmake-args": ["-DCMAKE_BUILD_TYPE=Debug"]
+        },
+    }
+}

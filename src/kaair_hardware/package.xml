@@ -1,15 +1,18 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>keti_assist_ai_robot_description</name>
+  <name>kaair_hardware</name>
   <version>0.0.0</version>
-  <description>TRobot description package for Keti Assist AI robot</description>
-  <maintainer email="seomi@keti.re.kr">seomi</maintainer>
+  <description>TODO: Package description</description>
+  <maintainer email="smi@todo.todo">smi</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>xacro</depend>
+  <depend>hardware_interface</depend>
+  <depend>pluginlib</depend>
+  <depend>rclcpp</depend>
+  <depend>pluginlib_cmake_python</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

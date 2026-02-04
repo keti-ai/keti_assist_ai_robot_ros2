@@ -1,57 +1,74 @@
-##############################
-# C++
-##############################
+# ==========================================
+# ROS 2 (colcon) 관련 빌드 결과물
+# ==========================================
+build/
+install/
+log/
 
-## Prerequisites
-*.dpp
+# colcon에서 생성하는 기타 파일들
+.colcon/
 
-## Compiled Object files
-*.slo
-
-## Fortran module files
-*.smod
-
-## Compiled Static libraries
-*.lai
-
-
-##############################
-# Python
-##############################
-
-## Byte-compiled / optimized / DLL files
+# ==========================================
+# Python 관련
+# ==========================================
 __pycache__/
 *.py[cod]
 *$py.class
-
-## Distribution / packaging
+*.so
 .Python
-build/
+env/
+build_python/
 develop-eggs/
 dist/
 downloads/
 eggs/
 .eggs/
-
-### (reserved) lib/
-### (reserved) lib64/
+lib/
+lib64/
 parts/
 sdist/
 var/
 wheels/
 *.egg-info/
 .installed.cfg
-*.egg
-MANIFEST
+.pip-internal-config
+.pytest_cache/
 
-##############################
-# CMAKE
-##############################
-CMakeCache.txt
-CMakeFiles
-CMakeScripts
-Testing
-cmake_install.cmake
-install_manifest.txt
-compile_commands.json
-CTestTestfile.cmake
+# ==========================================
+# C++ / CMake 관련
+# ==========================================
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.exe
+*.out
+*.app
+*.i
+*.s
+
+# ==========================================
+# IDE 설정 파일 (디버깅 관련)
+# ==========================================
+
+# VS Code
+.vscode/
+# *주의*: 만약 팀원들과 launch.json(디버그 설정)을 공유해야 한다면 
+# 위 줄을 주석 처리하고 아래처럼 개별 설정하세요.
+# .vscode/settings.json
+# .vscode/tasks.json
+
+# CLion (JetBrains)
+.idea/
+cmake-build-*/
+
+# ==========================================
+# OS 및 시스템 임시 파일
+# ==========================================
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.bak
