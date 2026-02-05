@@ -1,0 +1,32 @@
+<?xml version="1.0" ?>
+<robot name="kaair" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:arg name="lift_lower_limit" default="0.100"/>
+  <xacro:arg name="lift_upper_limit" default="0.600"/>
+
+  <xacro:include filename="$(find kaair_description)/urdf/lift/lift.urdf.xacro"/>
+  
+  <xacro:lift_module 
+    min_h="$(arg lift_lower_limit)" 
+    max_h="$(arg lift_upper_limit)" 
+  />
+
+
+  <xacro:include filename="$(find kaair_description)/urdf/head/head.urdf.xacro"/>
+
+  <!-- <joint name="lift_to_arm_fix_joint" type="fixed">
+    <origin xyz="0.2415 0.0 0.0" rpy="0 0 0"/>
+    <parent link="lift_link"/>
+    <child link="world"/>
+  </joint> -->
+
+  <joint name="lift_to_head_fix_joint" type="fixed">
+    <origin xyz="0.0 0.0 0.859" rpy="0 0 0"/>
+    <parent link="lift_base_link"/>
+    <child link="head_base"/>
+  </joint>
+
+
+
+
+</robot>

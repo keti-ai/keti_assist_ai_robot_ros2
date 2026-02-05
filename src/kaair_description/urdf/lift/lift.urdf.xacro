@@ -5,48 +5,63 @@
   <xacro:property name="m_to_mm" value="0.001 0.001 0.001"/>
   <xacro:property name="mesh_path" value="package://kaair_description/meshes/"/>
 
-  <link name="lift_base_link">
-    <!-- visual -->
-    <visual>
-      <geometry>
-        <mesh filename="${mesh_path}lift/visual/lift_base.stl" scale="${m_to_mm}"/>
-      </geometry>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-    </visual>
+  <xacro:arg name="lift_lower_limit" default="0.100"/>
+  <xacro:arg name="lift_upper_limit" default="0.600"/>
 
-    <!-- collision -->
-    <collision>
-      <geometry>
-        <mesh filename="${mesh_path}lift/visual/lift_base.stl" scale="${m_to_mm}"/>
-      </geometry>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-    </collision>
-  </link>
+  <xacro:macro name="lift_module" params="min_h max_h">
 
-  <link name="lift_link">
-    <!-- visual -->
-    <visual>
-      <geometry>
-        <mesh filename="${mesh_path}lift/visual/lift_link.stl" scale="${m_to_mm}"/>
-      </geometry>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-    </visual>
+    <link name="lift_base_link">
+      <!-- visual -->
+      <visual>
+        <geometry>
+          <mesh filename="${mesh_path}lift/visual/lift_base.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </visual>
 
-    <!-- collision -->
-    <collision>
-      <geometry>
-        <mesh filename="${mesh_path}lift/visual/lift_link.stl" scale="${m_to_mm}"/>
-      </geometry>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-    </collision>
-  </link>
+      <!-- collision -->
+      <collision>
+        <geometry>
+          <mesh filename="${mesh_path}lift/collision/lift_base.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </collision>
+    </link>
 
-  <joint name="lift_joint" type="prismatic">
-    <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
-    <parent link="lift_base_link"/>
-    <child link="lift_link"/>
-    <axis xyz="0.0 0.0 1.0"/>
-    <limit upper="0.8" lower="0.0" effort="100" velocity="100"/>
-  </joint>
+    <link name="lift_link">
+      <!-- visual -->
+      <visual>
+        <geometry>
+          <mesh filename="${mesh_path}lift/visual/lift_link.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </visual>
+
+      <!-- collision -->
+      <collision>
+        <geometry>
+          <mesh filename="${mesh_path}lift/collision/lift_link.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </collision>
+    </link>
+
+    <joint name="lift_joint" type="prismatic">
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <parent link="lift_base_link"/>
+      <child link="lift_link"/>
+      <axis xyz="0.0 0.0 1.0"/>
+      <limit 
+        upper="$(arg lift_upper_limit)"
+        lower="$(arg lift_lower_limit)"
+        effort="100" 
+        velocity="100"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:lift_module 
+    min_h="$(arg lift_lower_limit)" 
+    max_h="$(arg lift_upper_limit)" 
+  />
 
 </robot>
