@@ -46,6 +46,9 @@
       </collision>
     </link>
 
+    <link name="arm_base">
+    </link>
+
     <joint name="lift_joint" type="prismatic">
       <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
       <parent link="lift_base_link"/>
@@ -54,14 +57,17 @@
       <limit 
         upper="$(arg lift_upper_limit)"
         lower="$(arg lift_lower_limit)"
-        effort="100" 
-        velocity="100"/>
+        effort="700" 
+        velocity="0.34"/>
     </joint>
+
+    <joint name="lift_to_arm_fix_joint" type="fixed">
+      <origin xyz="0.2415 0.0 0.0" rpy="0 0 0"/>
+      <parent link="lift_link"/>
+      <child link="arm_base"/>
+    </joint>
+
   </xacro:macro>
 
-  <xacro:lift_module 
-    min_h="$(arg lift_lower_limit)" 
-    max_h="$(arg lift_upper_limit)" 
-  />
 
 </robot>

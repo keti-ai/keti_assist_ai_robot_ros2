@@ -1,0 +1,16 @@
+/**:
+  ros__parameters:
+    # URDF 생성용 파라미터 (xacro 인자로 전달될 값)
+    robot_description_configs:
+      lift_lower_limit: 0.050
+      lift_upper_limit: 0.550
+
+    # 컨트롤러 및 하드웨어 포트 설정 (나중에 사용)
+    lift_controller:
+      ros__parameters:
+        joint: lift_joint
+        interface_name: position
+    
+    hardware_interface:
+      lift:
+        serial_port: "/dev/ttyLift"

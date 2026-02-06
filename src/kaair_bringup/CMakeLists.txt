@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(kaair_hardware)
+project(kaair_bringup)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -7,38 +7,15 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-find_package(hardware_interface REQUIRED)
-find_package(pluginlib REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(rclcpp_lifecycle REQUIRED)
+find_package(kaair_description REQUIRED)
+find_package(kaair_hardware REQUIRED)
 
-find_package(dynamixel_sdk REQUIRED)
-
-# 2. 라이브러리 생성 (공유 라이브러리 SHARED 필수)
-add_library(kaair_hardware SHARED
-  src/head/head_hw_interface.cpp
+# 설치 규칙: config, launch, rviz 폴더 전체를 share/PROJECT_NAME 디렉토리로 복사
+install(DIRECTORY
+  config
+  launch
+  DESTINATION share/${PROJECT_NAME}
 )
-
-# 3. 인클루드 경로 설정
-target_include_directories(kaair_hardware PRIVATE
-  include
-)
-
-ament_target_dependencies(kaair_hardware
-  hardware_interface
-  pluginlib
-  rclcpp
-  dynamixel_sdk
-)
-
-# 플러그인 등록 XML 파일 (파일명 확인 필수)
-pluginlib_export_plugin_description_file(
-  hardware_interface 
-  hw_plugins.xml
-)
-
-install(TARGETS kaair_hardware
-  DESTINATION lib)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

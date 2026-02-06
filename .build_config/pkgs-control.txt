@@ -1,2 +1,2 @@
 xarm_moveit_config
-kaair_description
+kaair_bringup

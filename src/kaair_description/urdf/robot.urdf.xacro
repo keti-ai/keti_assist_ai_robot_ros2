@@ -1,30 +1,55 @@
 <?xml version="1.0" ?>
 <robot name="kaair" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
+  <xacro:arg name="mode" default="robot"/>
   <xacro:arg name="lift_lower_limit" default="0.100"/>
-  <xacro:arg name="lift_upper_limit" default="0.600"/>
+  <xacro:arg name="lift_upper_limit" default="0.700"/>
 
-  <xacro:include filename="$(find kaair_description)/urdf/lift/lift.urdf.xacro"/>
+  <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'lift'}">
+    <xacro:include filename="$(find kaair_description)/urdf/lift/lift.urdf.xacro"/>
+    <xacro:lift_module 
+      min_h="$(arg lift_lower_limit)" 
+      max_h="$(arg lift_upper_limit)" 
+    />
+  </xacro:if>
+
+  <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'head'}">
+    <xacro:include filename="$(find kaair_description)/urdf/head/head.urdf.xacro"/>
+    <xacro:include filename="$(find kaair_description)/urdf/head/head.ros2_control.xacro"/>
+
+    <xacro:head_ros2_control 
+      name="HeadHardware" 
+      usb_port="/dev/ttyHead" 
+      baud_rate="57600" 
+    />
+    <xacro:if value="${'$(arg mode)' == 'robot'}">
+      <joint name="lift_to_head_fix_joint" type="fixed">
+        <origin xyz="0.0 0.0 0.859" rpy="0 0 0"/>
+        <parent link="lift_base_link"/>
+        <child link="head_base"/>
+      </joint>
+    </xacro:if>
+    
+  </xacro:if>
+
+  <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'arm'}">
+    <xacro:unless value="${'$(arg mode)' == 'robot'}">
+      <link name="arm_base"/>
+    </xacro:unless>
+    
+    <xacro:include filename="$(find xarm_description)/urdf/xarm_device_macro.xacro"/>
+
+    <xacro:xarm_device 
+      prefix=""
+      hw_ns="xarm"
+      dof="7"
+      add_gripper="false"
+      attach_to="arm_base"
+      attach_xyz="0 0 0"
+      attach_rpy="0 0 0"
+    />
   
-  <xacro:lift_module 
-    min_h="$(arg lift_lower_limit)" 
-    max_h="$(arg lift_upper_limit)" 
-  />
-
-
-  <xacro:include filename="$(find kaair_description)/urdf/head/head.urdf.xacro"/>
-
-  <!-- <joint name="lift_to_arm_fix_joint" type="fixed">
-    <origin xyz="0.2415 0.0 0.0" rpy="0 0 0"/>
-    <parent link="lift_link"/>
-    <child link="world"/>
-  </joint> -->
-
-  <joint name="lift_to_head_fix_joint" type="fixed">
-    <origin xyz="0.0 0.0 0.859" rpy="0 0 0"/>
-    <parent link="lift_base_link"/>
-    <child link="head_base"/>
-  </joint>
+  </xacro:if>
 
 
 

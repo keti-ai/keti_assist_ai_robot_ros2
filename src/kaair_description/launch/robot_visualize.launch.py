@@ -1,68 +1,59 @@
 import os
-from os import environ
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, Shutdown
-from launch.substitutions import PathJoinSubstitution, Command, LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, Command, PathJoinSubstitution, PythonExpression
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    ld = LaunchDescription()
-
-    # 1. 환경 변수 및 기본 설정
-    environ['QT_AUTO_SCREEN_SCALE_FACTOR'] = '0'
     pkg_name = 'kaair_description'
-    robot_model_name = 'robot'
+    
+    # 1. 'mode' 인자 선언
+    mode_arg = DeclareLaunchArgument(
+        'mode', default_value='robot',
+        description='Visualization mode: robot(default), lift, head, arm'
+    )
+    mode = LaunchConfiguration('mode')
 
-    # 2. 경로 설정 (PathJoinSubstitution 활용)
-    # xacro 파일: urdf/lift/lift.urdf.xacro
-    xacro_path = PathJoinSubstitution([
-        FindPackageShare(pkg_name),
-        'urdf',
-        f'{robot_model_name}.urdf.xacro'
+    # 2. URDF 설정 (이전과 동일)
+    xacro_path = PathJoinSubstitution([FindPackageShare(pkg_name), 'urdf', 'robot.urdf.xacro'])
+    robot_description_content = Command([
+        'xacro ', xacro_path, 
+        ' mode:=', mode
     ])
 
+    # 3. RViz 설정 파일 경로 분기 (핵심!)
+    # mode 값에 따라 'all_config.rviz', 'lift_config.rviz' 등을 선택함
     rviz_config_path = PathJoinSubstitution([
         FindPackageShare(pkg_name),
         'rviz',
-        f'{robot_model_name}_config.rviz'
+        PythonExpression(["'", mode, "_config.rviz'"])
     ])
 
-    # 3. 노드 정의
-    
-    # [Robot State Publisher] xacro를 urdf로 변환하여 로봇 상태 발행
+    # 4. 노드 정의
     rsp_node = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
-        name='robot_state_publisher',
-        output='screen',
-        parameters=[{
-            'ignore_timestamp': False,
-            'robot_description': Command(['xacro ', xacro_path])
-        }]
+        parameters=[{'robot_description': robot_description_content}]
     )
 
-    # [Joint State Publisher GUI] 조인트 제어 슬라이더 표시
     jsp_gui_node = Node(
         package='joint_state_publisher_gui',
-        executable='joint_state_publisher_gui',
-        name='joint_state_publisher_gui',
-        output='screen'
+        executable='joint_state_publisher_gui'
     )
 
-    # [RViz2] 시각화 도구
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
         name='rviz2',
         output='screen',
         arguments=['-d', rviz_config_path],
-        on_exit=Shutdown() # RViz 종료 시 전체 런치 종료
+        on_exit=Shutdown()
     )
 
-    # 4. 런치 액션 추가
-    ld.add_action(rsp_node)
-    ld.add_action(jsp_gui_node)
-    ld.add_action(rviz_node)
-
-    return ld
+    return LaunchDescription([
+        mode_arg,
+        rsp_node,
+        jsp_gui_node,
+        rviz_node
+    ])
