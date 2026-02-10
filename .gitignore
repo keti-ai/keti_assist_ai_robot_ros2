@@ -33,6 +33,7 @@ wheels/
 .installed.cfg
 .pip-internal-config
 .pytest_cache/
+.venv
 
 # ==========================================
 # C++ / CMake 관련
