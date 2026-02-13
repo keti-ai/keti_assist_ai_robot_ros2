@@ -8,7 +8,7 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(kaair_description REQUIRED)
-find_package(kaair_hardware REQUIRED)
+find_package(kaair_driver REQUIRED)
 find_package(xarm_moveit_config REQUIRED)
 
 # 설치 규칙: config, launch, rviz 폴더 전체를 share/PROJECT_NAME 디렉토리로 복사

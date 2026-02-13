@@ -1,5 +1,5 @@
-#ifndef KAAIR_HARDWARE__HEAD_HW_INTERFACE_HPP_
-#define KAAIR_HARDWARE__HEAD_HW_INTERFACE_HPP_
+#ifndef KAAIR_DRIVER__HEAD_HW_INTERFACE_HPP_
+#define KAAIR_DRIVER__HEAD_HW_INTERFACE_HPP_
 
 #include <vector>
 #include <string>
@@ -7,7 +7,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "dynamixel_sdk/dynamixel_sdk.h"
 
-namespace kaair_hardware
+namespace kaair_driver
 {
 class HeadDynamixelHardware : public hardware_interface::SystemInterface
 {

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(kaair_hardware)
+project(kaair_driver)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -15,16 +15,16 @@ find_package(rclcpp_lifecycle REQUIRED)
 find_package(dynamixel_sdk REQUIRED)
 
 # 2. 라이브러리 생성 (공유 라이브러리 SHARED 필수)
-add_library(kaair_hardware SHARED
+add_library(kaair_driver SHARED
   src/head/head_hw_interface.cpp
 )
 
 # 3. 인클루드 경로 설정
-target_include_directories(kaair_hardware PRIVATE
+target_include_directories(kaair_driver PRIVATE
   include
 )
 
-ament_target_dependencies(kaair_hardware
+ament_target_dependencies(kaair_driver
   hardware_interface
   pluginlib
   rclcpp
@@ -37,7 +37,7 @@ pluginlib_export_plugin_description_file(
   hw_plugins.xml
 )
 
-install(TARGETS kaair_hardware
+install(TARGETS kaair_driver
   DESTINATION lib)
 
 if(BUILD_TESTING)

@@ -1,9 +1,9 @@
-#include "kaair_hardware/head/head_hw_interface.hpp"
+#include "kaair_driver/head/head_hw_interface.hpp"
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include <cmath>
 
-namespace kaair_hardware
+namespace kaair_driver
 {
 hardware_interface::CallbackReturn HeadDynamixelHardware::on_init(const hardware_interface::HardwareInfo & info)
 {
@@ -93,4 +93,4 @@ hardware_interface::return_type HeadDynamixelHardware::write(const rclcpp::Time 
 }
 }
 
-PLUGINLIB_EXPORT_CLASS(kaair_hardware::HeadDynamixelHardware, hardware_interface::SystemInterface)
+PLUGINLIB_EXPORT_CLASS(kaair_driver::HeadDynamixelHardware, hardware_interface::SystemInterface)

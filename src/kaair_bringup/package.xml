@@ -10,7 +10,7 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>kaair_description</depend>
-  <depend>kaair_hardware</depend>
+  <depend>kaair_driver</depend>
   <depend>xarm_moveit_config</depend>
 
   <test_depend>ament_lint_auto</test_depend>
