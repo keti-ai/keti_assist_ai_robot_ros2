@@ -1,6 +1,6 @@
 <library path="kaair_driver">
-  <class name="kaair_driver/HeadDynamixelHardware"
-         type="kaair_driver::HeadDynamixelHardware"
+  <class name="kaair_driver/HeadHwInterface"
+         type="kaair_driver::HeadHwInterface"
          base_class_type="hardware_interface::SystemInterface">
     <description>
       KAAIR Robot의 다이나믹셀 2축 헤드 제어를 위한 하드웨어 인터페이스입니다.

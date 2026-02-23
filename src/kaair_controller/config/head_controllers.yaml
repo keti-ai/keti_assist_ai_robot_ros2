@@ -1,0 +1,27 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 20  # Hz
+
+    # 사용할 컨트롤러 리스트 등록
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    head_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+head_controller:
+  ros__parameters:
+    joints:
+      - head_joint1
+      - head_joint2
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+    
+    # Action 완료 판단을 위한 허용 오차 (라디안 단위)
+    
+    constraints:
+      goal_time: 0.5
+      head_joint1: {trajectory: 0.3, goal: 0.1}
+      head_joint2: {trajectory: 0.3, goal: 0.1}

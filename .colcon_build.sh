@@ -21,6 +21,6 @@ $COLCON_CMD build \
     --symlink-install \
     --metas .build_config/colcon_build.meta \
     --packages-up-to $PKGS \
-    --cmake-args -DCMAKE_BUILD_TYPE=Release
+    --cmake-args -DCMAKE_BUILD_TYPE=Debug
 
 source install/setup.bash

@@ -55,7 +55,7 @@ wheels/
 # ==========================================
 
 # VS Code
-.vscode/
+#.vscode/
 # *주의*: 만약 팀원들과 launch.json(디버그 설정)을 공유해야 한다면 
 # 위 줄을 주석 처리하고 아래처럼 개별 설정하세요.
 # .vscode/settings.json

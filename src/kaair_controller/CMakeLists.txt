@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(kaair_bringup)
+project(kaair_controller)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -7,11 +7,14 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-find_package(kaair_description REQUIRED)
-find_package(kaair_controller REQUIRED)
-find_package(xarm_moveit_config REQUIRED)
+find_package(controller_manager REQUIRED)
+find_package(joint_state_broadcaster REQUIRED)
+find_package(joint_trajectory_controller REQUIRED)
+find_package(robot_state_publisher REQUIRED)
+find_package(xacro REQUIRED)
+find_package(kaair_driver REQUIRED)
 
-# 설치 규칙: config, launch, rviz 폴더 전체를 share/PROJECT_NAME 디렉토리로 복사
+# 런치 및 설정 파일 설치 규칙
 install(DIRECTORY
   config
   launch
