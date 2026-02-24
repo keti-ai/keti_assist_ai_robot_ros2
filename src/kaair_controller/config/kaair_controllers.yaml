@@ -1,0 +1,63 @@
+controller_manager:
+  ros__parameters:
+    update_rate: 50  # 제어 루프 주기 (50Hz = 20ms)
+
+    # 현재 조인트의 상태(위치, 속도 등)를 /joint_states 토픽으로 발행
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    # 리프트를 제어할 Action Server 역할
+    lift_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    # Head를 제어할 Action Server 역할
+    head_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+# ---------------------------------------------------------
+# 개별 컨트롤러 상세 설정
+# ---------------------------------------------------------
+
+lift_controller:
+  ros__parameters:
+    joints:
+      - lift_joint  # URDF에 선언된 리프트 조인트 이름
+
+    # 우리가 제어할 방식 (위치 제어)
+    command_interfaces:
+      - position
+
+    # 하드웨어로부터 읽어올 상태 값
+    state_interfaces:
+      - position
+      - velocity
+
+    state_publish_rate: 50.0   # 상태값을 토픽으로 쏠 주기 (Hz)
+    action_monitor_rate: 20.0  # Action 상태를 모니터링할 주기 (Hz)
+
+    # 안전 및 오차 허용 범위 설정 (Constraints)
+    constraints:
+      stopped_velocity_tolerance: 0.01  # 이 속도 이하가 되면 "멈춤"으로 판정
+      goal_time: 0.5                    # 목표 도달 후 완벽히 멈출 때까지 기다려주는 시간 (초)
+      
+      # 리프트 조인트의 궤적 오차 허용치 (m 단위)
+      lift_joint:
+        trajectory: 0.05  # 이동 중 허용되는 오차 (5cm)
+        goal: 0.02        # 최종 목표 지점에서의 허용 오차 (2cm)
+
+head_controller:
+  ros__parameters:
+    joints:
+      - head_joint1
+      - head_joint2
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+    
+    # Action 완료 판단을 위한 허용 오차 (라디안 단위)
+    
+    constraints:
+      goal_time: 0.5
+      head_joint1: {trajectory: 0.3, goal: 0.15}
+      head_joint2: {trajectory: 0.3, goal: 0.15}

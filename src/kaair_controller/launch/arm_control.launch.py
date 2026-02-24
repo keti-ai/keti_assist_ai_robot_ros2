@@ -1,4 +1,5 @@
 import os
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, RegisterEventHandler
 from launch.event_handlers import OnProcessStart
@@ -6,6 +7,9 @@ from launch.substitutions import Command, FindExecutable, PathJoinSubstitution, 
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
+
+# xArm의 파라미터 파싱 유틸리티 임포트
+from uf_ros_lib.uf_robot_utils import generate_robot_api_params
 
 def generate_launch_description():
     # 1. Launch Arguments 선언
@@ -25,7 +29,7 @@ def generate_launch_description():
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
     use_gui = LaunchConfiguration("use_gui")
 
-    # 3. URDF 로드 (use_fake_hardware 인자를 xacro에 전달)
+    # 3. URDF 로드 (전체 로봇 모드)
     robot_description_content = Command(
         [
             PathJoinSubstitution([FindExecutable(name="xacro")]),
@@ -36,21 +40,29 @@ def generate_launch_description():
                 "robot.urdf.xacro"
             ]),
             " ",
-            "mode:=robot",
+            "mode:=robot",  # 리프트, 헤드, 팔을 모두 불러오기 위함
             " ",
             "use_fake_hardware:=", use_fake_hardware,
         ]
     )
     robot_description = {"robot_description": robot_description_content}
 
-    # 컨트롤러 파라미터 경로
+    # 4. 컨트롤러 파라미터 경로 (xArm 패키지에서 가져옴)
+    # 주의: xArm 기본 패키지 파일명은 보통 'xarm7_controllers.yaml' (s가 붙음) 입니다.
     robot_controllers = PathJoinSubstitution(
-        [FindPackageShare("kaair_controller"), "config", "kaair_controllers.yaml"]
+        [FindPackageShare("xarm_controller"), "config", "xarm7_controllers.yaml"]
     )
 
-    # RViz 설정 파일 경로
+    # 4. xArm API 구동을 위한 전용 파라미터 로드
+    robot_params = generate_robot_api_params(
+        os.path.join(get_package_share_directory('xarm_api'), 'config', 'xarm_params.yaml'),
+        os.path.join(get_package_share_directory('xarm_api'), 'config', 'xarm_user_params.yaml'),
+        '', node_name='ufactory_driver'
+    )
+
+    # 5. RViz 설정 파일 경로
     rviz_config_file = PathJoinSubstitution(
-        [FindPackageShare("kaair_description"), "rviz", "head_config.rviz"] # 실제 파일명으로 수정하세요
+        [FindPackageShare("kaair_description"), "rviz", "arm_config.rviz"]
     )
 
     # --- 노드 설정 ---
@@ -58,7 +70,7 @@ def generate_launch_description():
     control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
-        parameters=[robot_description, robot_controllers],
+        parameters=[robot_description, robot_controllers, robot_params],
         output="both",
     )
 
@@ -75,10 +87,11 @@ def generate_launch_description():
         arguments=["joint_state_broadcaster"],
     )
 
-    head_spawner = Node(
+    # xArm용 궤적 제어기 스포너 (xArm은 보통 xarm7_traj_controller 이름을 사용함)
+    arm_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["head_controller"],
+        arguments=["xarm7_traj_controller"],
     )
 
     # RViz2 노드 (use_gui가 true일 때만 실행)
@@ -99,6 +112,7 @@ def generate_launch_description():
         control_node,
         robot_state_pub_node,
         rviz_node,
+        
         # 매니저 실행 후 브로드캐스터 실행
         RegisterEventHandler(
             OnProcessStart(
@@ -106,11 +120,11 @@ def generate_launch_description():
                 on_start=[jsb_spawner]
             )
         ),
-        # 브로드캐스터 실행 후 헤드 컨트롤러 실행
+        # 브로드캐스터 실행 후 팔 컨트롤러 실행
         RegisterEventHandler(
             OnProcessStart(
                 target_action=jsb_spawner,
-                on_start=[head_spawner]
+                on_start=[arm_spawner]
             )
         ),
     ])

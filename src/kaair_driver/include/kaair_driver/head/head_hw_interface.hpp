@@ -40,6 +40,9 @@ namespace kaair_driver {
     std::vector<uint8_t> dxl_ids_;
     std::string device_name_;
     int baudrate_;
+    int read_error_count_ = 0;
+    const int MAX_READ_ERRORS = 5; // 5회 연속 실패 시에만 ERROR 리턴
+    rclcpp::Clock::SharedPtr clock_;
   };
 
 } // namespace kaair_driver

@@ -5,8 +5,6 @@
   <xacro:property name="m_to_mm" value="0.001 0.001 0.001"/>
   <xacro:property name="mesh_path" value="package://kaair_description/meshes/"/>
 
-  <xacro:arg name="lift_lower_limit" default="0.100"/>
-  <xacro:arg name="lift_upper_limit" default="0.600"/>
 
   <xacro:macro name="lift_module" params="min_h max_h">
 
@@ -55,9 +53,7 @@
       <child link="lift_link"/>
       <axis xyz="0.0 0.0 1.0"/>
       <limit 
-        upper="$(arg lift_upper_limit)"
-        lower="$(arg lift_lower_limit)"
-        effort="700" 
+        upper="${max_h}"  lower="${min_h}"  effort="700" 
         velocity="0.34"/>
     </joint>
 
@@ -68,6 +64,5 @@
     </joint>
 
   </xacro:macro>
-
 
 </robot>

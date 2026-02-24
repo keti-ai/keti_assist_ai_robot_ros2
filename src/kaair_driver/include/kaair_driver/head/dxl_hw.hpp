@@ -27,6 +27,8 @@ public:
     bool sync_write_radian(const std::vector<uint8_t>& ids, const std::vector<double>& radians);
     bool sync_read_radian(const std::vector<uint8_t>& ids, std::vector<double>& radians);
 
+    bool write_profile_velocity(const std::vector<uint8_t>& ids, uint32_t velocity);
+
 private:
     dynamixel::PortHandler * portHandler_;
     dynamixel::PacketHandler * packetHandler_;
@@ -44,6 +46,9 @@ private:
     const uint16_t LEN_GOAL_POSITION = 4;
     const uint16_t ADDR_PRESENT_POSITION = 132;
     const uint16_t LEN_PRESENT_POSITION = 4;
+    const uint16_t ADDR_PROFILE_VELOCITY = 112;
+    const uint16_t LEN_PROFILE_VELOCIT = 4;
+
 
     // 편의를 위한 변환 헬퍼 함수
     int32_t rad_to_dxl(double rad) {

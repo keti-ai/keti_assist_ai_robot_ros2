@@ -2,14 +2,22 @@
 <robot name="kaair" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <xacro:arg name="mode" default="robot"/>
-  <xacro:arg name="lift_lower_limit" default="0.100"/>
-  <xacro:arg name="lift_upper_limit" default="0.700"/>
+  <xacro:arg name="hw_spec_file" default="$(find kaair_bringup)/config/robots/kaair_specs_01.yaml"/>
+  <xacro:arg name="use_fake_hardware" default="false"/>
+
+  <xacro:property name="hw_specs" value="${xacro.load_yaml('$(arg hw_spec_file)')}"/>
 
   <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'lift'}">
     <xacro:include filename="$(find kaair_description)/urdf/lift/lift.urdf.xacro"/>
+    <xacro:include filename="$(find kaair_description)/urdf/lift/lift.ros2_control.xacro"/>
     <xacro:lift_module 
-      min_h="$(arg lift_lower_limit)" 
-      max_h="$(arg lift_upper_limit)" 
+      min_h="${hw_specs['lift']['min_h']}" 
+      max_h="${hw_specs['lift']['max_h']}" 
+    />
+    <xacro:lift_ros2_control
+      name="LiftHardware" 
+      spec="${hw_specs['lift']}"
+      use_fake_hardware="$(arg use_fake_hardware)"
     />
   </xacro:if>
 
@@ -19,8 +27,8 @@
 
     <xacro:head_ros2_control 
       name="HeadHardware" 
-      usb_port="/dev/ttyHead" 
-      baud_rate="57600" 
+      spec="${hw_specs['head']}"
+      use_fake_hardware="$(arg use_fake_hardware)"
     />
     <xacro:if value="${'$(arg mode)' == 'robot'}">
       <joint name="lift_to_head_fix_joint" type="fixed">
@@ -37,21 +45,25 @@
       <link name="arm_base"/>
     </xacro:unless>
     
+    <xacro:property name="arm_hw_plugin" value="uf_robot_hardware/UFRobotSystemHardware"/>
+    
+    <xacro:if value="$(arg use_fake_hardware)">
+      <xacro:property name="arm_hw_plugin" value="uf_robot_hardware/UFRobotFakeSystemHardware"/>
+    </xacro:if>
+
     <xacro:include filename="$(find xarm_description)/urdf/xarm_device_macro.xacro"/>
 
     <xacro:xarm_device 
       prefix=""
       hw_ns="xarm"
       dof="7"
-      add_gripper="false"
       attach_to="arm_base"
-      attach_xyz="0 0 0"
-      attach_rpy="0 0 0"
+      effort_control="true" 
+      velocity_control="true"
+      robot_ip="${hw_specs['arm']['robot_ip']}"
+      ros2_control_plugin="${arm_hw_plugin}"
     />
   
   </xacro:if>
-
-
-
 
 </robot>
