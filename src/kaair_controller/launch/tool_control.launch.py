@@ -50,7 +50,7 @@ def generate_launch_description():
 
     # RViz 설정 파일 경로
     rviz_config_file = PathJoinSubstitution(
-        [FindPackageShare("kaair_description"), "rviz", "lift_config.rviz"] # 실제 파일명으로 수정하세요
+        [FindPackageShare("kaair_description"), "rviz", "tool_config.rviz"] # 실제 파일명으로 수정하세요
     )
 
     # --- 노드 설정 ---
@@ -75,10 +75,10 @@ def generate_launch_description():
         arguments=["joint_state_broadcaster"],
     )
 
-    lift_spawner = Node(
+    tool_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["lift_controller"],
+        arguments=["tool_controller"],
     )
 
     # RViz2 노드 (use_gui가 true일 때만 실행)
@@ -110,7 +110,7 @@ def generate_launch_description():
         RegisterEventHandler(
             OnProcessStart(
                 target_action=jsb_spawner,
-                on_start=[lift_spawner]
+                on_start=[tool_spawner]
             )
         ),
     ])

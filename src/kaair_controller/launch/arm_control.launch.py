@@ -50,7 +50,7 @@ def generate_launch_description():
     # 4. 컨트롤러 파라미터 경로 (xArm 패키지에서 가져옴)
     # 주의: xArm 기본 패키지 파일명은 보통 'xarm7_controllers.yaml' (s가 붙음) 입니다.
     robot_controllers = PathJoinSubstitution(
-        [FindPackageShare("xarm_controller"), "config", "xarm7_controllers.yaml"]
+        [FindPackageShare("kaair_controller"), "config", "arm_controllers.yaml"]
     )
 
     # 4. xArm API 구동을 위한 전용 파라미터 로드
@@ -70,8 +70,11 @@ def generate_launch_description():
     control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
+        namespace="arm", # 네임스페이스 격리!
         parameters=[robot_description, robot_controllers, robot_params],
         output="both",
+        # 핵심: /arm/joint_states로 나가는 데이터를 /joint_states로 합쳐줌
+        remappings=[("/arm/joint_states", "/joint_states")]
     )
 
     robot_state_pub_node = Node(
@@ -84,14 +87,14 @@ def generate_launch_description():
     jsb_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["joint_state_broadcaster"],
+        arguments=["joint_state_broadcaster", "-c", "/arm/controller_manager"],
     )
 
     # xArm용 궤적 제어기 스포너 (xArm은 보통 xarm7_traj_controller 이름을 사용함)
     arm_spawner = Node(
         package="controller_manager",
         executable="spawner",
-        arguments=["xarm7_traj_controller"],
+        arguments=["xarm7_traj_controller", "-c", "/arm/controller_manager"],
     )
 
     # RViz2 노드 (use_gui가 true일 때만 실행)

@@ -14,6 +14,12 @@ controller_manager:
     head_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
+    # Tool을 제어할 Action Server 역할
+    tool_controller:
+          type: position_controllers/GripperActionController
+
+
+
 # ---------------------------------------------------------
 # 개별 컨트롤러 상세 설정
 # ---------------------------------------------------------
@@ -61,3 +67,15 @@ head_controller:
       goal_time: 0.5
       head_joint1: {trajectory: 0.3, goal: 0.15}
       head_joint2: {trajectory: 0.3, goal: 0.15}
+
+tool_controller:
+  ros__parameters:
+      # 핵심: mimic 당하는 left는 빼고, 기준이 되는 right만 적습니다!
+      joint: right_finger_tip_joint
+      
+      # 그리퍼는 보통 위치(position)를 목표로 주고, 
+      # 물체에 닿았을 때의 힘(effort)을 피드백으로 받습니다.
+      action_monitor_rate: 20.0
+      goal_tolerance: 0.01
+      max_effort: 50.0
+      allow_stalling: true # 물체를 잡고 멈춰있는(Stall) 상태를 허용

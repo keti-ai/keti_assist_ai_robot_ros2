@@ -1,0 +1,128 @@
+<?xml version="1.0" ?>
+<robot name="tool" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <xacro:property name="m_to_mm" value="0.001 0.001 0.001"/>
+    <xacro:property name="mesh_path" value="package://kaair_description/meshes/"/>
+
+    <link name="hand_base_link">
+      <!-- visual -->
+      <visual>
+        <geometry>
+          <mesh filename="${mesh_path}tool/visual/hand_base.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </visual>
+
+      <!-- collision -->
+      <collision>
+        <geometry>
+          <mesh filename="${mesh_path}tool/visual/hand_base.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </collision>
+    </link>
+
+    <link name="vision_frame_link">
+      <!-- visual -->
+      <visual>
+        <geometry>
+          <mesh filename="${mesh_path}tool/visual/vision_frame.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </visual>
+
+      <!-- collision -->
+      <collision>
+        <geometry>
+          <mesh filename="${mesh_path}tool/visual/vision_frame.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </collision>
+    </link>
+
+    <link name="gripper_body_link">
+      <!-- visual -->
+      <visual>
+        <geometry>
+          <mesh filename="${mesh_path}tool/visual/gripper_body.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </visual>
+
+      <!-- collision -->
+      <collision>
+        <geometry>
+          <mesh filename="${mesh_path}tool/visual/gripper_body.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </collision>
+    </link>
+
+    <link name="left_finger_tip">
+      <!-- visual -->
+      <visual>
+        <geometry>
+          <mesh filename="${mesh_path}tool/visual/left_finger.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </visual>
+
+      <!-- collision -->
+      <collision>
+        <geometry>
+          <mesh filename="${mesh_path}tool/visual/left_finger.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </collision>
+    </link>
+
+    <link name="right_finger_tip">
+      <!-- visual -->
+      <visual>
+        <geometry>
+          <mesh filename="${mesh_path}tool/visual/right_finger.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </visual>
+
+      <!-- collision -->
+      <collision>
+        <geometry>
+          <mesh filename="${mesh_path}tool/visual/right_finger.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </collision>
+    </link>
+
+    <joint name="hand_to_gripper_fix_joint" type="fixed">
+      <origin xyz="0.0 0.0 0.0135" rpy="0 0 0"/>
+      <parent link="hand_base_link"/>
+      <child link="gripper_body_link"/>
+    </joint>
+
+    <joint name="hand_to_vision_frame_fix_joint" type="fixed">
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <parent link="hand_base_link"/>
+      <child link="vision_frame_link"/>
+    </joint>
+
+    <joint name="right_finger_tip_joint" type="prismatic">
+        <origin xyz="0.0 0.0035 0.15325" rpy="0 0 0"/>
+        <parent link="gripper_body_link"/>
+        <child link="right_finger_tip"/>
+        <axis xyz="0.0 1.0 0.0"/>
+        <limit upper="0.055" lower="0" effort="50" 
+        velocity="0.005"/>
+    </joint>
+
+    <joint name="left_finger_tip_joint" type="prismatic">
+        <origin xyz="0.0 -0.0035 0.15325" rpy="0 0 0"/>
+        <parent link="gripper_body_link"/>
+        <child link="left_finger_tip"/>
+        <axis xyz="0.0 -1.0 0.0"/>
+        <limit upper="0.055" lower="0" effort="50" 
+        velocity="0.005"/>
+        <mimic joint="right_finger_tip_joint" multiplier="1.0" offset="0"/>
+    </joint>
+
+</robot>

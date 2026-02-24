@@ -57,6 +57,7 @@
       prefix=""
       hw_ns="xarm"
       dof="7"
+      add_gripper="false"
       attach_to="arm_base"
       effort_control="true" 
       velocity_control="true"
@@ -64,6 +65,26 @@
       ros2_control_plugin="${arm_hw_plugin}"
     />
   
+  </xacro:if>
+
+  <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'tool'}">
+    <xacro:include filename="$(find kaair_description)/urdf/tool/tool.urdf.xacro"/>
+    <xacro:include filename="$(find kaair_description)/urdf/tool/tool_ros2_control.xacro"/>
+
+    <xacro:if value="${'$(arg mode)' == 'robot'}">
+      <joint name="arm_to_tool_fix_joint" type="fixed">
+        <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+        <parent link="link_eef"/>
+        <child link="hand_base_link"/>
+      </joint>
+    </xacro:if>
+
+    <xacro:tool_ros2_control 
+      name="ToolHardware" 
+      spec="${hw_specs['tool']}"
+      use_fake_hardware="$(arg use_fake_hardware)"
+    />
+
   </xacro:if>
 
 </robot>

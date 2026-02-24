@@ -3,7 +3,8 @@ lift:
   min_h: 0.100
   max_h: 0.700
   initial_pose: 0.110
-  port: "/dev/ttyLM"
+  usb_port: "/dev/ttyLM"
+  baud_rate: 57600
 
 # 헤드 모듈 설정 (다이나믹셀)
 head:
@@ -12,3 +13,7 @@ head:
 
 arm:
   robot_ip: "192.168.5.240"
+
+tool:
+  usb_port: "/dev/ttyGripper"
+  baud_rate: 57600
