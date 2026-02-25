@@ -76,7 +76,7 @@
     </collision>
   </link>
 
-  <link name="femto_base_link">
+  <link name="head_camera_mount">
   </link>
 
 
@@ -95,7 +95,7 @@
       lower="-1.58"
       upper="1.58"
       effort="30"
-      velocity="3.14" />
+      velocity="1.2" />
   </joint>
 
   <joint name="head_joint2" type="revolute">
@@ -107,13 +107,13 @@
       lower="-1.58"
       upper="1.58"
       effort="30"
-      velocity="3.14" />
+      velocity="1.2" />
   </joint>
 
   <joint name="pantilt_femto_frame_joint" type="fixed">
     <origin xyz="0.0 0.0 0.055" rpy="0 0 0"/>
     <parent link="head_link3"/>
-    <child link="femto_base_link"/>
+    <child link="head_camera_mount"/>
   </joint>
 
 </robot>

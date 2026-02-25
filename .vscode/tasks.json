@@ -14,7 +14,7 @@
         {
             "label": "colcon: build-release",
             "type": "shell",
-            "command": "python -m colcon build --packages-up-to orbbec_camera orbbec_description --cmake-args -DCMAKE_BUILD_TYPE=Release --symlink-install",
+            "command": "python -m colcon build --packages-up-to kaair_bringup orbbec_camera --cmake-args -DCMAKE_BUILD_TYPE=Release --symlink-install",
             "group": {
                 "kind": "build",
                 "isDefault": false

@@ -1,6 +1,6 @@
 controller_manager:
   ros__parameters:
-    update_rate: 50  # 제어 루프 주기 (50Hz = 20ms)
+    update_rate: 100  # 제어 루프 주기 (50Hz = 20ms)
 
     # 현재 조인트의 상태(위치, 속도 등)를 /joint_states 토픽으로 발행
     joint_state_broadcaster:
@@ -18,7 +18,8 @@ controller_manager:
     tool_controller:
           type: position_controllers/GripperActionController
 
-
+    xarm7_traj_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
 
 # ---------------------------------------------------------
 # 개별 컨트롤러 상세 설정
@@ -64,9 +65,9 @@ head_controller:
     # Action 완료 판단을 위한 허용 오차 (라디안 단위)
     
     constraints:
-      goal_time: 0.5
-      head_joint1: {trajectory: 0.3, goal: 0.15}
-      head_joint2: {trajectory: 0.3, goal: 0.15}
+      goal_time: 10.0
+      head_joint1: {trajectory: 0.0, goal: 0.07}
+      head_joint2: {trajectory: 0.0, goal: 0.07}
 
 tool_controller:
   ros__parameters:
@@ -79,3 +80,35 @@ tool_controller:
       goal_tolerance: 0.01
       max_effort: 50.0
       allow_stalling: true # 물체를 잡고 멈춰있는(Stall) 상태를 허용
+
+
+xarm7_traj_controller:
+  ros__parameters:
+    command_interfaces:
+      - position
+      - velocity
+    state_interfaces:
+      - position
+      - velocity
+    joints:
+      - joint1
+      - joint2
+      - joint3
+      - joint4
+      - joint5
+      - joint6
+      - joint7
+    constraints:
+      goal_time: 1.5
+      stopped_velocity_tolerance: 0.0
+      joint1: {trajectory: 1.0, goal: 0.04}
+      joint2: {trajectory: 1.0, goal: 0.04}
+      joint3: {trajectory: 1.0, goal: 0.04}
+      joint4: {trajectory: 1.0, goal: 0.04}
+      joint5: {trajectory: 1.0, goal: 0.04}
+      joint6: {trajectory: 1.0, goal: 0.04}
+      joint7: {trajectory: 1.0, goal: 0.04}
+    interface_name: position
+    state_publish_rate: 25.0
+    action_monitor_rate: 10.0
+    open_loop_control: true

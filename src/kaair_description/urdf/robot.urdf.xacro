@@ -24,12 +24,18 @@
   <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'head'}">
     <xacro:include filename="$(find kaair_description)/urdf/head/head.urdf.xacro"/>
     <xacro:include filename="$(find kaair_description)/urdf/head/head.ros2_control.xacro"/>
-
+    <xacro:include filename="$(find orbbec_description)/urdf/femto_bolt.urdf.xacro"/>
+  
     <xacro:head_ros2_control 
       name="HeadHardware" 
       spec="${hw_specs['head']}"
       use_fake_hardware="$(arg use_fake_hardware)"
     />
+
+  <xacro:femto_bolt prefix="femto" parent="head_camera_mount">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+  </xacro:femto_bolt>
+
     <xacro:if value="${'$(arg mode)' == 'robot'}">
       <joint name="lift_to_head_fix_joint" type="fixed">
         <origin xyz="0.0 0.0 0.859" rpy="0 0 0"/>
@@ -38,6 +44,8 @@
       </joint>
     </xacro:if>
     
+
+
   </xacro:if>
 
   <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'arm'}">

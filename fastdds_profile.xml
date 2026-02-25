@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+    
+    <transport_descriptors>
+        <transport_descriptor>
+            <transport_id>shm_transport</transport_id>
+            <type>SHM</type>
+            <maxMessageSize>33554432</maxMessageSize>
+            <segment_size>33554432</segment_size>
+        </transport_descriptor>
+
+        <transport_descriptor>
+            <transport_id>udp_transport</transport_id>
+            <type>UDPv4</type>
+            <non_blocking_send>true</non_blocking_send>
+        </transport_descriptor>
+    </transport_descriptors>
+
+    <participant profile_name="shm_udp_participant" is_default_profile="true">
+        <rtps>
+            <useBuiltinTransports>false</useBuiltinTransports>
+            
+            <userTransports>
+                <transport_id>shm_transport</transport_id>
+                <transport_id>udp_transport</transport_id>
+            </userTransports>
+
+            <builtin>
+                <initialPeersList>
+                    <locator>
+                        <udpv4>
+                            <address>127.0.0.1</address> 
+                        </udpv4>
+                    </locator>
+                    <!-- <locator>
+                        <udpv4>
+                            <address>192.168.1.101</address>
+                        </udpv4>
+                    </locator>
+                    <locator>
+                        <udpv4>
+                            <address>192.168.1.80</address> 
+                        </udpv4>
+                    </locator> -->
+                </initialPeersList>
+            </builtin>
+        </rtps>
+    </participant>
+
+    <data_writer profile_name="default_publisher_profile" is_default_profile="true">
+        <qos>
+            <publishMode>
+                <kind>SYNCHRONOUS</kind>
+            </publishMode>
+            <data_sharing>
+                <kind>AUTOMATIC</kind>
+            </data_sharing>
+        </qos>
+        <historyMemoryPolicy>DYNAMIC</historyMemoryPolicy>
+    </data_writer>
+
+    <data_reader profile_name="default_subscription_profile" is_default_profile="true">
+        <qos>
+            <data_sharing>
+                <kind>AUTOMATIC</kind>
+            </data_sharing>
+        </qos>
+        <historyMemoryPolicy>DYNAMIC</historyMemoryPolicy>
+    </data_reader>
+
+</profiles>

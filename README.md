@@ -5,6 +5,56 @@ It improves upon the original repository to enable easier and more seamless use 
 
 - [Documentation for KETI Assist AI ROBOT](https://bittersweet-singer-2da.notion.site/2fcb18ffad91806cbfd2c2f29d54d1cd?v=2fcb18ffad9180a6b2e6000c43cecc10&source=copy_link)
 
+## prerequisition
+
+- Ubuntu 22.04 + ROS Humble
+- Use `fastdds_profile.xml` for dds tuning.
+  ```
+  # Copy fastdds profile xml in home directory
+  cp fastdds_profile.xml ~/
+
+  # add this in ~/.bashrc
+  export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+  export FASTRTPS_DEFAULT_PROFILES_FILE=~/fastdds_profile.xml
+  export RMW_FASTRTPS_USE_QOS_FROM_XML=1
+
+  source /opt/ros/humble/setup.bash
+  ```
+- Edit if you want to communicate other PC.(Another PC also need export fastdds_profile.xml)
+  ```
+  <participant profile_name="shm_udp_participant" is_default_profile="true">
+    <rtps>
+        <useBuiltinTransports>false</useBuiltinTransports>
+        
+        <userTransports>
+            <transport_id>shm_transport</transport_id>
+            <transport_id>udp_transport</transport_id>
+        </userTransports>
+
+        <builtin>
+            <initialPeersList>
+                <locator>
+                    <udpv4>
+                        <address>127.0.0.1</address> 
+                    </udpv4>
+                </locator>
+                <locator>
+                    <udpv4>
+                        <address>192.168.1.xxx</address>
+                    </udpv4>
+                </locator>
+                <locator>
+                    <udpv4>
+                        <address>192.168.1.xx1</address> 
+                    </udpv4>
+                </locator>
+            </initialPeersList>
+        </builtin>
+    </rtps>
+</participant>
+  ```
+
+
 
 ## How To Use Quickly
 

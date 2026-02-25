@@ -9,7 +9,7 @@ lift:
 # 헤드 모듈 설정 (다이나믹셀)
 head:
   usb_port: "/dev/ttyHead"
-  baud_rate: 57600
+  baud_rate: 115200
 
 arm:
   robot_ip: "192.168.5.240"

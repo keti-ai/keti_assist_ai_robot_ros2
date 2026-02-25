@@ -32,9 +32,9 @@ def generate_launch_description():
     robot_description = {"robot_description": robot_description_content}
 
     # 4. 컨트롤러 파라미터 설정
-    body_controllers = PathJoinSubstitution([kaair_control_pkg, "config", "kaair_controllers.yaml"])
-    arm_controllers = PathJoinSubstitution([kaair_control_pkg, "config", "arm_controllers.yaml"])
-    
+    kaair_controllers = PathJoinSubstitution([kaair_control_pkg, "config", "kaair_controllers.yaml"])
+
+
     # xArm 전용 파라미터
     robot_params = generate_robot_api_params(
         os.path.join(get_package_share_directory('xarm_api'), 'config', 'xarm_params.yaml'),
@@ -55,33 +55,18 @@ def generate_launch_description():
     # ==========================================================
     # [Body 매니저 영역] 리프트, 헤드, 툴
     # ==========================================================
-    body_control_node = Node(
+    control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
-        parameters=[robot_description, body_controllers],
+        parameters=[robot_description, kaair_controllers],
         output="both",
     )
 
-    body_jsb_spawner = Node(package="controller_manager", executable="spawner", arguments=["joint_state_broadcaster", "-c", "/controller_manager","--param-file", body_controllers])
-    lift_spawner = Node(package="controller_manager", executable="spawner", arguments=["lift_controller", "-c", "/controller_manager"])
-    head_spawner = Node(package="controller_manager", executable="spawner", arguments=["head_controller", "-c", "/controller_manager"])
-    tool_spawner = Node(package="controller_manager", executable="spawner", arguments=["tool_controller", "-c", "/controller_manager"])
-
-    # ==========================================================
-    # [Arm 매니저 영역] xArm (네임스페이스: /arm)
-    # ==========================================================
-    arm_control_node = Node(
-        package="controller_manager",
-        executable="ros2_control_node",
-        namespace="arm", # 네임스페이스 격리!
-        parameters=[robot_description, arm_controllers, robot_params],
-        output="both",
-        # 핵심: /arm/joint_states로 나가는 데이터를 /joint_states로 합쳐줌
-        remappings=[("/arm/joint_states", "/joint_states")] 
-    )
-
-    arm_jsb_spawner = Node(package="controller_manager", executable="spawner", arguments=["joint_state_broadcaster", "-c", "/arm/controller_manager", "--param-file", arm_controllers])
-    arm_traj_spawner = Node(package="controller_manager", executable="spawner", arguments=["xarm7_traj_controller", "-c", "/arm/controller_manager"])
+    jsb_spawner = Node(package="controller_manager", executable="spawner", arguments=["joint_state_broadcaster"])
+    lift_spawner = Node(package="controller_manager", executable="spawner", arguments=["lift_controller"])
+    head_spawner = Node(package="controller_manager", executable="spawner", arguments=["head_controller"])
+    tool_spawner = Node(package="controller_manager", executable="spawner", arguments=["tool_controller"])
+    arm_spawner = Node(package="controller_manager", executable="spawner", arguments=["xarm7_traj_controller"])
 
     # ==========================================================
     # RViz2 노드
@@ -98,16 +83,12 @@ def generate_launch_description():
         use_gui_arg,
         robot_state_pub_node,
         
-        # 1. 두 개의 매니저를 동시에 실행
-        body_control_node,
-        arm_control_node,
+        # 1. 매니저를 실행
+        control_node,
         rviz_node,
         
-        # 2. Body Spawner 순차 실행
-        RegisterEventHandler(OnProcessStart(target_action=body_control_node, on_start=[body_jsb_spawner])),
-        RegisterEventHandler(OnProcessStart(target_action=body_jsb_spawner, on_start=[lift_spawner, head_spawner, tool_spawner])),
+        # 2. Spawner 순차 실행
+        RegisterEventHandler(OnProcessStart(target_action=control_node, on_start=[jsb_spawner])),
+        RegisterEventHandler(OnProcessStart(target_action=jsb_spawner, on_start=[lift_spawner, head_spawner, tool_spawner, arm_spawner])),
 
-        # 3. Arm Spawner 순차 실행
-        RegisterEventHandler(OnProcessStart(target_action=arm_control_node, on_start=[arm_jsb_spawner])),
-        RegisterEventHandler(OnProcessStart(target_action=arm_jsb_spawner, on_start=[arm_traj_spawner])),
     ])
