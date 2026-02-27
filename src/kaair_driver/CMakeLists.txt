@@ -20,25 +20,33 @@ find_package(pluginlib REQUIRED)
 find_package(realtime_tools REQUIRED)
 
 find_package(dynamixel_sdk REQUIRED)
+find_package(serial REQUIRED)
 
 # -------------------------------------------------------------------
 # 2. 공통 하드웨어 로직 라이브러리 (확장성의 핵심)
 # -------------------------------------------------------------------
-# 하드웨어 인터페이스와 테스트 실행 파일이 공통으로 사용할 로직을 분리합니다.
+# [기존] Head (다이나믹셀) 로직
 add_library(dxl_hw_lib SHARED
-  src/head/dxl_hw.cpp  # 실제 다이나믹셀 SDK를 다루는 클래스 구현부
+  src/head/dxl_hw.cpp
 )
-
 target_include_directories(dxl_hw_lib PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
-
 ament_target_dependencies(dxl_hw_lib
   dynamixel_sdk
-  rclcpp
-  rclcpp_lifecycle
-  hardware_interface
+)
+
+# 🌟 [추가된 부분] Lift (MD400) 로직
+add_library(md485_hw_lib SHARED
+  src/lift/md485_hw.cpp
+)
+target_include_directories(md485_hw_lib PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(md485_hw_lib
+  serial
 )
 
 # -------------------------------------------------------------------
@@ -46,12 +54,13 @@ ament_target_dependencies(dxl_hw_lib
 # -------------------------------------------------------------------
 add_library(kaair_driver SHARED
   src/head/head_hw_interface.cpp
+  src/lift/lift_hw_interface.cpp
 )
 
 target_include_directories(kaair_driver PRIVATE include)
 
 # 공통 라이브러리(dxl_hw_lib)를 링크합니다.
-target_link_libraries(kaair_driver dxl_hw_lib)
+target_link_libraries(kaair_driver dxl_hw_lib md485_hw_lib)
 
 ament_target_dependencies(kaair_driver
   hardware_interface
@@ -61,23 +70,19 @@ ament_target_dependencies(kaair_driver
 )
 
 # -------------------------------------------------------------------
-# 4. 테스트/디버깅용 실행 파일 (현재 연습 중인 부분)
+# 4. 테스트/디버깅용 실행 파일
 # -------------------------------------------------------------------
+# Head 테스트용
 add_executable(dxl_test_node src/head/test_dxl.cpp)
-
-# [수정] 실행 파일이 include 폴더를 뒤질 수 있도록 경로를 직접 추가합니다.
-target_include_directories(dxl_test_node PRIVATE 
-  include
-)
-
-# [수정] 라이브러리 링크 및 의존성 추가
+target_include_directories(dxl_test_node PRIVATE include)
 target_link_libraries(dxl_test_node dxl_hw_lib)
-ament_target_dependencies(dxl_test_node
-  dynamixel_sdk
-  rclcpp
-)
+ament_target_dependencies(dxl_test_node)
 
-#
+# Lift 테스트용 실행 파일 (lift_test_node)
+add_executable(lift_test_node src/lift/test_lift.cpp)
+target_include_directories(lift_test_node PRIVATE include)
+target_link_libraries(lift_test_node md485_hw_lib)
+ament_target_dependencies(lift_test_node)
 
 # -------------------------------------------------------------------
 # 5. 플러그인 등록 및 설치
@@ -90,8 +95,10 @@ pluginlib_export_plugin_description_file(
 # 실행 파일과 라이브러리를 모두 설치
 install(TARGETS 
   dxl_hw_lib
+  md485_hw_lib
   kaair_driver
   dxl_test_node
+  lift_test_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
