@@ -13,7 +13,7 @@ namespace kaair_driver {
     // 1. 설정값을 담는 구조체 (기본값 세팅 완료)
     struct MD485HwConfig {
         std::string port = "/dev/ttyLM";
-        int baudrate = 19200;
+        int baudrate = 115200;
         std::vector<double> elevation_range = {0.0, 600.0};
         double offset_position = 0.0;
         int encoder_ppr = 1000;
@@ -37,10 +37,16 @@ namespace kaair_driver {
 
             // 모터에 RPM 속도 명령 전송
             bool set_velocity_rpm(int16_t rpm);
-
+            // 메인 데이터와 I/O 데이터를 동시에 읽어오는 함수
+            bool read_state(kaair_driver::MainDataPayload& out_main, kaair_driver::IoMonitorPayload& out_io);
+            // 메인 데이터만 읽어오는 함수
+            bool read_state(kaair_driver::MainDataPayload& out_main);
         private:
             MD485HwConfig cfg_;
             std::unique_ptr<serial::Serial> serial_; // 시리얼 통신 객체 포인터
+            // 수신 패킷 동기화 및 파싱 함수
+            bool receive_packet(kaair_driver::PID expected_pid, std::vector<uint8_t>& out_data);
+
     };
 
 } // namespace kaair_driver

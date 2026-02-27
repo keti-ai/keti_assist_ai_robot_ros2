@@ -6,3 +6,6 @@
 	path = src/third_party/OrbbecSDK_ROS2
 	url = https://github.com/orbbec/OrbbecSDK_ROS2
 	branch = v2-main
+[submodule "src/third_party/serial"]
+	path = src/third_party/serial
+	url = https://github.com/RoverRobotics-forks/serial-ros2.git

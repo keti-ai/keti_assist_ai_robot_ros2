@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 int main() {
-    kaair_driver::DxlHw dxl("/dev/ttyUSB0", 57600);
+    kaair_driver::DxlHw dxl("/dev/ttyHead", 57600);
     std::vector<uint8_t> ids = {1, 2};
 
     if (dxl.open_port()) {

@@ -1,7 +1,7 @@
 #include <cstdint>
 #include <cstddef>
 
-namespace mdrobot {
+namespace kaair_driver {
 
 // =================================================================
 // 1. MID (Machine ID) 정의
@@ -102,6 +102,14 @@ struct MainDataPayload {
     uint8_t status2;        // 상태 2
 };
 
+struct IoMonitorPayload {
+    uint16_t input_port;   // 입력 핀 상태 (Start/Stop, Run/Brake 등 비트맵)
+    uint16_t output_port;  // 출력 핀 상태
+    uint16_t ad_in[4];     // 아날로그 입력 1~4 (8바이트)
+    uint8_t reserved[5];   // 나머지 예약 영역 (5바이트)
+};
+
+
 #pragma pack(pop)
 
 // =================================================================
@@ -114,6 +122,72 @@ inline uint8_t CalculateChecksum(const uint8_t* buffer, size_t length) {
         sum += buffer[i];
     }
     return static_cast<uint8_t>(~sum + 1);
+}
+
+// =================================================================
+// 7. PID별 예상 데이터 길이 (데이터 수신/검증 시 유용)
+// =================================================================
+constexpr uint8_t GetExpectedDataLength(PID pid) {
+    switch(pid) {
+        case PID::REQ_PID_DATA: return 1;
+        case PID::TQ_OFF: return 1;
+        case PID::BRAKE: return 1;
+        case PID::COMMAND: return 1;
+        case PID::ALARM_RESET: return 1;
+        case PID::POSI_RESET: return 1;
+        
+        case PID::VEL_CMD: return 2;
+        case PID::INT_RPM_DATA: return 2;
+        case PID::TQ_DATA: return 2;
+        
+        case PID::MAIN_DATA: return 17;
+        case PID::TAR_POSI: return 4;
+        case PID::POSI_VEL_CMD: return 6;
+        default: return 0; // 가변이거나 정의되지 않음
+    }
+}
+
+// =================================================================
+// 8. 🌟 만능 패킷 생성 함수 (C++ Template 활용) 🌟
+// =================================================================
+// 사용법: BuildPacket(수신ID, 송신ID, 모터ID, PID, 보낼데이터구조체_또는_변수);
+template <typename T>
+inline std::vector<uint8_t> BuildPacket(MID rmid, MID tmid, uint8_t motor_id, PID pid, const T& data) {
+    
+    // 템플릿 T의 자료형 크기를 자동으로 계산 (예: int16_t면 2, PosiVelCmdPayload면 6)
+    uint8_t data_len = sizeof(T); 
+    
+    std::vector<uint8_t> packet;
+    packet.reserve(5 + data_len + 1); // Header(5) + Data + Checksum(1) 메모리 사전할당
+
+    // 1. Header 조립
+    packet.push_back(static_cast<uint8_t>(rmid));
+    packet.push_back(static_cast<uint8_t>(tmid));
+    packet.push_back(motor_id);
+    packet.push_back(static_cast<uint8_t>(pid));
+    packet.push_back(data_len);
+
+    // 2. Data 조립 (PC는 리틀 엔디안이므로 메모리를 있는 그대로 복사하면 완벽히 일치함)
+    const uint8_t* p_data = reinterpret_cast<const uint8_t*>(&data);
+    packet.insert(packet.end(), p_data, p_data + data_len);
+
+    // 3. Checksum 계산 및 추가
+    packet.push_back(CalculateChecksum(packet.data(), packet.size()));
+
+    return packet;
+}
+
+// 오버로딩: 보낼 데이터가 아예 없는 경우 (Data Length = 0)
+inline std::vector<uint8_t> BuildPacket(MID rmid, MID tmid, uint8_t motor_id, PID pid) {
+    std::vector<uint8_t> packet = {
+        static_cast<uint8_t>(rmid),
+        static_cast<uint8_t>(tmid),
+        motor_id,
+        static_cast<uint8_t>(pid),
+        0
+    };
+    packet.push_back(CalculateChecksum(packet.data(), packet.size()));
+    return packet;
 }
 
 } // namespace mdrobot
