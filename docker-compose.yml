@@ -1,0 +1,40 @@
+services:
+  kaair_container:
+    image: kaair:humble-cuda  # 빌드한 이미지 이름
+    container_name: keti_ros2_container
+    network_mode: host           # ROS 2 통신을 위해 host 모드 권장
+    ipc: host                    # FastDDS 공유 메모리 통신을 위해 필요
+    privileged: true             # GPU 및 하드웨어 접근 권한
+    
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,display
+      - ROS_DOMAIN_ID=30         # 원하는 ID로 변경 가능
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/ros_ws/fastdds_profile.xml
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - RMW_FASTRTPS_USE_QOS_FROM_XML=1
+    
+    volumes:
+      # GUI 설정을 위한 X11 소켓 매핑
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # 프로젝트 폴더 매핑 (호스트의 현재 디렉토리를 컨테이너의 /ros_ws로)
+      - .:/ros_ws
+      # USB, 카메라 장치 매핑
+      - /dev:/dev
+      # (선택) 호스트의 .bashrc 설정 등을 유지하고 싶을 때
+      # - ~/.bash_history:/root/.bash_history
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    stdin_open: true # docker run -i
+    tty: true        # docker run -t
+    working_dir: /ros_ws
+    command: /bin/bash

@@ -1,0 +1,3 @@
+FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0 AS base
+
+WORKDIR /ros_ws

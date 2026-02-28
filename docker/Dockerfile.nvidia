@@ -1,0 +1,110 @@
+# 1. 베이스 이미지 설정 (CUDA 12.6.3 + cuDNN + Ubuntu 22.04)
+FROM nvidia/cuda:12.6.3-cudnn-devel-ubuntu22.04
+
+# 2. 환경 변수 설정 (터미널 입력 방지 및 언어 설정)
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# 3. 필수 기본 도구 및 네트워크 도구 설치
+RUN apt-get update && apt-get install -y \
+    locales \
+    nano \
+    git \
+    curl \
+    wget \
+    gnupg2 \
+    lsb-release \
+    ca-certificates \
+    build-essential \
+    cmake \
+    software-properties-common \
+    python3-pip \
+    python-is-python3 \
+    && locale-gen en_US.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 4. ROS 2 Humble 리포지토리 추가
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+# 5. ROS 2 Humble Desktop 및 개발 도구 설치
+RUN apt-get update && apt-get install -y \
+    ros-humble-desktop \
+    ros-dev-tools \
+    libgl1-mesa-dri libgl1-mesa-glx libglu1-mesa-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 5-1. ROS 2 Humble MoveIt, PCL
+RUN apt-get update && apt-get install -y \
+    ros-humble-rviz2 \
+    ros-humble-moveit \
+    ros-humble-moveit-servo \
+    ros-humble-pcl-ros \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------
+# 5-2: ROS 2 제어 프레임워크 핵심 (Control, Manager, HW IF)
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    ros-humble-ros2-control \
+    ros-humble-controller-manager \
+    ros-humble-hardware-interface \
+    ros-humble-pluginlib \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------
+# 5-3단계: 표준 컨트롤러 및 하드웨어 플러그인 (Controllers, Broadcaster, Gazebo)
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    ros-humble-ros2-controllers \
+    ros-humble-joint-state-broadcaster \
+    ros-humble-joint-state-publisher \
+    ros-humble-joint-state-publisher-gui \
+    ros-humble-diff-drive-controller \
+    ros-humble-joint-trajectory-controller \
+    ros-humble-gazebo-ros2-control \
+    ros-humble-gazebo-plugins \
+    ros-humble-xacro \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------
+# 5-4단계: 이미지 플러그인
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    libgflags-dev nlohmann-json3-dev \
+    ros-humble-image-transport ros-humble-image-transport-plugins ros-humble-compressed-image-transport \
+    ros-humble-image-publisher ros-humble-camera-info-manager \
+    ros-humble-diagnostic-updater ros-humble-diagnostic-msgs ros-humble-statistics-msgs ros-humble-xacro \
+    ros-humble-backward-ros libdw-dev libssl-dev mesa-utils libgl1 libgoogle-glog-dev \
+    ros-humble-image-view ros-humble-tf-transformations ros-humble-find-object-2d \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# ---------------------------------------------------------
+# 5-5단계: 그외 각종 제어를 위한 SDK
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    ros-humble-dynamixel-sdk \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# 6. GPU 가속 및 GUI 설정을 위한 환경 변수
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,display
+
+# 7. ROS 환경 자동 소싱 설정
+RUN echo "alias eb='nano ~/.bashrc'" >> ~/.bashrc && \
+    echo "alias sb='source ~/.bashrc'" >> ~/.bashrc && \
+    echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc && \
+    # install/setup.bash가 존재할 때만 source 실행
+    echo 'if [ -f "/ros_ws/install/setup.bash" ]; then source "/ros_ws/install/setup.bash"; fi' >> ~/.bashrc
+
+
+
+# 8. 작업 디렉토리 설정 및 소스 폴더 생성
+WORKDIR /ros_ws
+RUN mkdir -p src
+
+# 기본 쉘을 bash로 설정
+SHELL ["/bin/bash", "-c"]
