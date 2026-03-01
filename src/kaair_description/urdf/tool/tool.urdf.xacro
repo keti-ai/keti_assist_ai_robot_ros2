@@ -94,6 +94,8 @@
       </collision>
     </link>
 
+    <link name="virtual_gripper_link"/>
+
     <joint name="hand_to_gripper_fix_joint" type="fixed">
       <origin xyz="0.0 0.0 0.0135" rpy="0 0 0"/>
       <parent link="hand_base_link"/>
@@ -106,23 +108,31 @@
       <child link="vision_frame_link"/>
     </joint>
 
-    <joint name="right_finger_tip_joint" type="prismatic">
-        <origin xyz="0.0 0.0035 0.15325" rpy="0 0 0"/>
-        <parent link="gripper_body_link"/>
-        <child link="right_finger_tip"/>
-        <axis xyz="0.0 1.0 0.0"/>
-        <limit upper="0.055" lower="0" effort="50" 
-        velocity="0.005"/>
+    <joint name="virtual_gripper_joint" type="prismatic">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <parent link="hand_base_link"/>
+      <child link="virtual_gripper_link"/>
+      <axis xyz="0 1 0"/>
+      <limit upper="0.1" lower="0" effort="50" velocity="0.01"/>
     </joint>
 
-    <joint name="left_finger_tip_joint" type="prismatic">
-        <origin xyz="0.0 -0.0035 0.15325" rpy="0 0 0"/>
-        <parent link="gripper_body_link"/>
-        <child link="left_finger_tip"/>
-        <axis xyz="0.0 -1.0 0.0"/>
-        <limit upper="0.055" lower="0" effort="50" 
-        velocity="0.005"/>
-        <mimic joint="right_finger_tip_joint" multiplier="1.0" offset="0"/>
-    </joint>
+
+  <joint name="right_finger_tip_joint" type="prismatic">
+    <origin xyz="0.0 0.0035 0.15325" rpy="0 0 0"/>
+    <parent link="gripper_body_link"/>
+    <child link="right_finger_tip"/>
+    <axis xyz="0.0 1.0 0.0"/>
+    <limit upper="0.05" lower="0" effort="50" velocity="0.005"/>
+    <mimic joint="virtual_gripper_joint" multiplier="0.5" offset="0"/>
+  </joint>
+
+  <joint name="left_finger_tip_joint" type="prismatic">
+    <origin xyz="0.0 -0.0035 0.15325" rpy="0 0 0"/>
+    <parent link="gripper_body_link"/>
+    <child link="left_finger_tip"/>
+    <axis xyz="0.0 -1.0 0.0"/>
+    <limit upper="0.05" lower="0" effort="50" velocity="0.005"/>
+    <mimic joint="virtual_gripper_joint" multiplier="0.5" offset="0"/>
+  </joint>
 
 </robot>

@@ -5,6 +5,8 @@ services:
     network_mode: host           # ROS 2 통신을 위해 host 모드 권장
     ipc: host                    # FastDDS 공유 메모리 통신을 위해 필요
     privileged: true             # GPU 및 하드웨어 접근 권한
+    restart: unless-stopped
+
     
     environment:
       - DISPLAY=${DISPLAY}
@@ -37,4 +39,5 @@ services:
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     working_dir: /ros_ws
-    command: /bin/bash
+    command: >
+      bash -c "pip install -r requirements.txt && /bin/bash"

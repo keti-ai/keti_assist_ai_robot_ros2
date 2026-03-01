@@ -16,7 +16,7 @@ controller_manager:
 
     # Tool을 제어할 Action Server 역할
     tool_controller:
-          type: position_controllers/GripperActionController
+      type: position_controllers/GripperActionController
 
     xarm7_traj_controller:
       type: joint_trajectory_controller/JointTrajectoryController
@@ -72,7 +72,7 @@ head_controller:
 tool_controller:
   ros__parameters:
       # 핵심: mimic 당하는 left는 빼고, 기준이 되는 right만 적습니다!
-      joint: right_finger_tip_joint
+      joint: virtual_gripper_joint
       
       # 그리퍼는 보통 위치(position)를 목표로 주고, 
       # 물체에 닿았을 때의 힘(effort)을 피드백으로 받습니다.

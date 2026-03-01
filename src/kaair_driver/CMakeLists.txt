@@ -5,9 +5,11 @@ project(kaair_driver)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
+
 
 # -------------------------------------------------------------------
 # 1. 의존성 패키지 로드
@@ -26,7 +28,7 @@ find_package(serial REQUIRED)
 # 2. 공통 하드웨어 로직 라이브러리 (확장성의 핵심)
 # -------------------------------------------------------------------
 # [기존] Head (다이나믹셀) 로직
-add_library(dxl_hw_lib SHARED
+add_library(dxl_hw_lib STATIC
   src/head/dxl_hw.cpp
 )
 target_include_directories(dxl_hw_lib PUBLIC
@@ -38,9 +40,10 @@ ament_target_dependencies(dxl_hw_lib
 )
 
 # 🌟 [추가된 부분] Lift (MD400) 로직
-add_library(md485_hw_lib SHARED
+add_library(md485_hw_lib STATIC
   src/lift/md485_hw.cpp
 )
+
 target_include_directories(md485_hw_lib PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
@@ -67,6 +70,8 @@ ament_target_dependencies(kaair_driver
   pluginlib
   rclcpp
   rclcpp_lifecycle
+  serial
+  dynamixel_sdk
 )
 
 # -------------------------------------------------------------------
