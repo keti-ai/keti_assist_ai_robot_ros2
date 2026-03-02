@@ -1,0 +1,188 @@
+<?xml version="1.0" ?>
+<robot name="slamtec" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <xacro:property name="m_to_mm" value="0.001 0.001 0.001"/>
+    <xacro:property name="mesh_path" value="package://kaair_description/meshes/"/>
+
+    <link name="base_footprint"/>
+
+    <link name="slamtec_base_link">
+      <!-- visual -->
+      <visual>
+        <geometry>
+          <mesh filename="${mesh_path}slamtec/visual/slamtec_base.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </visual>
+      <!-- collision -->
+      <collision>
+        <origin xyz="0.008259 0.0 0.148485" rpy="0 0 0"/>
+        <geometry>
+            <box size="0.460 0.430 0.409"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <link name="S2RPLidar_frame">
+        <visual>
+            <geometry>
+                <mesh filename="${mesh_path}slamtec/visual/S2RPLIDAR.stl" scale="${m_to_mm}"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </visual>
+    </link>
+
+    <link name="robot_base_link"/>
+
+    <link name="left_wheel">
+        <!-- visual -->
+        <visual>
+            <geometry>
+            <mesh filename="${mesh_path}slamtec/visual/left_wheel.stl" scale="${m_to_mm}"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </visual>
+
+      <!-- collision -->
+        <collision>
+            <geometry>
+                <cylinder radius="0.085" length="0.041"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+        </collision>
+    </link>
+
+    <link name="right_wheel">
+        <!-- visual -->
+        <visual>
+            <geometry>
+            <mesh filename="${mesh_path}slamtec/visual/right_wheel.stl" scale="${m_to_mm}"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </visual>
+
+      <!-- collision -->
+        <collision>
+            <geometry>
+                <cylinder radius="0.085" length="0.041"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="1.5708 0 0"/>
+        </collision>
+    </link>
+
+    <link name="lf_caster">
+        <!-- visual -->
+        <visual>
+            <geometry>
+                <mesh filename="${mesh_path}slamtec/visual/caster.stl" scale="${m_to_mm}"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </visual>
+      <!-- collision -->
+        <collision>
+            <geometry>
+                <sphere radius="0.0315"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </collision>
+    </link>
+    <link name="rf_caster">
+        <!-- visual -->
+        <visual>
+            <geometry>
+                <mesh filename="${mesh_path}slamtec/visual/caster.stl" scale="${m_to_mm}"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </visual>
+      <!-- collision -->
+        <collision>
+            <geometry>
+                <sphere radius="0.0315"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </collision>
+    </link>
+    <link name="lb_caster">
+        <!-- visual -->
+        <visual>
+            <geometry>
+                <mesh filename="${mesh_path}slamtec/visual/caster.stl" scale="${m_to_mm}"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </visual>
+      <!-- collision -->
+        <collision>
+            <geometry>
+                <sphere radius="0.0315"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </collision>
+    </link>
+    <link name="rb_caster">
+        <!-- visual -->
+        <visual>
+            <geometry>
+                <mesh filename="${mesh_path}slamtec/visual/caster.stl" scale="${m_to_mm}"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </visual>
+      <!-- collision -->
+        <collision>
+            <geometry>
+                <sphere radius="0.0315"/>
+            </geometry>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+        </collision>
+    </link>
+
+    <joint name="footprint_to_base" type="fixed">
+        <origin xyz="0.0 0.0 0.085" rpy="0 0 0"/>
+        <parent link="base_footprint"/>
+        <child link="slamtec_base_link"/>
+    </joint>
+
+    <joint name="base_to_robot_base" type="fixed">
+        <origin xyz="-0.014838 0.0 0.352985" rpy="0 0 0"/>
+        <parent link="slamtec_base_link"/>
+        <child link="robot_base_link"/>
+    </joint>
+
+    <joint name="base_to_lidar" type="fixed">
+        <origin xyz="0.1153 -0.0014 0.127035" rpy="0 0 0"/>
+        <parent link="slamtec_base_link"/>
+        <child link="S2RPLidar_frame"/>
+    </joint>
+
+    <joint name="left_wheel_joint" type="fixed">
+        <origin xyz="0.0 0.16885 0.0" rpy="0 0 0"/>
+        <parent link="slamtec_base_link"/>
+        <child link="left_wheel"/>
+    </joint>
+
+    <joint name="right_wheel_joint" type="fixed">
+        <origin xyz="0.0 -0.16885 0.0" rpy="0 0 0"/>
+        <parent link="slamtec_base_link"/>
+        <child link="right_wheel"/>
+    </joint>
+
+    <joint name="lf_caster_joint" type="fixed">
+        <origin xyz="0.12766 0.09 -0.0535" rpy="0 0 0"/>
+        <parent link="slamtec_base_link"/>
+        <child link="lf_caster"/>
+    </joint>
+    <joint name="rf_caster_joint" type="fixed">
+        <origin xyz="0.12766 -0.09 -0.0535" rpy="0 0 0"/>
+        <parent link="slamtec_base_link"/>
+        <child link="rf_caster"/>
+    </joint>
+    <joint name="lb_caster_joint" type="fixed">
+        <origin xyz="-0.16034 0.1 -0.0535" rpy="0 0 0"/>
+        <parent link="slamtec_base_link"/>
+        <child link="lb_caster"/>
+    </joint>
+    <joint name="rb_caster_joint" type="fixed">
+        <origin xyz="-0.16034 -0.1 -0.0535" rpy="0 0 0"/>
+        <parent link="slamtec_base_link"/>
+        <child link="rb_caster"/>
+    </joint>
+</robot>

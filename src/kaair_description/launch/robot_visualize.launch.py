@@ -11,7 +11,7 @@ def generate_launch_description():
     # 1. 'mode' 인자 선언
     mode_arg = DeclareLaunchArgument(
         'mode', default_value='robot',
-        description='Visualization mode: robot(default), lift, head, arm'
+        description='Visualization mode: robot(default), lift, head, arm, slamtec'
     )
     mode = LaunchConfiguration('mode')
 

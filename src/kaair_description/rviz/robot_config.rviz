@@ -67,15 +67,71 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
+        S2RPLidar_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        arm_base:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        base_footprint:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
         femto_base_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
+          Value: true
+        femto_color_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        femto_color_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        femto_depth_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        femto_depth_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        femto_ir_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        femto_ir_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        femto_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        gripper_body_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        hand_base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         head_base:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
+        head_camera_mount:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
         head_link1:
           Alpha: 1
           Show Axes: false
@@ -91,6 +147,26 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        lb_caster:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        left_finger_tip:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        left_wheel:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        lf_caster:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         lift_base_link:
           Alpha: 1
           Show Axes: false
@@ -101,10 +177,88 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        world:
+        link1:
           Alpha: 1
           Show Axes: false
           Show Trail: false
+          Value: true
+        link2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        link3:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        link4:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        link5:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        link6:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        link7:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        link_base:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        link_eef:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        rb_caster:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rf_caster:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        right_finger_tip:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        right_wheel:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        robot_base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        slamtec_base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        virtual_gripper_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        vision_frame_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
@@ -118,9 +272,35 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: true
+        S2RPLidar_frame:
+          Value: true
+        arm_base:
+          Value: true
+        base_footprint:
+          Value: true
         femto_base_link:
           Value: true
+        femto_color_frame:
+          Value: true
+        femto_color_optical_frame:
+          Value: true
+        femto_depth_frame:
+          Value: true
+        femto_depth_optical_frame:
+          Value: true
+        femto_ir_frame:
+          Value: true
+        femto_ir_optical_frame:
+          Value: true
+        femto_link:
+          Value: true
+        gripper_body_link:
+          Value: true
+        hand_base_link:
+          Value: true
         head_base:
+          Value: true
+        head_camera_mount:
           Value: true
         head_link1:
           Value: true
@@ -128,11 +308,51 @@ Visualization Manager:
           Value: true
         head_link3:
           Value: true
+        lb_caster:
+          Value: true
+        left_finger_tip:
+          Value: true
+        left_wheel:
+          Value: true
+        lf_caster:
+          Value: true
         lift_base_link:
           Value: true
         lift_link:
           Value: true
-        world:
+        link1:
+          Value: true
+        link2:
+          Value: true
+        link3:
+          Value: true
+        link4:
+          Value: true
+        link5:
+          Value: true
+        link6:
+          Value: true
+        link7:
+          Value: true
+        link_base:
+          Value: true
+        link_eef:
+          Value: true
+        rb_caster:
+          Value: true
+        rf_caster:
+          Value: true
+        right_finger_tip:
+          Value: true
+        right_wheel:
+          Value: true
+        robot_base_link:
+          Value: true
+        slamtec_base_link:
+          Value: true
+        virtual_gripper_link:
+          Value: true
+        vision_frame_link:
           Value: true
       Marker Scale: 0.20000000298023224
       Name: TF
@@ -140,22 +360,67 @@ Visualization Manager:
       Show Axes: true
       Show Names: false
       Tree:
-        lift_base_link:
-          head_base:
-            head_link1:
-              head_link2:
-                head_link3:
-                  femto_base_link:
-                    {}
-          lift_link:
-            world:
+        base_footprint:
+          slamtec_base_link:
+            S2RPLidar_frame:
               {}
+            lb_caster:
+              {}
+            left_wheel:
+              {}
+            lf_caster:
+              {}
+            rb_caster:
+              {}
+            rf_caster:
+              {}
+            right_wheel:
+              {}
+            robot_base_link:
+              lift_base_link:
+                head_base:
+                  head_link1:
+                    head_link2:
+                      head_link3:
+                        head_camera_mount:
+                          femto_base_link:
+                            femto_link:
+                              femto_depth_frame:
+                                femto_color_frame:
+                                  femto_color_optical_frame:
+                                    {}
+                                femto_depth_optical_frame:
+                                  {}
+                                femto_ir_frame:
+                                  femto_ir_optical_frame:
+                                    {}
+                lift_link:
+                  arm_base:
+                    link_base:
+                      link1:
+                        link2:
+                          link3:
+                            link4:
+                              link5:
+                                link6:
+                                  link7:
+                                    link_eef:
+                                      hand_base_link:
+                                        gripper_body_link:
+                                          left_finger_tip:
+                                            {}
+                                          right_finger_tip:
+                                            {}
+                                        virtual_gripper_link:
+                                          {}
+                                        vision_frame_link:
+                                          {}
       Update Interval: 0
       Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: lift_base_link
+    Fixed Frame: base_footprint
     Frame Rate: 30
   Name: root
   Tools:
@@ -198,25 +463,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 1.838942289352417
+      Distance: 2.5835814476013184
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.2965029180049896
-        Y: 0.17631570994853973
-        Z: 0.2518238127231598
+        X: 0.10268831998109818
+        Y: 0.15691079199314117
+        Z: 0.5189103484153748
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5303980708122253
+      Pitch: 0.4253980815410614
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 5.328587532043457
+      Yaw: 4.348588943481445
     Saved: ~
 Window Geometry:
   Displays:
@@ -234,5 +499,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 2287
-  X: 433
-  Y: 343
+  X: 80
+  Y: -9

@@ -7,6 +7,11 @@
 
   <xacro:property name="hw_specs" value="${xacro.load_yaml('$(arg hw_spec_file)')}"/>
 
+  <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'slamtec'}">
+    <xacro:include filename="$(find kaair_description)/urdf/slamtec/slamtec.urdf.xacro"/>
+  </xacro:if>
+
+
   <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'lift'}">
     <xacro:include filename="$(find kaair_description)/urdf/lift/lift.urdf.xacro"/>
     <xacro:include filename="$(find kaair_description)/urdf/lift/lift.ros2_control.xacro"/>
@@ -19,6 +24,14 @@
       spec="${hw_specs['lift']}"
       use_fake_hardware="$(arg use_fake_hardware)"
     />
+    <xacro:if value="${'$(arg mode)' == 'robot'}">
+      <joint name="lift_to_mobile_joint" type="fixed">
+        <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+        <parent link="robot_base_link"/>
+        <child link="lift_base_link"/>
+      </joint>
+    </xacro:if>
+
   </xacro:if>
 
   <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'head'}">
@@ -44,8 +57,6 @@
       </joint>
     </xacro:if>
     
-
-
   </xacro:if>
 
   <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'arm'}">
@@ -94,5 +105,9 @@
     />
 
   </xacro:if>
+
+
+
+
 
 </robot>
