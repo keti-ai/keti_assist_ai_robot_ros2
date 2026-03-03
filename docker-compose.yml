@@ -6,8 +6,12 @@ services:
     ipc: host                    # FastDDS 공유 메모리 통신을 위해 필요
     privileged: true             # GPU 및 하드웨어 접근 권한
     restart: unless-stopped
-
+    #user: root                  # host id가 아닌 sudo id 생성시 주석 제거. 기본 id 1000
+    #user: "1001:1001"
     
+    # Jetpack 환경의 경우 runtie 부분 주석 제거
+    #runtime: ${DOCKER_RUNTIME}
+
     environment:
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
@@ -28,6 +32,7 @@ services:
       # (선택) 호스트의 .bashrc 설정 등을 유지하고 싶을 때
       # - ~/.bash_history:/root/.bash_history
 
+    # Jetpack 환경의 경우 deploy 부분 주석처리
     deploy:
       resources:
         reservations:
