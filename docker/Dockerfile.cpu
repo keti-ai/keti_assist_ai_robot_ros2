@@ -1,3 +1,122 @@
-FROM osrf/ros:humble-desktop-full AS base
+FROM moveit/moveit2:humble-source
 
+# 2. 환경 변수 설정 (터미널 입력 방지 및 언어 설정)
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+# 3. 필수 기본 도구 및 네트워크 도구 설치
+RUN apt-get update && apt-get install -y \
+    locales \
+    nano \
+    net-tools \
+    git \
+    curl \
+    wget \
+    gnupg2 \
+    lsb-release \
+    ca-certificates \
+    build-essential \
+    cmake \
+    software-properties-common \
+    python3-pip \
+    python-is-python3 \
+    && locale-gen en_US.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 5. ROS 2 Humble Desktop 및 개발 도구 설치
+RUN apt-get update && apt-get install -y \
+    ros-dev-tools \
+    libgl1-mesa-dri libgl1-mesa-glx libglu1-mesa-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 5-1. ROS 2 Humble MoveIt, PCL
+RUN apt-get update && apt-get install -y \
+    ros-humble-pcl-ros \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------
+# 5-3단계: 표준 컨트롤러 및 하드웨어 플러그인 (Controllers, Broadcaster, Gazebo)
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    ros-humble-ros2-controllers \
+    ros-humble-diff-drive-controller \
+    && rm -rf /var/lib/apt/lists/*
+    
+# ---------------------------------------------------------
+# 5-4단계: 이미지 플러그인
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    libgflags-dev nlohmann-json3-dev \
+    ros-humble-image-transport ros-humble-image-transport-plugins ros-humble-compressed-image-transport \
+    ros-humble-image-publisher ros-humble-camera-info-manager \
+    ros-humble-diagnostic-updater ros-humble-diagnostic-msgs ros-humble-statistics-msgs ros-humble-xacro \
+    ros-humble-backward-ros libdw-dev libssl-dev mesa-utils libgl1 libgoogle-glog-dev \
+    ros-humble-image-view ros-humble-tf-transformations ros-humble-find-object-2d \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------
+# 5-5단계: 그외 각종 제어를 위한 SDK
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    ros-humble-dynamixel-sdk \
+    && rm -rf /var/lib/apt/lists/*
+
+# 5-1. rviz-common 특정 버전 아키텍처별 자동 설치 및 고정
+RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates \
+    && ARCH=$(dpkg --print-architecture) \
+    && if [ "$ARCH" = "amd64" ]; then \
+        URL="http://snapshots.ros.org/humble/2025-06-18/ubuntu/pool/main/r/ros-humble-rviz-common/ros-humble-rviz-common_11.2.17-1jammy.20250617.234657_amd64.deb"; \
+    elif [ "$ARCH" = "arm64" ]; then \
+        URL="http://snapshots.ros.org/humble/2025-06-18/ubuntu/pool/main/r/ros-humble-rviz-common/ros-humble-rviz-common_11.2.17-1jammy.20250607.163324_arm64.deb"; \
+    fi \
+    && echo "Downloading rviz-common for $ARCH..." \
+    && wget "$URL" -O /tmp/rviz-common.deb \
+    && dpkg -i /tmp/rviz-common.deb || apt-get install -y -f \
+    && apt-mark hold ros-humble-rviz-common \
+    && rm /tmp/rviz-common.deb \
+    && rm -rf /var/lib/apt/lists/*
+
+
+ARG USERNAME=developer
+# 여기서 기본값을 1000으로 두되, 빌드 시 --build-arg USER_UID=2002 로 덮어쓸 수 있습니다.
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+ENTRYPOINT []
+
+RUN apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME
+
+# 가독성 높은 터미널 색상 설정 (Cyan & Yellow 조합)
+RUN echo 'export TERM=xterm-256color' >> /home/${USERNAME}/.bashrc && \
+    echo 'alias ls="ls --color=auto"' >> /home/${USERNAME}/.bashrc && \
+    echo 'alias ll="ls -alF"' >> /home/${USERNAME}/.bashrc && \
+    echo 'export PS1="\[\e[01;36m\]\u@docker\[\e[00m\]:\[\e[01;33m\]\w\[\e[00m\]\$ "' >> /home/${USERNAME}/.bashrc
+
+# (선택 사항) root 계정에도 적용하고 싶다면 동일하게 적용
+RUN echo 'export PS1="\[\e[01;31m\]\u@container\[\e[00m\]:\[\e[01;37m\]\w\[\e[00m\]# "' >> /root/.bashrc
+
+
+# 7. ROS 환경 자동 소싱 설정 (루프를 이용해 root와 일반 사용자 모두에게 적용)
+RUN for user_home in /root /home/${USERNAME}; do \
+    echo "alias eb='nano ~/.bashrc'" >> ${user_home}/.bashrc && \
+    echo "alias sb='source ~/.bashrc'" >> ${user_home}/.bashrc && \
+    echo "source /opt/ros/humble/setup.bash" >> ${user_home}/.bashrc && \
+    echo 'if [ -f "/ros_ws/install/setup.bash" ]; then source "/ros_ws/install/setup.bash"; fi' >> ${user_home}/.bashrc; \
+    done
+
+USER ${USERNAME}
+
+# 8. 작업 디렉토리 설정 및 소스 폴더 생성
 WORKDIR /ros_ws
+RUN mkdir -p src
+
+# 기본 쉘을 bash로 설정
+SHELL ["/bin/bash", "-c"]
+
+

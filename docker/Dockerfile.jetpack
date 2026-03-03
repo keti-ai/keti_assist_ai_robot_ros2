@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0 AS base
+FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0
 
 # 2. 환경 변수 설정 (터미널 입력 방지 및 언어 설정)
 ENV DEBIAN_FRONTEND=noninteractive
@@ -9,6 +9,7 @@ ENV LC_ALL=en_US.UTF-8
 RUN apt-get update && apt-get install -y \
     locales \
     nano \
+    net-tools \
     git \
     curl \
     wget \
@@ -138,6 +139,3 @@ RUN mkdir -p src
 # 기본 쉘을 bash로 설정
 SHELL ["/bin/bash", "-c"]
 
-
-
-WORKDIR /ros_ws

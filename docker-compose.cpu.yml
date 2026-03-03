@@ -1,6 +1,6 @@
 services:
   kaair_container:
-    image: kaair:humble-nvidia  # 빌드한 이미지 이름
+    image: kaair:humble-cpu  # 빌드한 이미지 이름
     container_name: keti_ros2_container
     network_mode: host           # ROS 2 통신을 위해 host 모드 권장
     ipc: host                    # FastDDS 공유 메모리 통신을 위해 필요
@@ -8,15 +8,10 @@ services:
     restart: unless-stopped
     #user: root                  # host id가 아닌 sudo id 생성시 주석 제거. 기본 id 1000
 
-    # Jetpack 환경의 경우 runtie 부분 주석 제거
-    runtime: nvidia
 
     environment:
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all
-      # - LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/dri:${LD_LIBRARY_PATH}
 
       - ROS_DOMAIN_ID=30         # 원하는 ID로 변경 가능
       - FASTRTPS_DEFAULT_PROFILES_FILE=/ros_ws/fastdds_profile.xml
@@ -43,16 +38,6 @@ services:
       - plugdev
       - sudo  # 필요시 추가
       - dialout  # 추가: 시리얼 포트 접근 권한
-
-
-    # 5. 최신 Docker Compose 버전에서는 deploy 섹션 사용을 권장합니다.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu, video, graphics, utility, compute]
 
 
     stdin_open: true # docker run -i

@@ -29,14 +29,17 @@ case $TARGET in
     "cpu")
         DOCKERFILE="Dockerfile.cpu"
         IMAGE_TAG="kaair:humble-cpu"
+        COMPOSE_FILE="docker-compose.cpu.yml"
         ;;
     "nvidia")
         DOCKERFILE="Dockerfile.nvidia"
         IMAGE_TAG="kaair:humble-nvidia"
+        COMPOSE_FILE="docker-compose.nvidia.yml"
         ;;
     "jetpack")
         DOCKERFILE="Dockerfile.jetpack"
         IMAGE_TAG="kaair:humble-jetpack"
+        COMPOSE_FILE="docker-compose.jetpack.yml"
         ;;
     *)
         echo "❌ 알 수 없는 타겟입니다: $TARGET (사용 가능: cpu, nvidia, jetpack)"
@@ -53,7 +56,6 @@ echo " GID: $USER_GID"
 
 
 # 5. 빌드 실행
-# --build-arg로 UID/GID뿐만 아니라 TARGET 정보도 넘겨줄 수 있습니다.
 docker build "$PROJECT_ROOT" \
     -f "$PROJECT_ROOT/docker/$DOCKERFILE" \
     -t "$IMAGE_TAG" \
@@ -62,4 +64,19 @@ docker build "$PROJECT_ROOT" \
     --build-arg USER_GID="$USER_GID" \
     --build-arg TARGET_MODE="$TARGET"
 
-echo "✅ 빌드 완료: $IMAGE_TAG"
+# 빌드 성공 여부 확인 후 복사 진행
+if [ $? -eq 0 ]; then
+    echo "✅ 빌드 완료: $IMAGE_TAG"
+    
+    # 6. Docker Compose 파일 복사
+    # 프로젝트 루트에 있는 docker-compose.{target}.yml을 docker-compose.yml로 복사
+    if [ -f "$PROJECT_ROOT/$COMPOSE_FILE" ]; then
+        cp "$PROJECT_ROOT/$COMPOSE_FILE" "$PROJECT_ROOT/docker-compose.yml"
+        echo "📂 설정 복사 완료: $COMPOSE_FILE -> docker-compose.yml"
+    else
+        echo "⚠️ 경고: $COMPOSE_FILE 파일을 찾을 수 없어 복사를 건너뜁니다."
+    fi
+else
+    echo "❌ 빌드 실패: 이미지를 생성하지 못했습니다."
+    exit 1
+fi
