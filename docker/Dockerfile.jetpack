@@ -1,5 +1,4 @@
-# 1. 베이스 이미지 설정 (CUDA 12.6.3 + cuDNN + Ubuntu 22.04)
-FROM nvidia/cuda:12.6.3-cudnn-devel-ubuntu22.04
+FROM nvcr.io/nvidia/l4t-jetpack:r36.4.0 AS base
 
 # 2. 환경 변수 설정 (터미널 입력 방지 및 언어 설정)
 ENV DEBIAN_FRONTEND=noninteractive
@@ -63,8 +62,6 @@ RUN apt-get update && apt-get install -y \
     ros-humble-joint-state-publisher-gui \
     ros-humble-diff-drive-controller \
     ros-humble-joint-trajectory-controller \
-    ros-humble-gazebo-ros2-control \
-    ros-humble-gazebo-plugins \
     ros-humble-xacro \
     && rm -rf /var/lib/apt/lists/*
 
@@ -88,19 +85,39 @@ RUN apt-get update && apt-get install -y \
     ros-humble-dynamixel-sdk \
     && rm -rf /var/lib/apt/lists/*
 
+# 5-1. rviz-common 특정 버전 단독 설치 및 업데이트 고정
+RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates \
+    && wget http://snapshots.ros.org/humble/2025-06-18/ubuntu/pool/main/r/ros-humble-rviz-common/ros-humble-rviz-common_11.2.17-1jammy.20250607.163324_arm64.deb -O /tmp/rviz-common.deb \
+    && dpkg -i /tmp/rviz-common.deb \
+    # 이후 apt-get upgrade 시 버전이 바뀌지 않도록 고정
+    && apt-mark hold ros-humble-rviz-common \
+    && rm /tmp/rviz-common.deb \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG USERNAME=developer
+# 여기서 기본값을 1000으로 두되, 빌드 시 --build-arg USER_UID=2002 로 덮어쓸 수 있습니다.
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME
+
+# 7. ROS 환경 자동 소싱 설정 (루프를 이용해 root와 일반 사용자 모두에게 적용)
+RUN for user_home in /root /home/${USERNAME}; do \
+    echo "alias eb='nano ~/.bashrc'" >> ${user_home}/.bashrc && \
+    echo "alias sb='source ~/.bashrc'" >> ${user_home}/.bashrc && \
+    echo "source /opt/ros/humble/setup.bash" >> ${user_home}/.bashrc && \
+    echo 'if [ -f "/ros_ws/install/setup.bash" ]; then source "/ros_ws/install/setup.bash"; fi' >> ${user_home}/.bashrc; \
+    done
 
 # 6. GPU 가속 및 GUI 설정을 위한 환경 변수
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,display
 
-# 7. ROS 환경 자동 소싱 설정
-RUN echo "alias eb='nano ~/.bashrc'" >> ~/.bashrc && \
-    echo "alias sb='source ~/.bashrc'" >> ~/.bashrc && \
-    echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc && \
-    # install/setup.bash가 존재할 때만 source 실행
-    echo 'if [ -f "/ros_ws/install/setup.bash" ]; then source "/ros_ws/install/setup.bash"; fi' >> ~/.bashrc
 
-
+USER ${USERNAME}
 
 # 8. 작업 디렉토리 설정 및 소스 폴더 생성
 WORKDIR /ros_ws
@@ -108,3 +125,7 @@ RUN mkdir -p src
 
 # 기본 쉘을 bash로 설정
 SHELL ["/bin/bash", "-c"]
+
+
+
+WORKDIR /ros_ws
