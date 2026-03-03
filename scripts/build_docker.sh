@@ -47,6 +47,10 @@ esac
 echo "🚀 빌드를 시작합니다: [$TARGET] 모드"
 echo "📍 Dockerfile: $DOCKERFILE"
 echo "🏷️ Image Tag: $IMAGE_TAG"
+echo " User Name: $USER_NAME"
+echo " UID: $USER_UID"
+echo " GID: $USER_GID"
+
 
 # 5. 빌드 실행
 # --build-arg로 UID/GID뿐만 아니라 TARGET 정보도 넘겨줄 수 있습니다.

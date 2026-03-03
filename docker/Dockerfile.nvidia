@@ -1,11 +1,12 @@
 # 1. 베이스 이미지 설정 (CUDA 12.6.3 + cuDNN + Ubuntu 22.04)
 #FROM nvidia/cuda:12.6.3-cudnn-devel-ubuntu22.04
-FROM nvidia/cuda:12.6.3-runtime-ubuntu22.04
+FROM nvidia/cuda:12.6.3-devel-ubuntu22.04
 
 # 2. 환경 변수 설정 (터미널 입력 방지 및 언어 설정)
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
+
 
 # 3. 필수 기본 도구 및 네트워크 도구 설치
 RUN apt-get update && apt-get install -y \
@@ -96,16 +97,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certifi
     && rm /tmp/rviz-common.deb \
     && rm -rf /var/lib/apt/lists/*
 
-
 ARG USERNAME=developer
 # 여기서 기본값을 1000으로 두되, 빌드 시 --build-arg USER_UID=2002 로 덮어쓸 수 있습니다.
 ARG USER_UID=1000
 ARG USER_GID=1000
 
+RUN apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --gid $USER_GID $USERNAME \
     && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
+
+
+# 가독성 높은 터미널 색상 설정 (Cyan & Yellow 조합)
+RUN echo 'export TERM=xterm-256color' >> /home/${USERNAME}/.bashrc && \
+    echo 'alias ls="ls --color=auto"' >> /home/${USERNAME}/.bashrc && \
+    echo 'alias ll="ls -alF"' >> /home/${USERNAME}/.bashrc && \
+    echo 'export PS1="\[\e[01;36m\]\u@docker\[\e[00m\]:\[\e[01;33m\]\w\[\e[00m\]\$ "' >> /home/${USERNAME}/.bashrc
+
+# (선택 사항) root 계정에도 적용하고 싶다면 동일하게 적용
+RUN echo 'export PS1="\[\e[01;31m\]\u@container\[\e[00m\]:\[\e[01;37m\]\w\[\e[00m\]# "' >> /root/.bashrc
 
 # 7. ROS 환경 자동 소싱 설정 (루프를 이용해 root와 일반 사용자 모두에게 적용)
 RUN for user_home in /root /home/${USERNAME}; do \
@@ -115,6 +127,7 @@ RUN for user_home in /root /home/${USERNAME}; do \
     echo 'if [ -f "/ros_ws/install/setup.bash" ]; then source "/ros_ws/install/setup.bash"; fi' >> ${user_home}/.bashrc; \
     done
 
+
 # 6. GPU 가속 및 GUI 설정을 위한 환경 변수
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,display
@@ -122,13 +135,10 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,display
 
 USER ${USERNAME}
 
+
 # 8. 작업 디렉토리 설정 및 소스 폴더 생성
 WORKDIR /ros_ws
 RUN mkdir -p src
 
 # 기본 쉘을 bash로 설정
 SHELL ["/bin/bash", "-c"]
-
-
-
-WORKDIR /ros_ws

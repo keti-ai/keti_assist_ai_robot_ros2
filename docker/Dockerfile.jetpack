@@ -99,10 +99,22 @@ ARG USERNAME=developer
 ARG USER_UID=1000
 ARG USER_GID=1000
 
+RUN apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --gid $USER_GID $USERNAME \
     && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
     && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
+
+# 가독성 높은 터미널 색상 설정 (Cyan & Yellow 조합)
+RUN echo 'export TERM=xterm-256color' >> /home/${USERNAME}/.bashrc && \
+    echo 'alias ls="ls --color=auto"' >> /home/${USERNAME}/.bashrc && \
+    echo 'alias ll="ls -alF"' >> /home/${USERNAME}/.bashrc && \
+    echo 'export PS1="\[\e[01;36m\]\u@docker\[\e[00m\]:\[\e[01;33m\]\w\[\e[00m\]\$ "' >> /home/${USERNAME}/.bashrc
+
+# (선택 사항) root 계정에도 적용하고 싶다면 동일하게 적용
+RUN echo 'export PS1="\[\e[01;31m\]\u@container\[\e[00m\]:\[\e[01;37m\]\w\[\e[00m\]# "' >> /root/.bashrc
+
 
 # 7. ROS 환경 자동 소싱 설정 (루프를 이용해 root와 일반 사용자 모두에게 적용)
 RUN for user_home in /root /home/${USERNAME}; do \
