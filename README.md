@@ -67,6 +67,7 @@ It improves upon the original repository to enable easier and more seamless use 
   cd keti_assist_ai_robot_ros2
 
   # get third party submodules
+  git submodule update --init --recursive
   git submodule update --remote --recursive
   ```
 
