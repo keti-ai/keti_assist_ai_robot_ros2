@@ -14,13 +14,13 @@ else
 fi
 
 # 3. 패키지 목록 읽기
-PKGS=$(cat .build_config/pkgs-control.txt)
+PKGS=$(cat .build_config/pkgs-all.txt)
 
 # 4. 빌드 실행
 $COLCON_CMD build \
     --symlink-install \
     --metas .build_config/colcon_build.meta \
     --packages-up-to $PKGS \
-    --cmake-args -DCMAKE_BUILD_TYPE=Debug
+    --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 source install/setup.bash

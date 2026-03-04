@@ -64,6 +64,44 @@ bool MD485Hw::set_velocity_rpm(int16_t rpm)
     return (written == packet.size());
 }
 
+bool MD485Hw::set_position_with_rpm(int32_t position, uint16_t rpm)
+{
+// 1. 메모리 패딩 없이 정확히 6바이트(4+2)만 차지하도록 구조체를 묶습니다.
+#pragma pack(push, 1)
+    struct PosVelData {
+        int32_t pos;
+        uint16_t vel;
+    } payload = {position, rpm};
+#pragma pack(pop)
+
+    // 2. 만들어두신 마법의 템플릿에 데이터 덩어리를 그대로 투척!
+    auto packet = kaair_driver::BuildPacket(
+        kaair_driver::MID::BLDC_CTR, 
+        kaair_driver::MID::MMI, 
+        cfg_.motor_id, 
+        kaair_driver::PID::POSI_VEL_CMD,
+        payload
+    );
+
+    size_t written = serial_->write(packet);
+    return (written == packet.size());
+}
+
+bool MD485Hw::init_set(uint8_t init_mode)
+{
+    // 2. 만들어두신 마법의 템플릿에 데이터 덩어리를 그대로 투척!
+    auto packet = kaair_driver::BuildPacket(
+        kaair_driver::MID::BLDC_CTR, 
+        kaair_driver::MID::MMI, 
+        cfg_.motor_id, 
+        kaair_driver::PID::INIT_SET,
+        init_mode
+    );
+
+    size_t written = serial_->write(packet);
+    return (written == packet.size());
+}
+
 bool MD485Hw::read_state(kaair_driver::MainDataPayload& out_main, kaair_driver::IoMonitorPayload& out_io)
 {
     if (!serial_ || !serial_->isOpen()) return false;
@@ -139,6 +177,38 @@ bool MD485Hw::read_state(kaair_driver::MainDataPayload& out_main)
     } 
 
     std::cerr << "[MD485Hw] MAIN_DATA 읽기 실패 (Timeout)" << std::endl;
+    return false;
+}
+
+// =========================================================
+// 3. IO 데이터만 읽기 (새로 추가한 오버로딩 함수)
+// =========================================================
+bool MD485Hw::read_state(kaair_driver::IoMonitorPayload& out_io)
+{
+    // =========================================================
+    // 2. IO_MONITOR (194) 요청 및 수신
+    // =========================================================
+    // REQ_PID_DATA(4)의 데이터로 '194'를 담아서 보냅니다.
+    auto req_io = kaair_driver::BuildPacket(
+        kaair_driver::MID::BLDC_CTR, kaair_driver::MID::MMI, cfg_.motor_id, 
+        kaair_driver::PID::REQ_PID_DATA, 
+        static_cast<uint8_t>(kaair_driver::PID::IO_MONITOR) // 👈 194번 데이터 줘!
+    );
+
+    serial_->write(req_io);
+
+    std::vector<uint8_t> rx_io;
+    if (receive_packet(kaair_driver::PID::IO_MONITOR, rx_io)) {
+
+        uint8_t byte_val = rx_io[5];
+        out_io.dir=(byte_val >> 2) & 0x01;
+        out_io.run_brake=(byte_val >> 3) & 0x01;
+        out_io.start_stop=(byte_val >> 4) & 0x01;
+        
+        return true;
+    }
+
+    std::cerr << "[MD485Hw] IO 읽기 실패 (Timeout)" << std::endl;
     return false;
 }
 

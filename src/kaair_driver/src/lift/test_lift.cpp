@@ -8,6 +8,7 @@ int main() {
 
     kaair_driver::MD485HwConfig config;
     kaair_driver::MainDataPayload main_data;
+    kaair_driver::IoMonitorPayload main_io;
 
     //실제 로봇에 연결된 시리얼 포트 이름으로 반드시 변경하세요. (예: /dev/ttyUSB0, /dev/ttyLM 등)
     config.port = "/dev/ttyLM"; 
@@ -18,15 +19,17 @@ int main() {
 
     lift_motor.connect();
 
-    lift_motor.set_velocity_rpm(150);
+    //lift_motor.set_position_with_rpm(0,300);
+
+    lift_motor.init_set(2);
 
     for(int i=0;i<10;i++)
     {
-        usleep(500000);
+        usleep(1000000);
 
         auto start_time = std::chrono::steady_clock::now();
-        lift_motor.set_velocity_rpm(50+i*10);
         bool success = lift_motor.read_state(main_data);
+        //bool success = lift_motor.read_state(main_io);
         auto end_time = std::chrono::steady_clock::now();
         auto duration_us = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
         double duration_ms = duration_us / 1000.0; // 밀리초(ms)로 변환
@@ -36,6 +39,12 @@ int main() {
             std::cout << "Position: " << main_data.position << std::endl;
             std::cout << "RPM: " << main_data.rpm << std::endl;
             std::cout << "Current: " << main_data.current << std::endl;
+
+
+
+            // std::cout << main_io.dir << " " << main_io.run_brake << main_io.start_stop;
+            // std::cout << std::endl;
+            
         }
     }
 

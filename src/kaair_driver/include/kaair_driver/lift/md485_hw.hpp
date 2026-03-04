@@ -37,10 +37,22 @@ namespace kaair_driver {
 
             // 모터에 RPM 속도 명령 전송
             bool set_velocity_rpm(int16_t rpm);
+            // 속도기반 모터 위치제어 명령 전송
+            bool set_position_with_rpm(int32_t position,uint16_t rpm);
+            // 속도기반 모터 증분위치제어 명령 전송
+            bool set_inc_position_with_rpm(int32_t position,uint16_t rpm);
+            // 포지션 초기화
+            bool reset_position();
+
+            bool init_set(uint8_t init_mode);
+
+
             // 메인 데이터와 I/O 데이터를 동시에 읽어오는 함수
             bool read_state(kaair_driver::MainDataPayload& out_main, kaair_driver::IoMonitorPayload& out_io);
             // 메인 데이터만 읽어오는 함수
             bool read_state(kaair_driver::MainDataPayload& out_main);
+            // IO 데이터만 읽어오는 함수
+            bool read_state(kaair_driver::IoMonitorPayload& out_io);
         private:
             MD485HwConfig cfg_;
             std::unique_ptr<serial::Serial> serial_; // 시리얼 통신 객체 포인터

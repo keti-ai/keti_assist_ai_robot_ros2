@@ -1,3 +1,2 @@
 orbbec_camera
-orbbec_description
 kaair_bringup

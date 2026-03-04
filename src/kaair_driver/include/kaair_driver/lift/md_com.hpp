@@ -26,6 +26,7 @@ enum class PID : uint8_t {
     POSI_RESET       = 13,  // 위치 0으로 초기화
     USE_LIMIT_SW     = 17,  // 리미트 스위치 기능 적용 여부
     CTRL_STATUS      = 34,  // 제어 상태 읽기
+    INIT_SET         = 35,  // 회전방향 위치 초기화
 
     // 2-Byte Data
     VEL_CMD          = 130, // 속도 제어 명령 (rpm)
@@ -103,10 +104,9 @@ struct MainDataPayload {
 };
 
 struct IoMonitorPayload {
-    uint16_t input_port;   // 입력 핀 상태 (Start/Stop, Run/Brake 등 비트맵)
-    uint16_t output_port;  // 출력 핀 상태
-    uint16_t ad_in[4];     // 아날로그 입력 1~4 (8바이트)
-    uint8_t reserved[5];   // 나머지 예약 영역 (5바이트)
+    bool dir;
+    bool run_brake;
+    bool start_stop;
 };
 
 
