@@ -75,6 +75,7 @@ Thumbs.db
 *.bak
 
 # ==========================================
-# DOCKER 파일 관련
+# User Editing file except
 # ==========================================
 docker-compose.yml
+fastdds_profile.xml

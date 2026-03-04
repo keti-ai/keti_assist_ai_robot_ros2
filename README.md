@@ -5,23 +5,23 @@ It improves upon the original repository to enable easier and more seamless use 
 
 - [Documentation for KETI Assist AI ROBOT](https://bittersweet-singer-2da.notion.site/2fcb18ffad91806cbfd2c2f29d54d1cd?v=2fcb18ffad9180a6b2e6000c43cecc10&source=copy_link)
 
-## prerequisition
+## Prerequisition
 
 - Ubuntu 22.04 + ROS Humble
 - Use `fastdds_profile.xml` for dds tuning.
-  ```
+  ```bash
   # Copy fastdds profile xml in home directory
-  cp fastdds_profile.xml ~/
+  cp fastdds_profile.xml ${HOME}
 
   # add this in ~/.bashrc
   export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-  export FASTRTPS_DEFAULT_PROFILES_FILE=~/fastdds_profile.xml
+  export FASTRTPS_DEFAULT_PROFILES_FILE=${HOME}/fastdds_profile.xml
   export RMW_FASTRTPS_USE_QOS_FROM_XML=1
 
   source /opt/ros/humble/setup.bash
   ```
-- Edit if you want to communicate other PC.(Another PC also need export fastdds_profile.xml)
-  ```
+- Edit if you want to communicate other PC.(Another PC also need to export fastdds_profile.xml)
+  ```xml
   <participant profile_name="shm_udp_participant" is_default_profile="true">
     <rtps>
         <useBuiltinTransports>false</useBuiltinTransports>
@@ -71,7 +71,27 @@ It improves upon the original repository to enable easier and more seamless use 
   git submodule update --remote --recursive
   ```
 
-- ### Build ROS2 Package
+- ### Build with Docker
+  #### Move to Repository directory
+    ```bash
+    cd <repository_directory>
+    ```
+  #### Build Docker Image .sh what you want
+  ```bash
+  # change input argument (cpu,nvidia,jetpack)
+  bash script/build_docker.sh -t nvidia
+  ```
+  #### This copies `docker-compose.yml` in your workspace repository
+  #### Move to Workspace Directory and docker-compose up. You can edit docker-compse.yml and rerun this code.
+  ```bash
+  docker-compose up -d
+  ```
+  #### Attach to docker shell
+  ```bash
+  docker exec -it keti_ros2_container /bin/bash
+  ```
+
+- ### Build ROS2 Package(Host installation)
   #### Move to Repository directory
   ```bash
   # Remember to source ros2 environment settings first
