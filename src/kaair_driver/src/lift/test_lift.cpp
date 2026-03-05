@@ -7,7 +7,6 @@
 int main() {
 
     kaair_driver::MD485HwConfig config;
-    kaair_driver::IoMonitorPayload main_io;
     kaair_driver::RosDataPayload ros_main;
 
     kaair_driver::MD485Hw lift_motor(config);
@@ -32,9 +31,7 @@ int main() {
 
         auto start_time = std::chrono::steady_clock::now();
         bool success = lift_motor.read_ros_state(ros_main);
-        //bool cmd_suc = lift_motor.set_linear_velocity(-0.01);
         lift_motor.move_abs_pose_meter_with_velocity(0.11,0.03);
-        //bool success = lift_motor.read_state(main_io);
         auto end_time = std::chrono::steady_clock::now();
         auto duration_us = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time).count();
         double duration_ms = duration_us / 1000.0; // 밀리초(ms)로 변환
