@@ -1,3 +1,6 @@
 [submodule "src/third_party/Orbbec_ROS2_SDK"]
 	path = src/third_party/Orbbec_ROS2_SDK
 	url = https://github.com/keti-ai/orbbec_kaair_ros2.git
+[submodule "src/third_party/xarm_ros2"]
+	path = src/third_party/xarm_ros2
+	url = https://github.com/keti-ai/xarm_kaair_ros2.git
