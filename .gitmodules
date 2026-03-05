@@ -1,6 +1,3 @@
-[submodule "src/third_party/serial"]
-	path = src/third_party/serial
-	url = https://github.com/RoverRobotics-forks/serial-ros2.git
 [submodule "src/third_party/xarm_ros2"]
 	path = src/third_party/xarm_ros2
 	url = https://github.com/keti-ai/xarm_kaair_ros2.git
