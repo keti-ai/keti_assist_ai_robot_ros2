@@ -32,6 +32,7 @@ enum class PID : uint8_t {
     VEL_CMD          = 130, // 속도 제어 명령 (rpm)
     INT_RPM_DATA     = 138, // 모터 회전 속도 읽기 (rpm)
     TQ_DATA          = 139, // 모터 전류 읽기 (0.1A 단위)
+    RETURN_TYPE      = 149, // ACK 여부 설정 (2입력시 응답 리턴)
 
     // N-Byte Data
     MAIN_DATA        = 193, // 메인 데이터 (상태, 속도, 전류, 위치 등 - 17 bytes)
@@ -41,6 +42,7 @@ enum class PID : uint8_t {
     POSI_DATA        = 197, // 위치 데이터 (4 bytes)
     POSI_VEL_CMD     = 219, // 위치 & 속도 제어 명령 (6 bytes)
     INC_POSI_VEL_CMD = 220, // 상대 위치 & 속도 제어 명령 (6 bytes)
+    MAX_RPM          = 221, // 모터 설정 최대 RPM
 };
 
 // =================================================================
@@ -103,6 +105,12 @@ struct MainDataPayload {
     uint8_t status2;        // 상태 2
 };
 
+struct RosDataPayload {
+    double position;
+    double velocity;
+    double effort;
+};
+
 struct IoMonitorPayload {
     bool dir;
     bool run_brake;
@@ -135,11 +143,11 @@ constexpr uint8_t GetExpectedDataLength(PID pid) {
         case PID::COMMAND: return 1;
         case PID::ALARM_RESET: return 1;
         case PID::POSI_RESET: return 1;
-        
+        case PID::RETURN_TYPE: return 1;
         case PID::VEL_CMD: return 2;
         case PID::INT_RPM_DATA: return 2;
         case PID::TQ_DATA: return 2;
-        
+        case PID::MAX_RPM: return 2;
         case PID::MAIN_DATA: return 17;
         case PID::TAR_POSI: return 4;
         case PID::POSI_VEL_CMD: return 6;
@@ -188,6 +196,33 @@ inline std::vector<uint8_t> BuildPacket(MID rmid, MID tmid, uint8_t motor_id, PI
     };
     packet.push_back(CalculateChecksum(packet.data(), packet.size()));
     return packet;
+}
+
+// =================================================================
+// [추가] ACK 응답 확인용 Helper 함수 (md_com.hpp 내부에 추가)
+// =================================================================
+inline bool IsValidAck(const std::vector<uint8_t>& packet, uint8_t motor_id, PID expected_pid) {
+    if (packet.size() < 6) return false; // Header(5) + Checksum(1) 최소 사이즈
+
+    // 헤더 패턴 검증 (모터(183) -> PC(172))
+    if (packet[0] != static_cast<uint8_t>(MID::MMI) || 
+        packet[1] != static_cast<uint8_t>(MID::BLDC_CTR) || 
+        packet[2] != motor_id) {
+        return false;
+    }
+
+    // PID 일치 여부 확인 (명령을 내린 PID와 응답으로 돌아온 PID가 같아야 함)
+    if (packet[3] != static_cast<uint8_t>(expected_pid)) {
+        return false;
+    }
+
+    // 체크섬 검증
+    uint8_t calc_chk = CalculateChecksum(packet.data(), packet.size() - 1);
+    if (calc_chk != packet.back()) {
+        return false;
+    }
+
+    return true;
 }
 
 } // namespace mdrobot

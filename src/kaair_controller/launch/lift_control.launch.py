@@ -36,7 +36,7 @@ def generate_launch_description():
                 "robot.urdf.xacro"
             ]),
             " ",
-            "mode:=robot",
+            "mode:=lift",
             " ",
             "use_fake_hardware:=", use_fake_hardware,
         ]

@@ -43,8 +43,8 @@ namespace kaair_driver {
         }
 
         // 2. 조인트 개수만큼 버퍼 초기화
-        hw_states_.resize(info.joints.size(), 0.0);
-        hw_commands_.resize(info.joints.size(), 0.0);
+        hw_states_.resize(3, 0.0);
+        hw_commands_.resize(1, 0.0);
 
 
         md485_hw_ = std::make_unique<MD485Hw>(config);
@@ -72,7 +72,14 @@ namespace kaair_driver {
 
     CallbackReturn LiftHwInterface::on_activate(const rclcpp_lifecycle::State & /*previous_state*/) {
         
-        
+        if(!md485_hw_->connect()) return CallbackReturn::ERROR;
+
+        md485_hw_->clear_alarm();
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        md485_hw_->set_max_rpm(config.max_rpm);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+
         RCLCPP_INFO(rclcpp::get_logger("LiftHwInterface"), "Hardware activated. ");
         
         return CallbackReturn::SUCCESS;
@@ -80,6 +87,10 @@ namespace kaair_driver {
 
     CallbackReturn LiftHwInterface::on_deactivate(const rclcpp_lifecycle::State & /*previous_state*/) {
     
+        md485_hw_->stop_brake();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        md485_hw_->disconnect();
+
         return CallbackReturn::SUCCESS;
     }
 
@@ -89,6 +100,52 @@ namespace kaair_driver {
     }
 
     hardware_interface::return_type LiftHwInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
+        RosDataPayload ros_main;
+        
+        if(!md485_hw_->read_ros_state(ros_main)){
+            read_error_count_++;
+
+            // 연속 에러가 허용 범위 내라면 OK를 리턴해서 루프를 살림
+            if (read_error_count_ < MAX_READ_ERRORS) {
+                // 너무 자주 찍히지 않게 Throttle 로그 사용
+                RCLCPP_WARN_THROTTLE(
+                    rclcpp::get_logger("HeadHwInterface"),
+                    *clock_, 500, // 0.5초 간격으로 경고
+                    "Sync Read Failed (%d/%d). Using last valid state.", 
+                    read_error_count_, MAX_READ_ERRORS
+                );
+                
+                // 중요: 여기서 ERROR를 리턴하지 않고 OK를 리턴함!
+                // hw_states_에는 이전 루프에서 읽었던 값이 그대로 남아있어 안전함.
+                return hardware_interface::return_type::OK;
+            } 
+            else {
+                // 연속 실패 횟수를 초과한 경우 (진짜 문제 발생)
+                RCLCPP_ERROR(rclcpp::get_logger("HeadHwInterface"), 
+                            "Critical: Consecutive sync read failures! Stopping hardware.");
+                return hardware_interface::return_type::ERROR;
+            }
+        }
+        
+        // 2. 읽기 성공 시 카운터 초기화
+        if (read_error_count_ > 0) {
+            RCLCPP_INFO(rclcpp::get_logger("HeadHwInterface"), "Communication recovered.");
+        }
+        read_error_count_ = 0;
+
+        hw_states_[0]=ros_main.position;
+        hw_states_[1]=ros_main.velocity;
+        hw_states_[2]=ros_main.effort;
+
+        // 4. 모니터링 로그 (디버깅 시 매우 유용)
+        RCLCPP_INFO_THROTTLE(
+            rclcpp::get_logger("LiftHwInterface"),
+            *clock_, 1000,
+            "Lift Status | Cmd: %.3f m | Pos: %.3f m, Vel: %.3f m/s, Effort: %.2f A",
+            hw_commands_[0], ros_main.position, ros_main.velocity, ros_main.effort
+        );
+
+
         return hardware_interface::return_type::OK;
     }
 }

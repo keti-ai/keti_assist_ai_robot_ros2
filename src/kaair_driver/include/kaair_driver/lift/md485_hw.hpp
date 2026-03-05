@@ -14,8 +14,8 @@ namespace kaair_driver {
     struct MD485HwConfig {
         std::string usb_port = "/dev/ttyLM";
         int baud_rate = 115200;
-        double offset_position = 0.0;
-        int encoder_ppr = 65536;
+        double offset_position = 0.1;
+        int encoder_ppr = 16384;
         double lead_pitch = 0.01;
         double reduction_ratio = 1.4736842;
         int max_rpm = 3000;
@@ -36,15 +36,24 @@ namespace kaair_driver {
 
             // 모터에 RPM 속도 명령 전송
             bool set_velocity_rpm(int16_t rpm);
+            bool set_linear_velocity(double velocity);
             // 속도기반 모터 위치제어 명령 전송
             bool set_position_with_rpm(int32_t position,uint16_t rpm);
-            // 속도기반 모터 증분위치제어 명령 전송
-            bool set_inc_position_with_rpm(int32_t position,uint16_t rpm);
-            // 포지션 초기화
+            // 선속도기반 모터 미터단위 제어 명령 전송
+            bool move_abs_pose_meter_with_velocity(double position,double velocity);
+            // 포지션 0으로 초기화
             bool reset_position();
+            // 최대 속도 설정
+            bool set_max_rpm(uint16_t rpm);
 
             bool init_set(uint8_t init_mode);
 
+            // ACK 활성화
+            bool return_type_ack();
+            // 에러시 알람 초기화
+            bool clear_alarm();
+            // 정지 및 브레이크 명령
+            bool stop_brake();
 
             // 메인 데이터와 I/O 데이터를 동시에 읽어오는 함수
             bool read_state(kaair_driver::MainDataPayload& out_main, kaair_driver::IoMonitorPayload& out_io);
@@ -52,11 +61,20 @@ namespace kaair_driver {
             bool read_state(kaair_driver::MainDataPayload& out_main);
             // IO 데이터만 읽어오는 함수
             bool read_state(kaair_driver::IoMonitorPayload& out_io);
+            // 
+            bool read_ros_state(kaair_driver::RosDataPayload& out_ros);
+
         private:
             MD485HwConfig cfg_;
             std::unique_ptr<serial::Serial> serial_; // 시리얼 통신 객체 포인터
             // 수신 패킷 동기화 및 파싱 함수
             bool receive_packet(kaair_driver::PID expected_pid, std::vector<uint8_t>& out_data);
+            bool send_command_and_wait_ack(const std::vector<uint8_t>& packet, kaair_driver::PID expected_pid, int timeout_ms = 100);
+
+            double count_to_meter(int count) const;
+            int meter_to_count(double meter) const;
+            double rpm_to_meter_per_s(int rpm) const;
+            int meter_per_s_to_rpm(double meter) const;
 
     };
 

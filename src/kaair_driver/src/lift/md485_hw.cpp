@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cstring>
 #include <chrono>
+#include <thread>
 
 namespace kaair_driver {
 
@@ -62,6 +63,12 @@ bool MD485Hw::set_velocity_rpm(int16_t rpm)
 
     size_t written = serial_->write(packet);
     return (written == packet.size());
+    
+}
+
+bool MD485Hw::set_linear_velocity(double velocity)
+{
+    set_velocity_rpm(meter_per_s_to_rpm(velocity));
 }
 
 bool MD485Hw::set_position_with_rpm(int32_t position, uint16_t rpm)
@@ -87,6 +94,11 @@ bool MD485Hw::set_position_with_rpm(int32_t position, uint16_t rpm)
     return (written == packet.size());
 }
 
+bool MD485Hw::move_abs_pose_meter_with_velocity(double position,double velocity)
+{
+    set_position_with_rpm(meter_to_count(position-cfg_.offset_position),meter_per_s_to_rpm(velocity));
+}
+
 bool MD485Hw::init_set(uint8_t init_mode)
 {
     // 2. 만들어두신 마법의 템플릿에 데이터 덩어리를 그대로 투척!
@@ -96,6 +108,81 @@ bool MD485Hw::init_set(uint8_t init_mode)
         cfg_.motor_id, 
         kaair_driver::PID::INIT_SET,
         init_mode
+    );
+
+    size_t written = serial_->write(packet);
+    return (written == packet.size());
+}
+
+bool MD485Hw::reset_position()
+{
+    // 2. 만들어두신 마법의 템플릿에 데이터 덩어리를 그대로 투척!
+    auto packet = kaair_driver::BuildPacket(
+        kaair_driver::MID::BLDC_CTR, 
+        kaair_driver::MID::MMI, 
+        cfg_.motor_id, 
+        kaair_driver::PID::COMMAND,
+        kaair_driver::Command::POSI_RESET
+    );
+
+    size_t written = serial_->write(packet);
+    return (written == packet.size());
+}
+
+bool MD485Hw::set_max_rpm(uint16_t rpm)
+{
+    // 2. 만들어두신 마법의 템플릿에 데이터 덩어리를 그대로 투척!
+    auto packet = kaair_driver::BuildPacket(
+        kaair_driver::MID::BLDC_CTR, 
+        kaair_driver::MID::MMI, 
+        cfg_.motor_id, 
+        kaair_driver::PID::MAX_RPM,
+        rpm
+    );
+
+    size_t written = serial_->write(packet);
+    return (written == packet.size());
+}
+
+bool MD485Hw::return_type_ack()
+{
+    // 2. 만들어두신 마법의 템플릿에 데이터 덩어리를 그대로 투척!
+    auto packet = kaair_driver::BuildPacket(
+        kaair_driver::MID::BLDC_CTR, 
+        kaair_driver::MID::MMI, 
+        cfg_.motor_id, 
+        kaair_driver::PID::RETURN_TYPE,
+        0
+    );
+
+    size_t written = serial_->write(packet);
+    return (written == packet.size());
+}
+
+bool MD485Hw::clear_alarm()
+{
+    // 2. 만들어두신 마법의 템플릿에 데이터 덩어리를 그대로 투척!
+    auto packet = kaair_driver::BuildPacket(
+        kaair_driver::MID::BLDC_CTR, 
+        kaair_driver::MID::MMI, 
+        cfg_.motor_id, 
+        kaair_driver::PID::COMMAND,
+        kaair_driver::PID::ALARM_RESET
+    );
+
+    size_t written = serial_->write(packet);
+    return (written == packet.size());
+}
+
+bool MD485Hw::stop_brake()
+{
+    // 2. 만들어두신 마법의 템플릿에 데이터 덩어리를 그대로 투척!
+    auto packet = kaair_driver::BuildPacket(
+        kaair_driver::MID::BLDC_CTR, 
+        kaair_driver::MID::MMI, 
+        cfg_.motor_id, 
+        kaair_driver::PID::COMMAND,
+        kaair_driver::Command::BRAKE
     );
 
     size_t written = serial_->write(packet);
@@ -212,6 +299,18 @@ bool MD485Hw::read_state(kaair_driver::IoMonitorPayload& out_io)
     return false;
 }
 
+bool MD485Hw::read_ros_state(kaair_driver::RosDataPayload& out_ros)
+{
+    MainDataPayload m_data;
+    bool success = read_state(m_data);
+
+    out_ros.position=count_to_meter(m_data.position)+cfg_.offset_position;
+    out_ros.velocity=rpm_to_meter_per_s(m_data.rpm);
+    out_ros.effort=m_data.current*0.1;
+
+    return success;
+}
+
 
 bool MD485Hw::receive_packet(kaair_driver::PID expected_pid, std::vector<uint8_t>& out_data)
 {
@@ -266,5 +365,73 @@ bool MD485Hw::receive_packet(kaair_driver::PID expected_pid, std::vector<uint8_t
     }
     return false;
 }
+
+bool MD485Hw::send_command_and_wait_ack(const std::vector<uint8_t>& packet, kaair_driver::PID expected_pid, int timeout_ms)
+{
+    if (!serial_ || !serial_->isOpen()) return false;
+
+    // 1. 송신 전 수신 버퍼 찌꺼기 완벽히 비우기 (매우 중요)
+    serial_->flushInput(); 
+    
+    // 2. 명령 전송
+    serial_->write(packet);
+
+    // 3. ACK 수신 대기
+    auto start_time = std::chrono::steady_clock::now();
+    std::vector<uint8_t> rx_buffer;
+    rx_buffer.reserve(10); // ACK 패킷은 보통 작음
+
+    while (true) {
+        // 타임아웃 검사
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count() > timeout_ms) {
+            std::cerr << "[MD485Hw] 통신 ACK 타임아웃! (PID: " << static_cast<int>(expected_pid) << ")" << std::endl;
+            return false;
+        }
+
+        // 버퍼에 데이터가 들어오면 읽어들임
+        if (serial_->available()) {
+            std::vector<uint8_t> temp_buf;
+            size_t bytes_to_read = serial_->available();
+            temp_buf.resize(bytes_to_read);
+            serial_->read(temp_buf.data(), bytes_to_read);
+            
+            rx_buffer.insert(rx_buffer.end(), temp_buf.begin(), temp_buf.end());
+
+            // 1바이트씩 들어오다가 패킷이 완성되었는지 지속 검사
+            // (최소 헤더(5) + 체크섬(1) = 6바이트 이상이어야 함)
+            if (rx_buffer.size() >= 6) {
+                // 수신된 패킷이 내가 쏜 PID에 대한 정상적인 ACK인지 검증
+                if (kaair_driver::IsValidAck(rx_buffer, cfg_.motor_id, expected_pid)) {
+                    return true; // 성공! 즉시 탈출!
+                }
+            }
+        }
+        // CPU 점유율 하락을 위한 미세 딜레이
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+}
+
+double MD485Hw::count_to_meter(int count) const
+{
+    return (count / (cfg_.encoder_ppr * 4.0)) / cfg_.reduction_ratio * cfg_.lead_pitch;
+}
+int MD485Hw::meter_to_count(double meter) const
+{
+    return static_cast<int>((meter / cfg_.lead_pitch) * cfg_.reduction_ratio * (cfg_.encoder_ppr * 4.0));
+}
+double MD485Hw::rpm_to_meter_per_s(int rpm) const
+{
+    // (rpm / 60초) / 감속비 * 리드피치
+    return (rpm / 60.0) / cfg_.reduction_ratio * cfg_.lead_pitch;
+}
+
+int MD485Hw::meter_per_s_to_rpm(double meter_per_s) const
+{
+    // ⭐️ static_cast<int> 적용: (초당 이동거리 / 리드피치) * 감속비 * 60초
+    return static_cast<int>((meter_per_s / cfg_.lead_pitch) * cfg_.reduction_ratio * 60.0);
+}
+
+
 
 } // namespace kaair_driver
