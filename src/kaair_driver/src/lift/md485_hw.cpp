@@ -11,7 +11,7 @@ MD485Hw::MD485Hw(const MD485HwConfig & config)
     // serial 객체 초기화 (포트는 아직 열지 않음)
     serial_ = std::make_unique<serial::Serial>(
         "", 
-        cfg_.baudrate, 
+        cfg_.baud_rate, 
         serial::Timeout::simpleTimeout(100)
     );
 }
@@ -24,15 +24,15 @@ MD485Hw::~MD485Hw()
 bool MD485Hw::connect()
 {
     try {
-        serial_->setPort(cfg_.port);
+        serial_->setPort(cfg_.usb_port);
         serial_->open();
     } catch (const serial::IOException& e) {
-        std::cerr << "[MD485Hw] 시리얼 포트 열기 실패 (" << cfg_.port << "): " << e.what() << std::endl;
+        std::cerr << "[MD485Hw] 시리얼 포트 열기 실패 (" << cfg_.usb_port << "): " << e.what() << std::endl;
         return false;
     }
 
     if (serial_->isOpen()) {
-        std::cout << "[MD485Hw] 모터 드라이버 연결 성공: " << cfg_.port << " (" << cfg_.baudrate << "bps)" << std::endl;
+        std::cout << "[MD485Hw] 모터 드라이버 연결 성공: " << cfg_.usb_port << " (" << cfg_.baud_rate << "bps)" << std::endl;
         return true;
     }
     return false;

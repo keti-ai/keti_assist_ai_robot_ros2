@@ -10,18 +10,13 @@ int main() {
     kaair_driver::MainDataPayload main_data;
     kaair_driver::IoMonitorPayload main_io;
 
-    //실제 로봇에 연결된 시리얼 포트 이름으로 반드시 변경하세요. (예: /dev/ttyUSB0, /dev/ttyLM 등)
-    config.port = "/dev/ttyLM"; 
-    config.baudrate = 115200;      // MD로봇 기본 통신 속도
-    config.motor_id = 1;
-
     kaair_driver::MD485Hw lift_motor(config);
 
     lift_motor.connect();
 
-    //lift_motor.set_position_with_rpm(0,300);
+    lift_motor.set_position_with_rpm(0,300);
 
-    lift_motor.init_set(2);
+
 
     for(int i=0;i<10;i++)
     {

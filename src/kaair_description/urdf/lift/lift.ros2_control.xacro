@@ -13,8 +13,16 @@
         
         <xacro:unless value="${use_fake_hardware}">
           <plugin>kaair_driver/LiftHwInterface</plugin>
-          <param name="serial_port">${spec['usb_port']}</param>
+          <param name="usb_port">${spec['usb_port']}</param>
           <param name="baud_rate">${spec['baud_rate']}</param>
+          <param name="offset_position">${spec['offset_position']}</param>
+          <param name="encoder_ppr">${spec['encoder_ppr']}</param>
+          <param name="lead_pitch">${spec['lead_pitch']}</param>
+          <param name="reduction_ratio">${spec['reduction_ratio']}</param>
+          <param name="max_rpm">${spec['max_rpm']}</param>
+          <param name="limit_direction">${spec['limit_direction']}</param>
+          <param name="motor_direction">${spec['motor_direction']}</param>
+          <param name="motor_id">${spec['motor_id']}</param>
         </xacro:unless> </hardware>
 
       <joint name="lift_joint">
@@ -24,7 +32,7 @@
           <command_interface name="velocity"/>
 
           <state_interface name="position">
-            <param name="initial_value">${spec['initial_pose']}</param>
+            <param name="initial_value">0.2</param>
           </state_interface>
           
           <state_interface name="velocity">

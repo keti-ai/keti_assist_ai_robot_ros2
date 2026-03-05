@@ -12,16 +12,15 @@ namespace kaair_driver {
 
     // 1. 설정값을 담는 구조체 (기본값 세팅 완료)
     struct MD485HwConfig {
-        std::string port = "/dev/ttyLM";
-        int baudrate = 115200;
-        std::vector<double> elevation_range = {0.0, 600.0};
+        std::string usb_port = "/dev/ttyLM";
+        int baud_rate = 115200;
         double offset_position = 0.0;
-        int encoder_ppr = 1000;
-        int reduction_ratio = 14;
-        int lead_pitch = 10;
-        std::vector<int> rpm_range = {-5000, 5000};
-        bool limit_inverted = false;
-        bool motor_inv = false;
+        int encoder_ppr = 65536;
+        double lead_pitch = 0.01;
+        double reduction_ratio = 1.4736842;
+        int max_rpm = 3000;
+        bool limit_direction = false;
+        bool motor_direction = true;
         int motor_id = 1;
     };
         
