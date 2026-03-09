@@ -180,6 +180,175 @@ class Process:
 
         return mk
 
+    # ================================================================
+    # 3단계: 바닥 제거 (Z 퍼센타일 기반)
+    # ================================================================
+    def remove_ground(self, points: np.ndarray) -> np.ndarray:
+        """
+        다운샘플된 포인트 배열에서 바닥 레이어 제거.
+
+        원리:
+          - 전체 포인트의 Z 값 하위 ground_z_percentile% 를 바닥 기준(z_floor)으로 사용
+          - z_floor + ground_height_thr 이하 포인트를 바닥으로 판정 → 제거
+        """
+        n = self._node
+        if len(points) == 0:
+            return points
+
+        z = points[:, 2]
+        z_floor = np.percentile(z, n.ground_z_percentile)
+        mask = z > (z_floor + n.ground_height_thr)
+        filtered = points[mask]
+        return filtered if len(filtered) > 0 else points
+
+    # ================================================================
+    # 4단계: DBSCAN 클러스터링  (구: cluster_bfs)
+    # ================================================================
+    def cluster_o3d(self, points: np.ndarray) -> np.ndarray:
+        """
+        o3d.cluster_dbscan : C++ DBSCAN, Python BFS 대비 5~10x 빠름
+
+        eps 설정 근거:
+          - voxel_down_sample 후 인접 포인트 간 최대 거리 = voxel_size * √3 (대각선)
+          - eps = voxel_size * 1.75 → 26-연결 BFS 와 동등한 연결성 보장
+
+        반환: (M,) int32 label 배열  (-1 = noise)
+        """
+        n = self._node
+        if len(points) == 0:
+            return np.array([], dtype=np.int32)
+
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points.astype(np.float64))
+
+        eps = n.voxel_size * 1.75   # √3 ≈ 1.732, 여유 포함
+        labels = np.array(
+            pcd.cluster_dbscan(eps=eps, min_points=1, print_progress=False),
+            dtype=np.int32
+        )
+        return labels
+
+    # ================================================================
+    # 5단계: AABB 계산
+    # ================================================================
+    def compute_aabb(self, points: np.ndarray, labels: np.ndarray) -> list:
+        """
+        클러스터별 AABB 계산.
+
+        Args:
+          points : (M, 3) float32  - 바닥 제거된 다운샘플 포인트
+          labels : (M,) int32      - cluster_o3d 반환값 (-1=noise)
+
+        반환 dict 구조:
+          min       : np.array([x,y,z])  박스 최솟값 코너
+          max       : np.array([x,y,z])  박스 최댓값 코너
+          center    : np.array([x,y,z])  중심
+          size      : np.array([w,h,d])  크기
+          num_voxels: int                클러스터 포인트 수
+          points    : np.ndarray         클러스터 포인트 배열
+        """
+        n = self._node
+        bboxes = []
+
+        for label in np.unique(labels):
+            if label < 0:   # noise
+                continue
+
+            cluster_pts = points[labels == label]
+            n_pts = len(cluster_pts)
+
+            if not (n.min_cluster_voxels <= n_pts <= n.max_cluster_voxels):
+                continue
+
+            bb_min    = cluster_pts.min(axis=0)
+            bb_max    = cluster_pts.max(axis=0)
+            bb_center = (bb_min + bb_max) / 2.0
+            bb_size   = bb_max - bb_min
+
+            bboxes.append({
+                'min':        bb_min,
+                'max':        bb_max,
+                'center':     bb_center,
+                'size':       bb_size,
+                'num_voxels': n_pts,
+                'points':     cluster_pts,
+            })
+
+        bboxes.sort(key=lambda b: b['num_voxels'], reverse=True)
+        return bboxes
+
+    # ================================================================
+    # 6단계: Collision Check + 시각화
+    # ================================================================
+    def collision_and_visualize(self, bboxes: list, header):
+        """
+        AABB vs 로봇 안전 구역(구) 교차 판정 + RViz2 마커 퍼블리시
+
+        교차 판정 원리:
+          - 로봇 위치 robot_pos 에서 AABB 표면까지의 최단거리 계산
+          - 최단거리 = ||robot_pos - clamp(robot_pos, bb_min, bb_max)||
+          - 최단거리 < robot_safety_radius → 충돌 위험
+        """
+        n = self._node
+        bbox_markers       = MarkerArray()
+        cluster_points_all = []
+        cluster_colors_all = []
+        collision_ids      = []
+
+        for i, bbox in enumerate(bboxes):
+            r, g, b = CLUSTER_COLORS[i % len(CLUSTER_COLORS)]
+
+            # ── Collision Check ─────────────────────────────────
+            closest = np.clip(n.robot_pos, bbox['min'], bbox['max'])
+            dist    = float(np.linalg.norm(n.robot_pos - closest))
+            is_col  = dist < n.robot_safety_radius
+
+            if is_col:
+                collision_ids.append(i)
+                r, g, b = 1.0, 0.0, 0.0
+
+            # ── AABB Marker ──────────────────────────────────────
+            bbox_markers.markers.append(
+                self._make_bbox_marker(i, bbox, header, r, g, b, is_col))
+
+            # ── 라벨 텍스트 Marker ───────────────────────────────
+            label_text = f'#{i} {bbox["num_voxels"]}pts {"⚠" if is_col else ""}'
+            bbox_markers.markers.append(
+                self._make_text_marker(i + len(bboxes), bbox, header, label_text))
+
+            # ── 컬러 PointCloud 수집 ─────────────────────────────
+            if len(bbox['points']) > 0:
+                cluster_points_all.append(bbox['points'])
+                cluster_colors_all.extend([(r, g, b)] * len(bbox['points']))
+
+        # 이전 마커 전체 삭제 후 새 마커 퍼블리시
+        delete_all = MarkerArray()
+        dm = Marker()
+        dm.action = Marker.DELETEALL
+        dm.header = header
+        delete_all.markers.append(dm)
+        n.pub_bbox.publish(delete_all)
+        n.pub_bbox.publish(bbox_markers)
+
+        # ── 컬러 클러스터 PointCloud 퍼블리시 ─────────────────────
+        if cluster_points_all:
+            all_pts    = np.vstack(cluster_points_all)
+            all_colors = np.array(cluster_colors_all)
+            n.pub_cluster_cloud.publish(
+                numpy_to_ros_rgb(all_pts, all_colors, header))
+
+        # ── Collision 상태 퍼블리시 ───────────────────────────────
+        status = String()
+        if collision_ids:
+            status.data = (
+                f'DANGER: {len(collision_ids)} object(s) in safety zone '
+                f'[ids={collision_ids}]'
+            )
+        else:
+            status.data = f'SAFE: {len(bboxes)} objects detected'
+        n.pub_collision.publish(status)
+        n.get_logger().info(f'[6] Collision: {status.data}')
+
     def create_shape_markers(
         self,
         centers: np.ndarray,
@@ -309,3 +478,61 @@ class Process:
             co.primitive_poses.append(pose)
 
         return co
+
+    # ================================================================
+    # 유틸: Marker 생성
+    # ================================================================
+    def _make_bbox_marker(self, mid, bbox, header, r, g, b, is_col) -> Marker:
+        """AABB → LINE_LIST 큐브 Marker"""
+        mk = Marker()
+        mk.header   = header
+        mk.ns       = 'bounding_boxes'
+        mk.id       = mid
+        mk.type     = Marker.LINE_LIST
+        mk.action   = Marker.ADD
+        mk.scale.x  = 0.04 if is_col else 0.02
+        mk.color.r  = r
+        mk.color.g  = g
+        mk.color.b  = b
+        mk.color.a  = 1.0
+
+        mn, mx = bbox['min'], bbox['max']
+        edges = [
+            [mn[0],mn[1],mn[2]], [mx[0],mn[1],mn[2]],
+            [mx[0],mn[1],mn[2]], [mx[0],mx[1],mn[2]],
+            [mx[0],mx[1],mn[2]], [mn[0],mx[1],mn[2]],
+            [mn[0],mx[1],mn[2]], [mn[0],mn[1],mn[2]],
+            [mn[0],mn[1],mx[2]], [mx[0],mn[1],mx[2]],
+            [mx[0],mn[1],mx[2]], [mx[0],mx[1],mx[2]],
+            [mx[0],mx[1],mx[2]], [mn[0],mx[1],mx[2]],
+            [mn[0],mx[1],mx[2]], [mn[0],mn[1],mx[2]],
+            [mn[0],mn[1],mn[2]], [mn[0],mn[1],mx[2]],
+            [mx[0],mn[1],mn[2]], [mx[0],mn[1],mx[2]],
+            [mx[0],mx[1],mn[2]], [mx[0],mx[1],mx[2]],
+            [mn[0],mx[1],mn[2]], [mn[0],mx[1],mx[2]],
+        ]
+        for c in edges:
+            p = Point()
+            p.x, p.y, p.z = float(c[0]), float(c[1]), float(c[2])
+            mk.points.append(p)
+
+        return mk
+
+    def _make_text_marker(self, mid, bbox, header, text) -> Marker:
+        """AABB 위에 텍스트 라벨 Marker"""
+        mk = Marker()
+        mk.header              = header
+        mk.ns                  = 'labels'
+        mk.id                  = mid
+        mk.type                = Marker.TEXT_VIEW_FACING
+        mk.action              = Marker.ADD
+        mk.pose.position.x     = float(bbox['center'][0])
+        mk.pose.position.y     = float(bbox['center'][1])
+        mk.pose.position.z     = float(bbox['max'][2]) + 0.12
+        mk.scale.z             = 0.12
+        mk.color.r             = 1.0
+        mk.color.g             = 1.0
+        mk.color.b             = 1.0
+        mk.color.a             = 1.0
+        mk.text                = text
+        return mk

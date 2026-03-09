@@ -16,30 +16,6 @@ from kaair_obstacle.utils.load_config import load_config, PipelineConfig
 from kaair_obstacle.utils.convert_pointcloud import numpy_to_ros
 from kaair_obstacle.utils.process import Process
 
-"""
-=============================================================================
-Voxel-based 3D Collision Avoidance Pipeline  (Open3D 기반)
-=============================================================================
-Orbbec Camera PointCloud2 → ROI Filter → Voxel Downsample → Ground Removal
-                          → DBSCAN Cluster → AABB → Collision Check → RViz2
-
-[파이프라인 단계]
-  1. 전처리      : ROI PassThrough + NaN/Inf 제거  (np.frombuffer)
-  2. 다운샘플링  : o3d.voxel_down_sample
-  3. 바닥 제거   : Z 퍼센타일 필터
-  4. 클러스터링  : o3d.cluster_dbscan
-  5. AABB        : 각 클러스터의 Axis-Aligned Bounding Box
-  6. Collision   : AABB vs 로봇 안전 구역 교차 판정 + RViz2 시각화
-
-[퍼블리시 토픽]
-  /pointcloud/preprocessed   - 전처리된 PointCloud2
-  /pointcloud/no_ground      - 바닥 제거된 PointCloud2
-  /objects/bounding_boxes    - AABB 박스 MarkerArray
-  /objects/cluster_cloud     - 클러스터별 컬러 PointCloud2
-  /collision/status          - 충돌 위험 상태 String
-=============================================================================
-"""
-
 
 class ObstacleRepresentation(Node):
 
@@ -74,16 +50,11 @@ class ObstacleRepresentation(Node):
         # self.pub_mesh            = self.create_publisher(MarkerArray,     '/pointcloud/mesh',          10)
         self.pub_shape_markers   = self.create_publisher(MarkerArray,     '/obstacle_spheres',         10)
         self.pub_collision_obj   = self.create_publisher(CollisionObject, '/collision_field',         10)
-        # self.pub_no_ground     = self.create_publisher(PointCloud2,  '/pointcloud/no_ground',    10)
-        # self.pub_bbox          = self.create_publisher(MarkerArray,  '/objects/bounding_boxes',  10)
-        # self.pub_cluster_cloud = self.create_publisher(PointCloud2,  '/objects/cluster_cloud',   10)
-        # self.pub_collision     = self.create_publisher(String,       '/collision/status',        10)
-
 
         self.frame_count = 0
         self.get_logger().info(
             f'ObstacleRepresentation started | '
-            f'topic={self.cfg.input_topic} | voxel={self.cfg.voxel_size}m'
+            f'topic={self.cfg.input_topic} | voxel={self.cfg.voxel_size}m | marker_shape={self.cfg.marker_shape}'
         )
 
     # ----------------------------------------------------------------
@@ -91,18 +62,13 @@ class ObstacleRepresentation(Node):
         """PipelineConfig 값을 self 속성으로 단축 연결"""
         c = self.cfg
         self.voxel_size          = c.voxel_size
+        self.marker_shape        = c.marker_shape
         self.roi_x_min           = c.roi_x_min
         self.roi_x_max           = c.roi_x_max
         self.roi_y_min           = c.roi_y_min
         self.roi_y_max           = c.roi_y_max
         self.roi_z_min           = c.roi_z_min
         self.roi_z_max           = c.roi_z_max
-        self.ground_height_thr   = c.ground_height_threshold
-        self.ground_z_percentile = c.ground_z_percentile
-        self.min_cluster_voxels  = c.min_cluster_voxels
-        self.max_cluster_voxels  = c.max_cluster_voxels
-        self.robot_safety_radius = c.robot_safety_radius
-        self.robot_pos           = c.robot_pos              # np.array([x,y,z])
 
     # ================================================================
     # 메인 콜백
@@ -139,40 +105,23 @@ class ObstacleRepresentation(Node):
         #     ma.markers.append(mesh_mk)
         #     self.pub_mesh.publish(ma)
 
-        shape_mk = self.process.create_shape_markers(ds_points, 'sphere', msg.header.frame_id, msg.header.stamp)
+        shape_mk = self.process.create_shape_markers(
+            ds_points, 
+            self.marker_shape, 
+            msg.header.frame_id, 
+            msg.header.stamp)
         times.append(time.time())
         self.pub_shape_markers.publish(shape_mk)
 
         # MoveIt2 CollisionObject 생성 및 퍼블리시
         collision_obj = self.process.create_collision_object(
-            ds_points, msg.header.frame_id, msg.header.stamp, shape='sphere'
+            ds_points, 
+            msg.header.frame_id, 
+            msg.header.stamp, 
+            shape=self.marker_shape
         )
+        times.append(time.time())
         self.pub_collision_obj.publish(collision_obj)
-
-        # ── 3단계: 바닥 제거 ──────────────────────────────────────
-        # no_ground = self.process.remove_ground(ds_points)
-        # self.get_logger().info(f'[3] Ground removed: {len(ds_points) - len(no_ground)} pts')
-        # if len(no_ground) > 0:
-        #     self.pub_no_ground.publish(numpy_to_ros(no_ground, msg.header))
-
-        # ── 4단계: DBSCAN 클러스터링 ──────────────────────────────
-        # labels = self.process.cluster_o3d(ds_points)
-        # n_clusters = int((labels >= 0).any() and labels.max() + 1) if len(labels) > 0 else 0
-        # self.get_logger().info(f'[4] Clusters: {n_clusters}')
-
-        # if n_clusters == 0:
-        #     status = String()
-        #     status.data = 'SAFE: no objects detected'
-        #     self.pub_collision.publish(status)
-        #     return
-
-        # # ── 5단계: AABB 계산 ──────────────────────────────────────
-        # bboxes = self.process.compute_aabb(ds_points, labels)
-        # self.get_logger().info(f'[5] AABB: {len(bboxes)} boxes')
-
-        # # ── 6단계: Collision 판정 + 시각화 ───────────────────────
-        # self.process.collision_and_visualize(bboxes, msg.header)
-
 
         spend_time = [times[i+1] - times[i] for i in range(len(times)-1)]
         spend_time = [f'{i*1000:.1f}ms' for i in spend_time]

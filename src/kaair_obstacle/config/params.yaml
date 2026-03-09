@@ -1,7 +1,7 @@
 obstacle_representation_node:
   ros__parameters:
 
-    # ── 1. 입력 토픽 ───────────────────────────────────────────────
+    # ── 입력 토픽 ───────────────────────────────────────────────
     # Orbbec 카메라 토픽명 확인 후 수정:
     #   ros2 topic list | grep point
     input_topic: '/femto/depth_registered/points'
@@ -15,48 +15,13 @@ obstacle_representation_node:
     roi_y_max:  1.5
     roi_z_min:  0.1    # 카메라 바로 앞 노이즈 제거
     roi_z_max:  4.0    # 탐지 최대 거리
-
-    # ── 3. Voxel Grid ─────────────────────────────────────────────
+    
+    # ── Voxel Grid ──────────────────────────────────────────────
     # voxel_size 조절 가이드:
     #   0.03 : 세밀 (3cm) - 느림, 소형 물체 검출
     #   0.05 : 기본 (5cm) - 실내 일반 장애물
     #   0.10 : 빠름 (10cm) - 원거리·실시간 우선
     voxel_size: 0.02
 
-    # ── 4. 바닥 제거 ──────────────────────────────────────────────
-    # ground_z_percentile:
-    #   Z 히스토그램 하위 10% → 바닥 기준 Z 결정
-    #   평탄한 실내: 5~15, 경사 있는 환경: 낮추기
-    ground_z_percentile: 10.0
-
-    # ground_height_threshold:
-    #   바닥 기준 Z 위로 이 높이(m)까지 바닥으로 제거
-    #   얇은 매트/카펫: 0.05~0.10
-    #   일반 바닥 노이즈: 0.15
-    ground_height_threshold: 0.15
-
-    # ── 5. BFS 클러스터링 ─────────────────────────────────────────
-    # min_cluster_voxels:
-    #   이보다 작은 클러스터 → 노이즈로 제거
-    #   민감도 높이려면 낮추기 (최소 3)
-    min_cluster_voxels: 5
-
-    # max_cluster_voxels:
-    #   이보다 큰 클러스터 → 벽·천장으로 제거
-    #   큰 물체(파레트 등) 검출 시 높이기
-    max_cluster_voxels: 5000
-
-    # cluster_connectivity: 26 or 6
-    #   26 : 대각선 포함 (자연스러운 클러스터, 권장)
-    #    6 : 면 인접만   (더 보수적, 분리 잘 됨)
-    cluster_connectivity: 26
-
-    # ── 6. 로봇 안전 구역 ─────────────────────────────────────────
-    # robot_safety_radius:
-    #   AABB까지 최단거리 < 이 값 → DANGER 판정 (m)
-    robot_safety_radius: 0.5
-
-    # robot_pos: 카메라 좌표계 기준 로봇 위치 [x, y, z]
-    #   카메라가 로봇 전방 탑재 시 → [0.0, 0.0, 0.0]
-    #   카메라가 50cm 전방에 탑재 시 → [0.0, 0.0, -0.5]
-    robot_pos: [0.0, 0.0, 0.0]
+    # ── 마커 형태 ──────────────────────────────────────────────
+    marker_shape: 'cube'
