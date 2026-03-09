@@ -13,6 +13,8 @@ setup(
         ('share/' + package_name, ['package.xml']),
         (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
+        (os.path.join('share', package_name, 'third_party'), glob('third_party/sam2/checkpoints/*')),
+        (os.path.join('share', package_name, 'third_party'), glob('third_party/sam2/sam2/configs/sam2.1/*')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -28,6 +30,7 @@ setup(
     entry_points={
         'console_scripts': [
             'obstacle_representation = kaair_obstacle.obstacle_representation:main',
+            'scene_representation = kaair_obstacle.scene_representation:main',
         ],
     },
 )

@@ -5,10 +5,8 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 from sensor_msgs.msg import PointCloud2
-from visualization_msgs.msg import Marker, MarkerArray
-from geometry_msgs.msg import Point
+from visualization_msgs.msg import MarkerArray
 from std_msgs.msg import String
-from moveit_msgs.msg import CollisionObject
 
 import numpy as np
 
@@ -69,16 +67,12 @@ class ObstacleRepresentation(Node):
         )
 
         # ── Publishers ────────────────────────────────────────────
-        self.pub_preprocessed    = self.create_publisher(PointCloud2,     '/pointcloud/preprocessed', 10)
-        self.pub_downsampled     = self.create_publisher(PointCloud2,     '/pointcloud/downsampled',  10)
-        # self.pub_mesh            = self.create_publisher(MarkerArray,     '/pointcloud/mesh',          10)
-        self.pub_shape_markers   = self.create_publisher(MarkerArray,     '/obstacle_spheres',         10)
-        self.pub_collision_obj   = self.create_publisher(CollisionObject, '/collision_field',         10)
+        self.pub_preprocessed  = self.create_publisher(PointCloud2,  '/pointcloud/preprocessed', 10)
+        self.pub_downsampled   = self.create_publisher(PointCloud2,  '/pointcloud/downsampled',  10)
         # self.pub_no_ground     = self.create_publisher(PointCloud2,  '/pointcloud/no_ground',    10)
-        # self.pub_bbox          = self.create_publisher(MarkerArray,  '/objects/bounding_boxes',  10)
-        # self.pub_cluster_cloud = self.create_publisher(PointCloud2,  '/objects/cluster_cloud',   10)
+        self.pub_bbox          = self.create_publisher(MarkerArray,  '/objects/bounding_boxes',  10)
+        self.pub_cluster_cloud = self.create_publisher(PointCloud2,  '/objects/cluster_cloud',   10)
         # self.pub_collision     = self.create_publisher(String,       '/collision/status',        10)
-
 
         self.frame_count = 0
         self.get_logger().info(
@@ -131,24 +125,6 @@ class ObstacleRepresentation(Node):
             self.pub_downsampled.publish(numpy_to_ros(ds_points, msg.header))
         # self.get_logger().info(f'[2] Downsample: {len(ds_points)} pts')
 
-        # ── 2.5단계: 메시 생성 + 퍼블리시 ───────────────────────
-        # mesh_mk = self.process.create_mesh_marker(ds_points, msg.header)
-        # times.append(time.time())
-        # if mesh_mk is not None:
-        #     ma = MarkerArray()
-        #     ma.markers.append(mesh_mk)
-        #     self.pub_mesh.publish(ma)
-
-        shape_mk = self.process.create_shape_markers(ds_points, 'sphere', msg.header.frame_id, msg.header.stamp)
-        times.append(time.time())
-        self.pub_shape_markers.publish(shape_mk)
-
-        # MoveIt2 CollisionObject 생성 및 퍼블리시
-        collision_obj = self.process.create_collision_object(
-            ds_points, msg.header.frame_id, msg.header.stamp, shape='sphere'
-        )
-        self.pub_collision_obj.publish(collision_obj)
-
         # ── 3단계: 바닥 제거 ──────────────────────────────────────
         # no_ground = self.process.remove_ground(ds_points)
         # self.get_logger().info(f'[3] Ground removed: {len(ds_points) - len(no_ground)} pts')
@@ -179,10 +155,12 @@ class ObstacleRepresentation(Node):
         spend_time = ' | '.join(spend_time)
         elapsed = (times[-1] - times[0]) * 1000
         self.get_logger().info(
-            f'\nFrame {self.frame_count:04d} | raw={len(points)} | ds={len(ds_points)} '
+            f'Frame {self.frame_count:04d} | raw={len(points)} '
             # f'ds={len(ds_points)} clusters={len(bboxes)} | {elapsed:.1f}ms'
-            f'\nTotal={elapsed:.1f}ms | EACH =  {spend_time}'
+            f'ds={len(ds_points)} | total={elapsed:.1f}ms '
+            f'\nEACH =  {spend_time}'
         )
+
 
 # ============================================================================
 def main(args=None):

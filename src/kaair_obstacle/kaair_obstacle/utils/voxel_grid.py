@@ -1,70 +1,142 @@
 import numpy as np
+from typing import Dict, List, Set, Tuple
 
-# ============================================================================
-# VoxelGrid : 핵심 자료구조
-# ============================================================================
+"""
+=============================================================================
+VoxelGrid : Sparse 3D Occupancy Grid
+=============================================================================
+핵심 자료구조:
+  voxels : dict  { (ix, iy, iz) → centroid(np.array [x,y,z]) }
+    - key   : 정수 voxel 인덱스 튜플
+    - value : 해당 voxel에 속한 포인트들의 running mean centroid
+
+[인덱싱 방식]
+  voxel 인덱스 = floor(coord / voxel_size)
+  → 좌표 → 정수 인덱스로 양방향 변환 가능
+  → 두 voxel의 인접 여부 = 인덱스 차이가 각 축 ±1 이내
+
+[Running Mean Centroid]
+  새 포인트가 들어올 때마다 평균을 점진적으로 갱신
+  → 메모리: voxel당 (centroid xyz + count) 만 저장
+  → 전체 포인트 배열을 보관하지 않아도 됨
+=============================================================================
+"""
+
+
 class VoxelGrid:
-    """
-    Sparse 3D Voxel Grid
-    - key   : (ix, iy, iz) 정수 인덱스 tuple
-    - value : 해당 voxel에 속한 포인트들의 centroid (numpy array)
 
-    장점: 빈 공간을 메모리에 저장하지 않아 대규모 공간에도 효율적
-    """
+    def __init__(self, voxel_size: float = 0.05):
+        """
+        Args:
+            voxel_size: 각 voxel의 한 변 길이 (m 단위)
+                        작을수록 정밀하지만 메모리·연산 증가
+        """
+        assert voxel_size > 0, "voxel_size must be positive"
+        self.voxel_size: float = voxel_size
 
-    def __init__(self, voxel_size: float):
-        self.voxel_size = voxel_size
-        self.voxels: dict = {}          # {(ix,iy,iz): np.array([x,y,z])}
-        self.point_counts: dict = {}    # {(ix,iy,iz): int}  - 평균 계산용
+        # 핵심 저장소
+        self.voxels:  Dict[Tuple, np.ndarray] = {}   # key → centroid
+        self._counts: Dict[Tuple, int]         = {}   # key → 포인트 수 (running mean용)
 
+    # ----------------------------------------------------------------
     def clear(self):
+        """모든 voxel 초기화 (프레임 시작 시 호출)"""
         self.voxels.clear()
-        self.point_counts.clear()
+        self._counts.clear()
 
-    def world_to_index(self, x, y, z):
-        """실수 좌표 → voxel 정수 인덱스"""
-        ix = int(np.floor(x / self.voxel_size))
-        iy = int(np.floor(y / self.voxel_size))
-        iz = int(np.floor(z / self.voxel_size))
-        return (ix, iy, iz)
+    # ----------------------------------------------------------------
+    def _coord_to_key(self, x: float, y: float, z: float) -> Tuple[int, int, int]:
+        """실수 좌표 → 정수 voxel 인덱스"""
+        vs = self.voxel_size
+        return (int(np.floor(x / vs)),
+                int(np.floor(y / vs)),
+                int(np.floor(z / vs)))
 
-    def index_to_center(self, ix, iy, iz):
-        """voxel 인덱스 → 중심 좌표"""
-        x = (ix + 0.5) * self.voxel_size
-        y = (iy + 0.5) * self.voxel_size
-        z = (iz + 0.5) * self.voxel_size
-        return np.array([x, y, z])
+    def key_to_center(self, key: Tuple[int, int, int]) -> np.ndarray:
+        """voxel 인덱스 → 해당 voxel 중심 좌표"""
+        vs = self.voxel_size
+        return np.array([(key[0] + 0.5) * vs,
+                         (key[1] + 0.5) * vs,
+                         (key[2] + 0.5) * vs], dtype=np.float32)
 
+    # ----------------------------------------------------------------
     def insert_points(self, points: np.ndarray):
         """
-        포인트 배열을 voxel grid에 삽입
-        각 voxel의 centroid를 누적 평균으로 업데이트
+        (N, 3) float32 배열 → Sparse Voxel Grid 에 삽입
+
+        알고리즘:
+          1. 전체 포인트를 voxel 인덱스로 벡터 변환 (numpy 연산)
+          2. 동일 voxel에 속하는 포인트끼리 그룹화
+          3. 각 voxel의 running mean centroid 갱신
+
+        시간복잡도: O(N log N)  (numpy 내부 정렬 기반)
         """
-        self.clear()
-        # 벡터화 연산으로 모든 포인트를 한번에 인덱싱
-        indices = np.floor(points / self.voxel_size).astype(np.int32)
+        vs = self.voxel_size
 
-        for i, (pt, idx) in enumerate(zip(points, indices)):
-            key = (idx[0], idx[1], idx[2])
-            if key not in self.voxels:
-                self.voxels[key] = pt.copy()
-                self.point_counts[key] = 1
+        # (1) 좌표 → 인덱스 변환 (벡터화)
+        indices = np.floor(points / vs).astype(np.int32)  # (N, 3)
+
+        # (2) 고유 voxel 키 추출 + 역인덱스
+        # np.unique 는 axis=0 으로 행 단위 unique 지원
+        unique_keys, inverse = np.unique(indices, axis=0, return_inverse=True)
+
+        # (3) 각 voxel 별 centroid 계산 (numpy.bincount 활용)
+        n_unique = len(unique_keys)
+
+        for dim in range(3):
+            # 각 차원별 합산
+            pass
+
+        # 벡터화된 per-voxel 평균 계산
+        sum_xyz = np.zeros((n_unique, 3), dtype=np.float64)
+        count_v = np.zeros(n_unique, dtype=np.int32)
+
+        np.add.at(sum_xyz, inverse, points)
+        np.add.at(count_v, inverse, 1)
+
+        centroids = (sum_xyz / count_v[:, np.newaxis]).astype(np.float32)
+
+        # (4) dict 에 저장 (기존 voxel 이면 running mean 갱신)
+        for i in range(n_unique):
+            key = tuple(unique_keys[i])
+            new_c   = centroids[i]
+            new_cnt = int(count_v[i])
+
+            if key in self.voxels:
+                # Running mean 갱신
+                old_c   = self.voxels[key]
+                old_cnt = self._counts[key]
+                total   = old_cnt + new_cnt
+                self.voxels[key]  = (old_c * old_cnt + new_c * new_cnt) / total
+                self._counts[key] = total
             else:
-                # 누적 평균 업데이트 (Running Mean)
-                n = self.point_counts[key]
-                self.voxels[key] = (self.voxels[key] * n + pt) / (n + 1)
-                self.point_counts[key] = n + 1
+                self.voxels[key]  = new_c
+                self._counts[key] = new_cnt
 
-    def get_occupied_keys(self):
+    # ----------------------------------------------------------------
+    def get_occupied_keys(self) -> List[Tuple[int, int, int]]:
+        """점령된 voxel 키 목록 반환"""
         return list(self.voxels.keys())
 
-    def get_centers(self):
-        """모든 occupied voxel의 중심좌표 배열 반환"""
+    def get_centers(self) -> np.ndarray:
+        """
+        모든 occupied voxel의 centroid 반환
+        반환: (N, 3) float32 numpy array
+        """
         if not self.voxels:
-            return np.empty((0, 3))
-        return np.array(list(self.voxels.values()))
+            return np.empty((0, 3), dtype=np.float32)
+        return np.array(list(self.voxels.values()), dtype=np.float32)
 
-    def remove_keys(self, keys_to_remove: set):
-        for key in keys_to_remove:
-            self.voxels.pop(key, None)
-            self.point_counts.pop(key, None)
+    def remove_keys(self, keys: Set[Tuple]):
+        """지정 키 집합 삭제 (바닥 제거 등에 사용)"""
+        for k in keys:
+            self.voxels.pop(k, None)
+            self._counts.pop(k, None)
+
+    # ----------------------------------------------------------------
+    def __len__(self) -> int:
+        return len(self.voxels)
+
+    def __repr__(self) -> str:
+        return (f"VoxelGrid(voxel_size={self.voxel_size}m, "
+                f"occupied={len(self.voxels)} voxels)")

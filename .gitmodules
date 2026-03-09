@@ -4,3 +4,6 @@
 [submodule "src/third_party/xarm_ros2"]
 	path = src/third_party/xarm_ros2
 	url = https://github.com/keti-ai/xarm_kaair_ros2.git
+[submodule "src/kaair_obstacle/third_party/sam2"]
+	path = src/kaair_obstacle/third_party/sam2
+	url = https://github.com/moonjongsul/sam2.git
