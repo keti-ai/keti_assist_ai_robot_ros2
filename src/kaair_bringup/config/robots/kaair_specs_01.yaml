@@ -5,12 +5,12 @@ lift:
   usb_port: "/dev/ttyLM"
   baud_rate: 115200
   offset_position: 0.10733    # meter
-  global_velocity: 0.1        # meter / second
+  global_velocity: 0.1        # meter / second [max : 0.339 m/s]
   encoder_ppr: 16384          # encode resolution
   lead_pitch: 0.010           # meter
   reduction_ratio: 1.4736842  # 28/19
   max_rpm: 3000               # RPM
-  limit_direction: False
+  limit_direction: False      # False->Start/stop, True->Dir 
   motor_direction: True
   motor_id: 1
 
