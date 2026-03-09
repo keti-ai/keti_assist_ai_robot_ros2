@@ -30,16 +30,14 @@ int main() {
     // 테스트할 때는 아래 주석을 해제하여 드라이버의 INIT_SET을 0으로 만드세요.
     // =====================================================================
 
-    driver.set_velocity_rpm(600);
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    driver.set_velocity_rpm(0);
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // driver.set_velocity_rpm(600);
+    // std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    // driver.set_velocity_rpm(0);
+    // std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    std::cout << "[DEBUG] 강제로 INIT_SET 상태를 0으로 초기화합니다." << std::endl;
-    driver.set_init_set(0);
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-    return 0;
+    // std::cout << "[DEBUG] 강제로 INIT_SET 상태를 0으로 초기화합니다." << std::endl;
+    // driver.set_init_set(0);
+    // std::this_thread::sleep_for(std::chrono::milliseconds(100));
     // =====================================================================
 
     uint8_t init_state = 0;

@@ -18,7 +18,8 @@ namespace kaair_driver {
         int encoder_ppr = 16384;
         double lead_pitch = 0.01;
         double reduction_ratio = 1.4736842;
-        int max_rpm = 3000;
+        double global_velocity = 0.1;
+        uint16_t max_rpm = 3000;
         bool limit_direction = false;
         bool motor_direction = true;
         int motor_id = 1;
@@ -41,13 +42,14 @@ namespace kaair_driver {
             bool set_position_with_rpm(int32_t position,uint16_t rpm);
             // 선속도기반 모터 미터단위 제어 명령 전송
             bool move_abs_pose_meter_with_velocity(double position,double velocity);
+            bool move_abs_pose_meter_rpm(double position,double rpm);
             // 포지션 0으로 초기화
             bool reset_position();
             // 최대 속도 설정
             bool set_max_rpm(uint16_t rpm);
 
-            bool init_set(uint8_t init_mode);
-
+            bool set_init_set(uint8_t init_mode);
+            bool read_init_set_ok(uint8_t& init_state);
             // ACK 활성화
             bool return_type_ack();
             // 에러시 알람 초기화
@@ -61,8 +63,10 @@ namespace kaair_driver {
             bool read_state(kaair_driver::MainDataPayload& out_main);
             // IO 데이터만 읽어오는 함수
             bool read_state(kaair_driver::IoMonitorPayload& out_io);
-            // 
+            // ROS 관련 데이터로 읽기 및 변환 함수 
             bool read_ros_state(kaair_driver::RosDataPayload& out_ros);
+            // IO 모니터 초기화 역할 핀 읽기 함수
+            bool read_init_switch_status(bool& init_staus);
 
         private:
             MD485HwConfig cfg_;

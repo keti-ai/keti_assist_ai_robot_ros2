@@ -27,7 +27,7 @@ enum class PID : uint8_t {
     USE_LIMIT_SW     = 17,  // 리미트 스위치 기능 적용 여부
     CTRL_STATUS      = 34,  // 제어 상태 읽기
     INIT_SET         = 35,  // 회전방향 위치 초기화
-
+    TQ_RATIO         = 66,  // 위치 초기화 대체 레지스터(INIT SET 대용)
     // 2-Byte Data
     VEL_CMD          = 130, // 속도 제어 명령 (rpm)
     INT_RPM_DATA     = 138, // 모터 회전 속도 읽기 (rpm)
@@ -147,6 +147,7 @@ constexpr uint8_t GetExpectedDataLength(PID pid) {
         case PID::VEL_CMD: return 2;
         case PID::INT_RPM_DATA: return 2;
         case PID::TQ_DATA: return 2;
+        case PID::TQ_RATIO: return 1;
         case PID::MAX_RPM: return 2;
         case PID::MAIN_DATA: return 17;
         case PID::TAR_POSI: return 4;

@@ -4,8 +4,8 @@
 
 namespace kaair_driver {
 
-    CallbackReturn LiftHwInterface::on_init(const hardware_interface:: HardwareInfo & info){
-        if (SystemInterface::on_init(info) != CallbackReturn::SUCCESS) return CallbackReturn::ERROR;
+    hardware_interface::CallbackReturn LiftHwInterface::on_init(const hardware_interface:: HardwareInfo & info){
+        if (SystemInterface::on_init(info) != hardware_interface::CallbackReturn::SUCCESS) return hardware_interface::CallbackReturn::ERROR;
 
         if (info.joints.size() != 1) {
             RCLCPP_FATAL(rclcpp::get_logger("LiftHwInterface"), "LiftHwInterface expects exactly 1 joint!");
@@ -14,8 +14,7 @@ namespace kaair_driver {
 
         clock_ = std::make_shared<rclcpp::Clock>(RCL_STEADY_TIME);
 
-        
-        // 1. URDF 파라미터 로드 (.count()를 사용하여 xacro에 값이 있을 때만 덮어씌움)
+        // URDF 파라미터 로드
         if (info.hardware_parameters.count("usb_port")) 
             config.usb_port = info.hardware_parameters.at("usb_port");
         if (info.hardware_parameters.count("baud_rate")) 
@@ -30,73 +29,80 @@ namespace kaair_driver {
             config.reduction_ratio = std::stod(info.hardware_parameters.at("reduction_ratio"));
         if (info.hardware_parameters.count("max_rpm")) 
             config.max_rpm = std::stoi(info.hardware_parameters.at("max_rpm"));
+        if (info.hardware_parameters.count("global_velocity")) 
+            config.global_velocity = std::stod(info.hardware_parameters.at("global_velocity"));
 
-        // boolean 값 파싱 (문자열 "true"와 비교)
         if (info.hardware_parameters.count("limit_direction")) 
             config.limit_direction = (info.hardware_parameters.at("limit_direction") == "true");
         if (info.hardware_parameters.count("motor_direction")) 
             config.motor_direction = (info.hardware_parameters.at("motor_direction") == "true");
 
-        // 조인트 태그(<joint name="...">) 내부에 있는 모터 ID 로드
         if (info.joints[0].parameters.count("id")) {
             config.motor_id = std::stoi(info.joints[0].parameters.at("id"));
         }
 
-        // 2. 조인트 개수만큼 버퍼 초기화
         hw_states_.resize(3, 0.0);
         hw_commands_.resize(1, 0.0);
 
-
         md485_hw_ = std::make_unique<MD485Hw>(config);
 
-        return CallbackReturn::SUCCESS;
+        return hardware_interface::CallbackReturn::SUCCESS;
     }
 
     std::vector<hardware_interface::StateInterface> LiftHwInterface::export_state_interfaces() {
-    std::vector<hardware_interface::StateInterface> state_interfaces;
-    for (size_t i = 0; i < info_.joints.size(); i++) {
+        std::vector<hardware_interface::StateInterface> state_interfaces;
         state_interfaces.emplace_back(hardware_interface::StateInterface(
-        info_.joints[i].name, hardware_interface::HW_IF_POSITION, &hw_states_[i]));
-    }
-    return state_interfaces;
+            info_.joints[0].name, hardware_interface::HW_IF_POSITION, &hw_states_[0]));
+        state_interfaces.emplace_back(hardware_interface::StateInterface(
+            info_.joints[0].name, hardware_interface::HW_IF_VELOCITY, &hw_states_[1]));
+        state_interfaces.emplace_back(hardware_interface::StateInterface(
+            info_.joints[0].name, hardware_interface::HW_IF_EFFORT, &hw_states_[2]));
+        return state_interfaces;
     }
 
     std::vector<hardware_interface::CommandInterface> LiftHwInterface::export_command_interfaces() {
-    std::vector<hardware_interface::CommandInterface> command_interfaces;
-    for (size_t i = 0; i < info_.joints.size(); i++) {
+        std::vector<hardware_interface::CommandInterface> command_interfaces;
         command_interfaces.emplace_back(hardware_interface::CommandInterface(
-        info_.joints[i].name, hardware_interface::HW_IF_POSITION, &hw_commands_[i]));
-    }
-    return command_interfaces;
+            info_.joints[0].name, hardware_interface::HW_IF_POSITION, &hw_commands_[0]));
+        return command_interfaces;
     }
 
-    CallbackReturn LiftHwInterface::on_activate(const rclcpp_lifecycle::State & /*previous_state*/) {
+    hardware_interface::CallbackReturn LiftHwInterface::on_activate(const rclcpp_lifecycle::State & /*previous_state*/) {
         
-        if(!md485_hw_->connect()) return CallbackReturn::ERROR;
+        if(!md485_hw_->connect()) return hardware_interface::CallbackReturn::ERROR;
 
         md485_hw_->clear_alarm();
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         md485_hw_->set_max_rpm(config.max_rpm);
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
+        // 🌟 강력한 안전장치: 단독 초기화 프로그램이 선행되었는지 검사
+        uint8_t init_state = 0;
+        if (md485_hw_->read_init_set_ok(init_state) && init_state >= 1) {
+            RCLCPP_INFO(rclcpp::get_logger("LiftHwInterface"), "드라이버 영점 초기화 확인 완료! 정상 제어를 시작합니다.");
+        } else {
+            RCLCPP_ERROR(rclcpp::get_logger("LiftHwInterface"), 
+                         "❌ 로봇 영점이 잡히지 않았습니다! ROS 컨트롤러 실행 전 'lift_initializer'를 먼저 실행하세요.");
+            return hardware_interface::CallbackReturn::ERROR; // 영점이 안 잡혔으면 컨트롤러 로드를 거부함!
+        }
 
-        RCLCPP_INFO(rclcpp::get_logger("LiftHwInterface"), "Hardware activated. ");
-        
-        return CallbackReturn::SUCCESS;
+        // 초기 시작 위치를 현재 하드웨어 위치로 동기화 (갑자기 튀는 현상 방지)
+        kaair_driver::RosDataPayload ros_main;
+        if(md485_hw_->read_ros_state(ros_main)) {
+            hw_commands_[0] = ros_main.position;
+            hw_states_[0] = ros_main.position;
+            hw_states_[1] = ros_main.velocity;
+            hw_states_[2] = ros_main.effort;
+        }
+
+        return hardware_interface::CallbackReturn::SUCCESS;
     }
 
-    CallbackReturn LiftHwInterface::on_deactivate(const rclcpp_lifecycle::State & /*previous_state*/) {
-    
+    hardware_interface::CallbackReturn LiftHwInterface::on_deactivate(const rclcpp_lifecycle::State & /*previous_state*/) {
         md485_hw_->stop_brake();
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         md485_hw_->disconnect();
-
-        return CallbackReturn::SUCCESS;
-    }
-
-    hardware_interface::return_type LiftHwInterface::write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
-        // 컨트롤러에서 내려온 목표 라디안을 다이나믹셀로 전송
-        return hardware_interface::return_type::OK;
+        return hardware_interface::CallbackReturn::SUCCESS;
     }
 
     hardware_interface::return_type LiftHwInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
@@ -105,31 +111,23 @@ namespace kaair_driver {
         if(!md485_hw_->read_ros_state(ros_main)){
             read_error_count_++;
 
-            // 연속 에러가 허용 범위 내라면 OK를 리턴해서 루프를 살림
             if (read_error_count_ < MAX_READ_ERRORS) {
-                // 너무 자주 찍히지 않게 Throttle 로그 사용
                 RCLCPP_WARN_THROTTLE(
-                    rclcpp::get_logger("HeadHwInterface"),
-                    *clock_, 500, // 0.5초 간격으로 경고
+                    rclcpp::get_logger("LiftHwInterface"), *clock_, 500,
                     "Sync Read Failed (%d/%d). Using last valid state.", 
                     read_error_count_, MAX_READ_ERRORS
                 );
-                
-                // 중요: 여기서 ERROR를 리턴하지 않고 OK를 리턴함!
-                // hw_states_에는 이전 루프에서 읽었던 값이 그대로 남아있어 안전함.
                 return hardware_interface::return_type::OK;
             } 
             else {
-                // 연속 실패 횟수를 초과한 경우 (진짜 문제 발생)
-                RCLCPP_ERROR(rclcpp::get_logger("HeadHwInterface"), 
+                RCLCPP_ERROR(rclcpp::get_logger("LiftHwInterface"), 
                             "Critical: Consecutive sync read failures! Stopping hardware.");
                 return hardware_interface::return_type::ERROR;
             }
         }
         
-        // 2. 읽기 성공 시 카운터 초기화
         if (read_error_count_ > 0) {
-            RCLCPP_INFO(rclcpp::get_logger("HeadHwInterface"), "Communication recovered.");
+            RCLCPP_INFO(rclcpp::get_logger("LiftHwInterface"), "Communication recovered.");
         }
         read_error_count_ = 0;
 
@@ -137,18 +135,32 @@ namespace kaair_driver {
         hw_states_[1]=ros_main.velocity;
         hw_states_[2]=ros_main.effort;
 
-        // 4. 모니터링 로그 (디버깅 시 매우 유용)
+        std::this_thread::sleep_for(std::chrono::microseconds(1000));
+
         RCLCPP_INFO_THROTTLE(
-            rclcpp::get_logger("LiftHwInterface"),
-            *clock_, 1000,
+            rclcpp::get_logger("LiftHwInterface"), *clock_, 1000,
             "Lift Status | Cmd: %.3f m | Pos: %.3f m, Vel: %.3f m/s, Effort: %.2f A",
             hw_commands_[0], ros_main.position, ros_main.velocity, ros_main.effort
         );
 
+        return hardware_interface::return_type::OK;
+    }
+
+    hardware_interface::return_type LiftHwInterface::write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
+        
+        // JTC(JointTrajectoryController)가 내린 목표 위치
+        double target_position = hw_commands_[0];
+        
+        // 파라미터에서 로드한 글로벌 안전 속도
+        double global_speed = config.global_velocity; 
+
+        // 모터로 위치와 속도 동시 전송
+        md485_hw_->move_abs_pose_meter_with_velocity(target_position, global_speed);
+
+        std::this_thread::sleep_for(std::chrono::microseconds(1000));
 
         return hardware_interface::return_type::OK;
     }
 }
 
-// 플러그인 등록
 PLUGINLIB_EXPORT_CLASS(kaair_driver::LiftHwInterface, hardware_interface::SystemInterface)

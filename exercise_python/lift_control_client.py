@@ -5,13 +5,12 @@ from rclpy.action import ActionClient
 from control_msgs.action import FollowJointTrajectory
 from trajectory_msgs.msg import JointTrajectoryPoint
 
-class LiftSingleClient(Node):
+class LiftCycleClient(Node):
     def __init__(self):
-        super().__init__('lift_single_client')
+        super().__init__('lift_cycle_client')
         self._client = ActionClient(self, FollowJointTrajectory, '/lift_controller/follow_joint_trajectory')
 
     def send_goal_and_wait(self, target_pos):
-        self.get_logger().info('액션 서버 대기 중...')
         self._client.wait_for_server()
 
         # 1. 목표(Goal) 메시지 생성
@@ -30,34 +29,53 @@ class LiftSingleClient(Node):
         goal_handle = send_goal_future.result()
         
         if not goal_handle.accepted:
-            self.get_logger().error('명령이 거절되었습니다 (한계치 초과 등).')
-            return
+            self.get_logger().error('❌ 명령이 거절되었습니다 (한계치 초과 등).')
+            return False
 
-        self.get_logger().info('명령 수락됨! 이동을 시작합니다... (취소하려면 Ctrl+C)')
-        
         # 3. 결과 대기 및 Ctrl+C(강제 종료) 감지
         result_future = goal_handle.get_result_async()
         try:
             # 이동이 끝날 때까지 여기서 대기
             rclpy.spin_until_future_complete(self, result_future)
-            self.get_logger().info('이동 완료! 프로그램을 종료합니다.')
+            self.get_logger().info('✅ 도착 완료!')
+            return True
             
         except KeyboardInterrupt:
             # 4. 사용자가 도중에 Ctrl+C를 눌렀을 때의 처리 (Cancel 전송)
-            self.get_logger().warn('\n강제 종료 감지! 컨트롤러에 취소(Cancel) 명령을 보냅니다...')
+            self.get_logger().warn('\n🛑 강제 종료 감지! 컨트롤러에 취소(Cancel) 명령을 보냅니다...')
             cancel_future = goal_handle.cancel_goal_async()
             rclpy.spin_until_future_complete(self, cancel_future)
             self.get_logger().info('취소 완료. 로봇이 멈춥니다.')
+            return False
 
 def main(args=None):
     rclpy.init(args=args)
     
-    # 터미널 실행 시 뒤에 적은 숫자를 가져옴 (없으면 0.3m)
-    target = float(sys.argv[1]) if len(sys.argv) > 1 else 0.3
+    # 터미널 실행 시 뒤에 적은 숫자를 가져옴 (없으면 기본값 1회 왕복)
+    cycles = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     
-    node = LiftSingleClient()
-    node.send_goal_and_wait(target)
+    node = LiftCycleClient()
+    node.get_logger().info(f'🚀 총 {cycles}회 왕복 테스트를 시작합니다. (범위: 0.12m <-> 0.5m)')
     
+    # 지정된 횟수만큼 반복
+    for i in range(cycles):
+        node.get_logger().info(f'\n============================')
+        node.get_logger().info(f'🔄 [왕복 {i+1}/{cycles} 회차]')
+        node.get_logger().info(f'============================')
+        
+        # 첫 번째 목표: 0.4m (상승)
+        success = node.send_goal_and_wait(0.5)
+        if not success:
+            break # 에러나 Ctrl+C 발생 시 루프 즉시 탈출
+            
+        # 두 번째 목표: 0.2m (하강)
+        success = node.send_goal_and_wait(0.12)
+        if not success:
+            break # 에러나 Ctrl+C 발생 시 루프 즉시 탈출
+            
+    if success:
+        node.get_logger().info('\n🎉 모든 왕복 테스트가 성공적으로 끝났습니다!')
+
     node.destroy_node()
     rclpy.shutdown()
 

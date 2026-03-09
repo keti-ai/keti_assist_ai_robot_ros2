@@ -89,6 +89,11 @@ target_include_directories(lift_test_node PRIVATE include)
 target_link_libraries(lift_test_node md485_hw_lib)
 ament_target_dependencies(lift_test_node)
 
+# Lift 단독 호밍 초기화 노드
+add_executable(lift_initializer src/lift/lift_initializer.cpp)
+target_include_directories(lift_initializer PRIVATE include)
+target_link_libraries(lift_initializer md485_hw_lib) # 통신 라이브러리 연결
+
 # -------------------------------------------------------------------
 # 5. 플러그인 등록 및 설치
 # -------------------------------------------------------------------
@@ -104,6 +109,7 @@ install(TARGETS
   kaair_driver
   dxl_test_node
   lift_test_node
+  lift_initializer
   DESTINATION lib/${PROJECT_NAME}
 )
 
