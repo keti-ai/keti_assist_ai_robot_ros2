@@ -45,8 +45,8 @@ class ObstacleRepresentation(Node):
         )
 
         # ── Publishers ────────────────────────────────────────────
-        self.pub_preprocessed    = self.create_publisher(PointCloud2,     '/pointcloud/preprocessed', 10)
-        self.pub_downsampled     = self.create_publisher(PointCloud2,     '/pointcloud/downsampled',  10)
+        # self.pub_preprocessed    = self.create_publisher(PointCloud2,     '/pointcloud/preprocessed', 10)
+        # self.pub_downsampled     = self.create_publisher(PointCloud2,     '/pointcloud/downsampled',  10)
         # self.pub_mesh            = self.create_publisher(MarkerArray,     '/pointcloud/mesh',          10)
         self.pub_shape_markers   = self.create_publisher(MarkerArray,     '/obstacle_spheres',         10)
         self.pub_collision_obj   = self.create_publisher(CollisionObject, '/collision_field',         10)
@@ -85,7 +85,7 @@ class ObstacleRepresentation(Node):
 
         times.append(time.time())
 
-        self.pub_preprocessed.publish(numpy_to_ros(points, msg.header))
+        # self.pub_preprocessed.publish(numpy_to_ros(points, msg.header))
         # self.get_logger().info(f'[1] Preprocess: {len(points)} pts')
 
         # ── 2단계: Voxel 다운샘플링 ──────────────────────────────
@@ -93,8 +93,8 @@ class ObstacleRepresentation(Node):
         times.append(time.time())
         if len(ds_points) == 0:
             return
-        else:
-            self.pub_downsampled.publish(numpy_to_ros(ds_points, msg.header))
+        # else:
+        #     self.pub_downsampled.publish(numpy_to_ros(ds_points, msg.header))
         # self.get_logger().info(f'[2] Downsample: {len(ds_points)} pts')
 
         # ── 2.5단계: 메시 생성 + 퍼블리시 ───────────────────────
@@ -123,15 +123,15 @@ class ObstacleRepresentation(Node):
         times.append(time.time())
         self.pub_collision_obj.publish(collision_obj)
 
-        spend_time = [times[i+1] - times[i] for i in range(len(times)-1)]
-        spend_time = [f'{i*1000:.1f}ms' for i in spend_time]
-        spend_time = ' | '.join(spend_time)
-        elapsed = (times[-1] - times[0]) * 1000
-        self.get_logger().info(
-            f'\nFrame {self.frame_count:04d} | raw={len(points)} | ds={len(ds_points)} '
-            # f'ds={len(ds_points)} clusters={len(bboxes)} | {elapsed:.1f}ms'
-            f'\nTotal={elapsed:.1f}ms | EACH =  {spend_time}'
-        )
+        # spend_time = [times[i+1] - times[i] for i in range(len(times)-1)]
+        # spend_time = [f'{i*1000:.1f}ms' for i in spend_time]
+        # spend_time = ' | '.join(spend_time)
+        # elapsed = (times[-1] - times[0]) * 1000
+        # self.get_logger().info(
+        #     f'\nFrame {self.frame_count:04d} | raw={len(points)} | ds={len(ds_points)} '
+        #     # f'ds={len(ds_points)} clusters={len(bboxes)} | {elapsed:.1f}ms'
+        #     f'\nTotal={elapsed:.1f}ms | EACH =  {spend_time}'
+        # )
 
 # ============================================================================
 def main(args=None):
