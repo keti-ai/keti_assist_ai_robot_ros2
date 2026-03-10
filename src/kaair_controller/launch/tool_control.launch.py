@@ -11,7 +11,7 @@ def generate_launch_description():
     # 1. Launch Arguments 선언
     use_fake_hardware_arg = DeclareLaunchArgument(
         "use_fake_hardware",
-        default_value="true",
+        default_value="false",
         description="Start robot with fake hardware (mock_components)"
     )
 

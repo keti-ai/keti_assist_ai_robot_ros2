@@ -23,6 +23,9 @@ find_package(realtime_tools REQUIRED)
 
 find_package(dynamixel_sdk REQUIRED)
 find_package(serial REQUIRED)
+find_package(PkgConfig REQUIRED)
+
+pkg_check_modules(MODBUS REQUIRED libmodbus)
 
 # -------------------------------------------------------------------
 # 2. 공통 하드웨어 로직 라이브러리 (확장성의 핵심)
@@ -39,7 +42,7 @@ ament_target_dependencies(dxl_hw_lib
   dynamixel_sdk
 )
 
-# 🌟 [추가된 부분] Lift (MD400) 로직
+# Lift (MD400) 로직
 add_library(md485_hw_lib STATIC
   src/lift/md485_hw.cpp
 )
@@ -58,8 +61,11 @@ add_library(koras_hw_lib STATIC
 target_include_directories(koras_hw_lib PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
+  ${MODBUS_INCLUDE_DIRS}
 )
-
+target_link_libraries(koras_hw_lib
+  ${MODBUS_LIBRARIES}
+)
 
 # -------------------------------------------------------------------
 # 3. ROS 2 Control Hardware Interface 플러그인
@@ -67,12 +73,18 @@ target_include_directories(koras_hw_lib PUBLIC
 add_library(kaair_driver SHARED
   src/head/head_hw_interface.cpp
   src/lift/lift_hw_interface.cpp
+  src/tool/tool_hw_interface.cpp
 )
 
 target_include_directories(kaair_driver PRIVATE include)
 
 # 공통 라이브러리(dxl_hw_lib)를 링크합니다.
-target_link_libraries(kaair_driver dxl_hw_lib md485_hw_lib)
+target_link_libraries(kaair_driver 
+  dxl_hw_lib 
+  md485_hw_lib 
+  koras_hw_lib
+  ${MODBUS_LIBRARIES}  # 👈 여기에 추가!
+)
 
 ament_target_dependencies(kaair_driver
   hardware_interface
@@ -106,7 +118,7 @@ target_link_libraries(lift_initializer md485_hw_lib) # 통신 라이브러리 �
 # Koras 그리퍼 테스트용 실행 파일
 add_executable(koras_test_node src/tool/test_koras.cpp)
 target_include_directories(koras_test_node PRIVATE include)
-target_link_libraries(koras_test_node koras_hw_lib)
+target_link_libraries(koras_test_node koras_hw_lib ${MODBUS_LIBRARIES})
 ament_target_dependencies(koras_test_node)
 
 

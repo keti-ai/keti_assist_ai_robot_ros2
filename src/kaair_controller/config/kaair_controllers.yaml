@@ -71,16 +71,16 @@ head_controller:
 
 tool_controller:
   ros__parameters:
-      # 핵심: mimic 당하는 left는 빼고, 기준이 되는 right만 적습니다!
       joint: virtual_gripper_joint
       
       # 그리퍼는 보통 위치(position)를 목표로 주고, 
       # 물체에 닿았을 때의 힘(effort)을 피드백으로 받습니다.
       action_monitor_rate: 20.0
-      goal_tolerance: 0.01
-      max_effort: 50.0
+      goal_tolerance: 0.005
       allow_stalling: true # 물체를 잡고 멈춰있는(Stall) 상태를 허용
 
+      stall_timeout: 0.8
+      stall_velocity_threshold: 0.001
 
 xarm7_traj_controller:
   ros__parameters:

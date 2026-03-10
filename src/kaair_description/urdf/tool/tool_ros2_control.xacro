@@ -10,7 +10,7 @@
         
         <xacro:unless value="${use_fake_hardware}">
           <plugin>kaair_driver/ToolHwInterface</plugin>
-          <param name="serial_port">${spec['usb_port']}</param>
+          <param name="usb_port">${spec['usb_port']}</param>
           <param name="baud_rate">${spec['baud_rate']}</param>
         </xacro:unless> </hardware>
 

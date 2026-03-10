@@ -13,7 +13,7 @@ from uf_ros_lib.uf_robot_utils import generate_robot_api_params
 
 def generate_launch_description():
     # 1. Launch Arguments 선언
-    use_fake_hardware_arg = DeclareLaunchArgument("use_fake_hardware", default_value="true")
+    use_fake_hardware_arg = DeclareLaunchArgument("use_fake_hardware", default_value="false")
     use_gui_arg = DeclareLaunchArgument("use_gui", default_value="true")
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
     use_gui = LaunchConfiguration("use_gui")
