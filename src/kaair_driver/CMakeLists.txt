@@ -52,6 +52,15 @@ ament_target_dependencies(md485_hw_lib
   serial
 )
 
+add_library(koras_hw_lib STATIC
+  src/tool/koras_hw.cpp
+)
+target_include_directories(koras_hw_lib PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+
 # -------------------------------------------------------------------
 # 3. ROS 2 Control Hardware Interface 플러그인
 # -------------------------------------------------------------------
@@ -94,6 +103,13 @@ add_executable(lift_initializer src/lift/lift_initializer.cpp)
 target_include_directories(lift_initializer PRIVATE include)
 target_link_libraries(lift_initializer md485_hw_lib) # 통신 라이브러리 연결
 
+# Koras 그리퍼 테스트용 실행 파일
+add_executable(koras_test_node src/tool/test_koras.cpp)
+target_include_directories(koras_test_node PRIVATE include)
+target_link_libraries(koras_test_node koras_hw_lib)
+ament_target_dependencies(koras_test_node)
+
+
 # -------------------------------------------------------------------
 # 5. 플러그인 등록 및 설치
 # -------------------------------------------------------------------
@@ -106,10 +122,12 @@ pluginlib_export_plugin_description_file(
 install(TARGETS 
   dxl_hw_lib
   md485_hw_lib
+  koras_hw_lib
   kaair_driver
   dxl_test_node
   lift_test_node
   lift_initializer
+  koras_test_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
