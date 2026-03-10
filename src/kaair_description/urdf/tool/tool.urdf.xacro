@@ -96,6 +96,8 @@
 
     <link name="virtual_gripper_link"/>
 
+    <link name="tool_tcp_link"/>
+
     <joint name="hand_to_gripper_fix_joint" type="fixed">
       <origin xyz="0.0 0.0 0.0135" rpy="0 0 0"/>
       <parent link="hand_base_link"/>
@@ -116,6 +118,12 @@
       <limit upper="0.1" lower="0" effort="50" velocity="0.01"/>
     </joint>
 
+    <joint name="gripper_tcp_joint" type="fixed">
+      <origin xyz="0.0 0.0 0.241" rpy="0 0 0"/>
+      <parent link="gripper_body_link"/>
+      <child link="tool_tcp_link"/>
+    </joint>
+
 
   <joint name="right_finger_tip_joint" type="prismatic">
     <origin xyz="0.0 0.0035 0.15325" rpy="0 0 0"/>
@@ -134,5 +142,6 @@
     <limit upper="0.05" lower="0" effort="50" velocity="0.005"/>
     <mimic joint="virtual_gripper_joint" multiplier="0.5" offset="0"/>
   </joint>
+
 
 </robot>
