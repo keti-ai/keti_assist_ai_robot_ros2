@@ -1,0 +1,29 @@
+{
+    "name": "ROS 2 Humble",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "kaair_container",
+    "workspaceFolder": "/ros_ws",
+
+    // remoteUser를 지우면 Dockerfile의 'USER' 설정을 그대로 따릅니다.
+    // "remoteUser": "developer", 
+
+    "postCreateCommand": "echo \"PYTHONPATH=$(find /ros_ws/install -type d -name 'site-packages' | tr '\\n' ':'):\\$PYTHONPATH\" > .env",
+
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "python.analysis.extraPaths": [
+                    "/opt/ros/humble/lib/python3.10/site-packages",
+                    "/ros_ws/install/*/lib/python3.10/site-packages"
+                ],
+                "ros.distro": "humble"
+            },
+            "extensions": [
+                "ms-iot.vscode-ros",
+                "ms-python.python",
+                "ms-vscode.cpptools"
+            ]
+        }
+    }
+}

@@ -142,4 +142,4 @@ RUN mkdir -p src
 
 # 기본 쉘을 bash로 설정
 SHELL ["/bin/bash", "-c"]
-
+ENV SHELL=/bin/bash
