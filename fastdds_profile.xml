@@ -26,23 +26,27 @@
             </userTransports>
 
             <builtin>
-                <initialPeersList>
+                <!-- <initialPeersList>
+                    <locator><udpv4><address>127.0.0.1</address></udpv4></locator>
+                    <locator><udpv4><address>192.168.1.110</address></udpv4></locator>
+                    <locator><udpv4><address>192.168.1.80</address></udpv4></locator>
+                </initialPeersList> -->
+                <metatrafficMulticastLocatorList>
                     <locator>
                         <udpv4>
-                            <address>127.0.0.1</address> 
+                            <address>239.255.0.1</address> 
                         </udpv4>
                     </locator>
-                    <!-- <locator>
-                        <udpv4>
-                            <address>192.168.1.101</address>
-                        </udpv4>
-                    </locator>
-                    <locator>
-                        <udpv4>
-                            <address>192.168.1.80</address> 
-                        </udpv4>
-                    </locator> -->
-                </initialPeersList>
+                </metatrafficMulticastLocatorList>
+                <discovery_config>
+                    <initialAnnouncements>
+                        <count>5</count>
+                        <period>
+                            <sec>0</sec>
+                            <nanosec>100000000</nanosec> 
+                        </period>
+                    </initialAnnouncements>
+                </discovery_config>
             </builtin>
         </rtps>
     </participant>
