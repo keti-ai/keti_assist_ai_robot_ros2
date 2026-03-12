@@ -138,6 +138,24 @@ def generate_launch_description():
     )
 
 
+    # 8. Filtered point cloud
+    obstacle_node = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            os.path.join(
+                get_package_share_directory('kaair_obstacle'),
+                'launch',
+                'obstacle_representation.launch.py'
+            )
+        ]),
+        launch_arguments={
+            # 'enable_point_cloud': 'true',
+            # 'enable_depth': 'true',
+            # 'enable_color': 'true',
+            # 필요한 경우 여기서 토픽 이름 등을 덮어쓸 수 있습니다.
+        }.items()
+    )
+
+
     # 최종 실행 리스트
     return LaunchDescription([
         use_gui_arg,
@@ -151,4 +169,5 @@ def generate_launch_description():
         tool_spawner,
         head_spawner,
         camera_node,
+        obstacle_node,
     ])

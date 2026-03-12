@@ -1,1 +1,3 @@
 py-trees
+open3d
+numpy

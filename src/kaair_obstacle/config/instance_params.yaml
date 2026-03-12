@@ -1,0 +1,13 @@
+obstacle_representation_node:
+  ros__parameters:
+
+    # ── 1. 입력 토픽 ───────────────────────────────────────────────
+    # Orbbec 카메라 토픽명 확인 후 수정:
+    #   ros2 topic list | grep point
+    input_rgb : '/femto/color/image_raw/compressed'
+    input_depth : '/femto/depth/image_raw/compressedDepth'
+    input_pcd: '/femto/depth_registered/points'
+
+    sam2_model : 'sam2.1_hiera_large.pt'
+    sam2_cfg : 'sam2.1_hiera_l.yaml'
+    

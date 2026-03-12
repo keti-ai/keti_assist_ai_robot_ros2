@@ -1,0 +1,27 @@
+obstacle_representation_node:
+  ros__parameters:
+
+    # ── 입력 토픽 ───────────────────────────────────────────────
+    # Orbbec 카메라 토픽명 확인 후 수정:
+    #   ros2 topic list | grep point
+    input_topic: '/femto/depth_registered/points'
+
+    # ── 2. ROI (Region of Interest) ───────────────────────────────
+    # 카메라 기준 좌표계 (단위: m)
+    # Orbbec 기본: x=좌우, y=상하, z=전방 깊이
+    roi_x_min: -2.0
+    roi_x_max:  2.0
+    roi_y_min: -1.5
+    roi_y_max:  1.5
+    roi_z_min:  0.1    # 카메라 바로 앞 노이즈 제거
+    roi_z_max:  4.0    # 탐지 최대 거리
+    
+    # ── Voxel Grid ──────────────────────────────────────────────
+    # voxel_size 조절 가이드:
+    #   0.03 : 세밀 (3cm) - 느림, 소형 물체 검출
+    #   0.05 : 기본 (5cm) - 실내 일반 장애물
+    #   0.10 : 빠름 (10cm) - 원거리·실시간 우선
+    voxel_size: 0.02
+
+    # ── 마커 형태 ──────────────────────────────────────────────
+    marker_shape: 'cube'
