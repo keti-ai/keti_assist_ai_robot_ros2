@@ -15,6 +15,7 @@ find_package(kaair_moveit_config REQUIRED)
 install(DIRECTORY
   config
   launch
+  rviz
   DESTINATION share/${PROJECT_NAME}
 )
 

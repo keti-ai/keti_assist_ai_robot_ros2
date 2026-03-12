@@ -1,117 +1,107 @@
 import sys
 import rclpy
-import time
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from control_msgs.action import FollowJointTrajectory
 from trajectory_msgs.msg import JointTrajectoryPoint
 from action_msgs.msg import GoalStatus
+from sensor_msgs.msg import JointState
 
-class HeadLoopClient(Node):
+class HeadDirectController(Node):
     def __init__(self):
-        super().__init__('head_loop_client')
-        # 헤드 컨트롤러의 액션 서버 이름으로 변경
+        super().__init__('head_direct_controller')
+        
+        # 설정: 조인트 이름 및 허용 오차
+        self.JOINT_NAMES = ['head_joint1', 'head_joint2']
+        self.TOLERANCE = 0.05  # 약 2.8도 (헤드는 기어 백래시가 있을 수 있어 약간 여유 있게 설정)
+
+        # 실시간 상태 모니터링
+        self.current_positions = [None, None]
+        self.create_subscription(JointState, '/joint_states', self._js_cb, 10)
+
+        # 컨트롤러 액션 클라이언트
         self._client = ActionClient(self, FollowJointTrajectory, '/head_controller/follow_joint_trajectory')
 
-    def send_goal_and_wait(self, target_pos):
-        self._client.wait_for_server()
+    def _js_cb(self, msg):
+        for i, name in enumerate(self.JOINT_NAMES):
+            if name in msg.name:
+                self.current_positions[i] = msg.position[msg.name.index(name)]
+
+    def move_head(self, target_pos):
+        if not self._client.wait_for_server(timeout_sec=5.0):
+            self.get_logger().error('❌ 헤드 컨트롤러 서버를 찾을 수 없습니다.')
+            return False
 
         # 1. 목표(Goal) 메시지 생성
         goal_msg = FollowJointTrajectory.Goal()
-        # 조인트 이름을 헤드에 맞게 변경
-        goal_msg.trajectory.joint_names = ['head_joint1', 'head_joint2']
+        goal_msg.trajectory.joint_names = self.JOINT_NAMES
         
         point = JointTrajectoryPoint()
-        # 전달받은 리스트 값을 각각 대입
-        point.positions = [target_pos[0], target_pos[1]]
-        
-        # 🚀 2.8 라디안(1.4 -> -1.4) 이동이 있으므로 여유롭게 4초 부여
-        point.time_from_start.sec = 1
+        point.positions = [float(target_pos[0]), float(target_pos[1])]
+        # 이동 시간 설정 (너무 빠르면 하드웨어에 무리가 가니 거리에 따라 조절하거나 고정값 부여)
+        point.time_from_start.sec = 2 
         goal_msg.trajectory.points.append(point)
 
-        self.get_logger().info(f'🚀 목표 위치 [{target_pos[0]} rad, {target_pos[1]} rad]로 이동 명령 전송 중...')
+        self.get_logger().info(f'🚀 헤드 이동 명령: Pan({target_pos[0]}), Tilt({target_pos[1]})')
         
-        # 2. 목표 전송 및 수락 대기
+        # 2. 전송 및 결과 대기
         send_goal_future = self._client.send_goal_async(goal_msg)
         rclpy.spin_until_future_complete(self, send_goal_future)
         goal_handle = send_goal_future.result()
         
         if not goal_handle.accepted:
-            self.get_logger().error('❌ 명령이 거절되었습니다.')
+            self.get_logger().error('❌ 헤드 컨트롤러가 명령을 거절했습니다.')
             return False
 
-        # 3. 결과 대기 및 예외 처리
         result_future = goal_handle.get_result_async()
-        try:
-            rclpy.spin_until_future_complete(self, result_future)
-            action_response = result_future.result()
-            status = action_response.status
-            
-            if status == GoalStatus.STATUS_SUCCEEDED:
-                self.get_logger().info(f'✅ [{target_pos[0]}, {target_pos[1]}] 이동 완료!\n')
-                return True
-            elif status == GoalStatus.STATUS_ABORTED:
-                self.get_logger().error('⚠️ 이동 실패 (Aborted). 오차 초과 또는 충돌 발생!\n')
-                return False
-            elif status == GoalStatus.STATUS_CANCELED:
-                self.get_logger().warn('🛑 이동이 취소되었습니다.\n')
-                return False
-            else:
-                self.get_logger().warn(f'알 수 없는 상태: {status}\n')
-                return False
-                
-        except KeyboardInterrupt:
-            self.get_logger().warn('\n강제 종료 감지! 컨트롤러에 취소(Cancel) 명령을 보냅니다...')
-            cancel_future = goal_handle.cancel_goal_async()
-            rclpy.spin_until_future_complete(self, cancel_future)
-            self.get_logger().info('취소 완료. 로봇이 멈춥니다.')
+        rclpy.spin_until_future_complete(self, result_future)
+        status = result_future.result().status
+        
+        if status == GoalStatus.STATUS_SUCCEEDED:
+            # 3. 실제 도달 여부 검증 (Clamping 확인)
+            return self._verify_reach(target_pos)
+        else:
+            self.get_logger().error(f'⚠️ 이동 실패: 상태 코드 {status}')
             return False
 
-def main(args=None):
-    rclpy.init(args=args)
-    node = HeadLoopClient()
-    
-    # 터미널에서 반복 횟수를 입력받습니다. (기본값: 3회 왕복)
-    loop_count = int(sys.argv[1]) if len(sys.argv) > 1 else 3
-    
-    # 왕복할 타겟 각도 리스트 (head_joint1, head_joint2)
-    targets = [
-        [1.4, -0.7],
-        [-1.4, 0.3]
-    ]
-    
-    node.get_logger().info(f'=== 총 {loop_count}회 헤드 왕복 테스트를 시작합니다 ===')
-    
-    success = True
+    def _verify_reach(self, targets):
+        """현재 위치와 목표 위치를 비교하여 실제 도달 여부를 확인합니다."""
+        if None in self.current_positions:
+            self.get_logger().warn('⚠️ 현재 조인트 상태를 읽을 수 없어 검증을 건너뜁니다.')
+            return True
+
+        for i, (target, actual) in enumerate(zip(targets, self.current_positions)):
+            diff = abs(target - actual)
+            if diff > self.TOLERANCE:
+                self.get_logger().error(
+                    f'❌ 검증 실패: {self.JOINT_NAMES[i]} 도달 불가. '
+                    f'(목표: {target:.3f}, 실제: {actual:.3f}, 차이: {diff:.3f})'
+                )
+                return False
+        
+        self.get_logger().info('✅ 헤드 목표 지점 도달 완료.')
+        return True
+
+def main():
+    # 2개의 인자를 받음 (Pan, Tilt)
+    if len(sys.argv) < 3:
+        print("Usage: ros2 run <pkg> <script> <pan_angle> <tilt_angle>")
+        return
+
     try:
-        for i in range(loop_count):
-            node.get_logger().info(f'--- [헤드 왕복 {i+1}/{loop_count} 회차 시작] ---')
-            
-            for target in targets:
-                # 목표 지점으로 이동
-                success = node.send_goal_and_wait(target)
-                
-                # 만약 이동 중 에러가 나면 즉시 전체 루프를 중단합니다.
-                if not success:
-                    node.get_logger().error('🚨 동작 중 치명적 에러 발생! 안전을 위해 루프를 강제 종료합니다.')
-                    break
-                
-                # 관절에 무리가 가지 않도록 도착 후 0.5초 대기 (안정화)
-                time.sleep(0.5)
-            
-            # 내부 루프에서 에러(break)가 났다면 외부 루프도 종료
-            if not success:
-                break
-                
-        if success:
-            node.get_logger().info('🎉 모든 헤드 왕복 테스트가 성공적으로 완료되었습니다!')
+        targets = [float(sys.argv[1]), float(sys.argv[2])]
+    except ValueError:
+        print("❌ 오류: 인자는 숫자(radian)여야 합니다.")
+        return
 
-    except KeyboardInterrupt:
-        node.get_logger().info('사용자에 의해 테스트가 중단되었습니다.')
-
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+    rclpy.init()
+    node = HeadDirectController()
+    
+    success = node.move_head(targets)
+    
+    node.destroy_node()
+    rclpy.shutdown()
+    sys.exit(0 if success else 1)
 
 if __name__ == '__main__':
     main()
