@@ -66,6 +66,10 @@ RUN apt-get update && apt-get install -y \
 RUN apt-get update && apt-get install -y gdb \
     && rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update && apt-get install -y \
+    ros-humble-rmw-cyclonedds-cpp \
+    && rm -rf /var/lib/apt/lists/*
+
 # 5-1. rviz-common 특정 버전 아키텍처별 자동 설치 및 고정
 RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates \
     && ARCH=$(dpkg --print-architecture) \

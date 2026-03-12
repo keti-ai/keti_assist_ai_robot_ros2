@@ -18,5 +18,6 @@ PKGS=$(cat .build_config/pkgs-all.txt)
 
 # 4. 빌드 실행
 $COLCON_CMD build --symlink-install --packages-up-to kaair_bringup --cmake-args -DCMAKE_BUILD_TYPE=Debug
+$COLCON_CMD build --symlink-install --packages-up-to orbbec_camera --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 source install/setup.bash

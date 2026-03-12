@@ -4,11 +4,10 @@ moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControll
 
 moveit_simple_controller_manager:
   controller_names:
-    - arm_controller
+    - xarm7_traj_controller
     - lift_controller
-    - tool_controller
 
-  arm_controller:
+  xarm7_traj_controller:
     type: FollowJointTrajectory
     joints:
       - joint1
@@ -26,9 +25,3 @@ moveit_simple_controller_manager:
       - lift_joint
     action_ns: follow_joint_trajectory
     default: True
-  tool_controller:
-    type: GripperCommand
-    joints:
-      - virtual_gripper_joint
-    action_ns: gripper_cmd
-    default: true

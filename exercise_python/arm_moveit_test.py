@@ -22,35 +22,6 @@ class HybridRobotController(Node):
         # 🚧 가상 장애물을 퍼블리싱할 토픽 생성
         self.collision_pub = self.create_publisher(CollisionObject, '/collision_object', 10)
 
-    def spawn_virtual_wall(self):
-        time.sleep(1.0) 
-        box_msg = CollisionObject()
-        box_msg.id = "virtual_wall"
-        # ❗ 로봇의 최하단 고정축 이름을 적어주세요 (예: 'base_link', 'link_base' 등)
-        box_msg.header.frame_id = "link_base" 
-
-        # 박스 모양과 크기 설정 (x: 10cm, y: 40cm, z: 40cm짜리 벽)
-        primitive = SolidPrimitive()
-        primitive.type = SolidPrimitive.BOX
-        primitive.dimensions = [0.1, 1.0, 1.0] 
-
-        # 박스의 중심 좌표 설정 (로봇 정면 30cm 앞, 높이 20cm 지점에 세움)
-        pose = Pose()
-        pose.position.x = -0.23 
-        pose.position.y = 0.00
-        pose.position.z = 0.50
-        # 회전(Quaternion)은 기본값
-        pose.orientation.w = 1.0 
-
-        box_msg.primitives.append(primitive)
-        box_msg.primitive_poses.append(pose)
-
-        # 동작 지시: 맵에 추가하라(ADD)
-        box_msg.operation = CollisionObject.ADD
-
-        self.collision_pub.publish(box_msg)
-        self.get_logger().info('🚧 [기둥 생성] 가상의 벽을 로봇 앞(x=0.3)에 세웠습니다!')
-
 
     def spawn_virtual_obstacle(self):
         # 1초 정도 기다려야 퍼블리셔가 MoveIt과 완벽히 연결됩니다.
@@ -89,7 +60,7 @@ class HybridRobotController(Node):
 
         goal_msg = MoveGroup.Goal()
         req = MotionPlanRequest()
-        req.group_name = 'xarm7' # ❗ 본인의 그룹명
+        req.group_name = 'arm' # ❗ 본인의 그룹명
         
         # ---------------------------------------------------------
         # 🐢 바로 여기서 속도와 가속도를 제어합니다! (0.0 ~ 1.0 사이의 비율)
@@ -168,7 +139,6 @@ def main(args=None):
     node = HybridRobotController()
     
     # 왕복 시작 전에 장애물부터 세웁니다.
-    node.spawn_virtual_wall()
     node.spawn_virtual_obstacle()
     time.sleep(1.0) # 맵에 반영될 시간 확보
 

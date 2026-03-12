@@ -90,6 +90,10 @@ RUN apt-get update && apt-get install -y \
 RUN apt-get update && apt-get install -y gdb \
     && rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update && apt-get install -y \
+    ros-humble-rmw-cyclonedds-cpp \
+    && rm -rf /var/lib/apt/lists/*
+
 # 5-1. rviz-common 특정 버전 단독 설치 및 업데이트 고정
 RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates \
     && wget http://snapshots.ros.org/humble/2025-06-18/ubuntu/pool/main/r/ros-humble-rviz-common/ros-humble-rviz-common_11.2.17-1jammy.20250607.163324_arm64.deb -O /tmp/rviz-common.deb \

@@ -3,5 +3,6 @@
     "python.analysis.extraPaths": [
         "${workspaceFolder}/install/*/lib/python3.10/site-packages",
         "${workspaceFolder}/src/*"
-    ]
+    ],
+    "cmake.ignoreCMakeListsMissing": true
 }

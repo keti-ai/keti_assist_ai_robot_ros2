@@ -11,6 +11,7 @@
           <mesh filename="${mesh_path}tool/visual/hand_base.stl" scale="${m_to_mm}"/>
         </geometry>
         <origin xyz="0 0 0" rpy="0 0 0"/>
+        <material name="gray"/>
       </visual>
 
       <!-- collision -->
@@ -29,6 +30,7 @@
           <mesh filename="${mesh_path}tool/visual/vision_frame.stl" scale="${m_to_mm}"/>
         </geometry>
         <origin xyz="0 0 0" rpy="0 0 0"/>
+        <material name="light_gray"/>
       </visual>
 
       <!-- collision -->
@@ -47,6 +49,7 @@
           <mesh filename="${mesh_path}tool/visual/gripper_body.stl" scale="${m_to_mm}"/>
         </geometry>
         <origin xyz="0 0 0" rpy="0 0 0"/>
+        <material name="black"/>
       </visual>
 
       <!-- collision -->
@@ -65,6 +68,7 @@
           <mesh filename="${mesh_path}tool/visual/left_finger.stl" scale="${m_to_mm}"/>
         </geometry>
         <origin xyz="0 0 0" rpy="0 0 0"/>
+        <material name="dark_gray"/>
       </visual>
 
       <!-- collision -->
@@ -83,6 +87,7 @@
           <mesh filename="${mesh_path}tool/visual/right_finger.stl" scale="${m_to_mm}"/>
         </geometry>
         <origin xyz="0 0 0" rpy="0 0 0"/>
+        <material name="dark_gray"/>
       </visual>
 
       <!-- collision -->

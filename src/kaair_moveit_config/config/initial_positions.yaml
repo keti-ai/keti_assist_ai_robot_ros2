@@ -9,4 +9,3 @@ initial_positions:
   joint6: 0
   joint7: 0
   lift_joint: 0
-  virtual_gripper_joint: 0
