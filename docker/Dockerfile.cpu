@@ -85,6 +85,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certifi
     && rm /tmp/rviz-common.deb \
     && rm -rf /var/lib/apt/lists/*
 
+RUN cp -r /root/ws_moveit /ws_moveit
 
 ARG USERNAME=developer
 # 여기서 기본값을 1000으로 두되, 빌드 시 --build-arg USER_UID=2002 로 덮어쓸 수 있습니다.
@@ -110,12 +111,15 @@ RUN echo 'export TERM=xterm-256color' >> /home/${USERNAME}/.bashrc && \
 RUN echo 'export PS1="\[\e[01;31m\]\u@container\[\e[00m\]:\[\e[01;37m\]\w\[\e[00m\]# "' >> /root/.bashrc
 
 
-# 7. ROS 환경 자동 소싱 설정 (루프를 이용해 root와 일반 사용자 모두에게 적용)
+# 7. ROS 환경 자동 소싱 및 alias 설정
 RUN for user_home in /root /home/${USERNAME}; do \
     echo "alias eb='nano ~/.bashrc'" >> ${user_home}/.bashrc && \
     echo "alias sb='source ~/.bashrc'" >> ${user_home}/.bashrc && \
     echo "source /opt/ros/humble/setup.bash" >> ${user_home}/.bashrc && \
-    echo 'if [ -f "/ros_ws/install/setup.bash" ]; then source "/ros_ws/install/setup.bash"; fi' >> ${user_home}/.bashrc; \
+    # 기존 ros_ws 소싱
+    echo 'if [ -f "/ros_ws/install/setup.bash" ]; then source "/ros_ws/install/setup.bash"; fi' >> ${user_home}/.bashrc && \
+    # 추가: ws_moveit 소싱 (install/setup.bash가 있을 경우)
+    echo 'if [ -f "/ws_moveit/install/setup.bash" ]; then source "/ws_moveit/install/setup.bash"; fi' >> ${user_home}/.bashrc; \
     done
 
 USER ${USERNAME}
