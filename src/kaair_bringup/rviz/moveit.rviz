@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /MotionPlanning1
         - /MarkerArray1
+        - /TF1
       Splitter Ratio: 0.5
     Tree Height: 215
   - Class: rviz_common/Help
@@ -522,6 +523,160 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /obstacle_spheres
       Value: true
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Frame Timeout: 15
+      Frames:
+        All Enabled: true
+        S2RPLidar_frame:
+          Value: true
+        arm_base:
+          Value: true
+        base_footprint:
+          Value: true
+        femto_base_link:
+          Value: true
+        femto_color_frame:
+          Value: true
+        femto_color_optical_frame:
+          Value: true
+        femto_depth_frame:
+          Value: true
+        femto_depth_optical_frame:
+          Value: true
+        femto_ir_frame:
+          Value: true
+        femto_ir_optical_frame:
+          Value: true
+        femto_link:
+          Value: true
+        gripper_body_link:
+          Value: true
+        hand_base_link:
+          Value: true
+        head_base:
+          Value: true
+        head_camera_mount:
+          Value: true
+        head_link1:
+          Value: true
+        head_link2:
+          Value: true
+        head_link3:
+          Value: true
+        lb_caster:
+          Value: true
+        left_finger_tip:
+          Value: true
+        left_wheel:
+          Value: true
+        lf_caster:
+          Value: true
+        lift_base_link:
+          Value: true
+        lift_link:
+          Value: true
+        link1:
+          Value: true
+        link2:
+          Value: true
+        link3:
+          Value: true
+        link4:
+          Value: true
+        link5:
+          Value: true
+        link6:
+          Value: true
+        link7:
+          Value: true
+        link_base:
+          Value: true
+        link_eef:
+          Value: true
+        rb_caster:
+          Value: true
+        rf_caster:
+          Value: true
+        right_finger_tip:
+          Value: true
+        right_wheel:
+          Value: true
+        robot_base_link:
+          Value: true
+        slamtec_base_link:
+          Value: true
+        tool_tcp_link:
+          Value: true
+        virtual_gripper_link:
+          Value: true
+        vision_frame_link:
+          Value: true
+      Marker Scale: 0.30000001192092896
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: false
+      Tree:
+        base_footprint:
+          slamtec_base_link:
+            S2RPLidar_frame:
+              {}
+            lb_caster:
+              {}
+            left_wheel:
+              {}
+            lf_caster:
+              {}
+            rb_caster:
+              {}
+            rf_caster:
+              {}
+            right_wheel:
+              {}
+            robot_base_link:
+              lift_base_link:
+                head_base:
+                  head_link1:
+                    head_link2:
+                      head_link3:
+                        head_camera_mount:
+                          femto_base_link:
+                            femto_link:
+                              femto_depth_frame:
+                                femto_color_frame:
+                                  femto_color_optical_frame:
+                                    {}
+                                femto_depth_optical_frame:
+                                  {}
+                                femto_ir_frame:
+                                  femto_ir_optical_frame:
+                                    {}
+                lift_link:
+                  arm_base:
+                    link_base:
+                      link1:
+                        link2:
+                          link3:
+                            link4:
+                              link5:
+                                link6:
+                                  link7:
+                                    link_eef:
+                                      hand_base_link:
+                                        gripper_body_link:
+                                          left_finger_tip:
+                                            {}
+                                          right_finger_tip:
+                                            {}
+                                          tool_tcp_link:
+                                            {}
+                                        virtual_gripper_link:
+                                          {}
+                                        vision_frame_link:
+                                          {}
+      Update Interval: 0
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -540,25 +695,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 3.4645309448242188
+      Distance: 2.077662944793701
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.7339296936988831
-        Y: -0.4480549097061157
-        Z: 0.9128431081771851
+        X: 0.1151411309838295
+        Y: -0.47081416845321655
+        Z: 0.9288374185562134
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.2700001299381256
+      Pitch: 0.32500049471855164
       Target Frame: base_footprint
       Value: Orbit (rviz_default_plugins)
-      Yaw: 3.745192766189575
+      Yaw: 3.7151992321014404
     Saved: ~
 Window Geometry:
   Displays:

@@ -13,7 +13,7 @@ MD485Hw::MD485Hw(const MD485HwConfig & config)
     serial_ = std::make_unique<serial::Serial>(
         "",
         cfg_.baud_rate, 
-        serial::Timeout::simpleTimeout(3)
+        serial::Timeout::simpleTimeout(20)
     );
 }
 

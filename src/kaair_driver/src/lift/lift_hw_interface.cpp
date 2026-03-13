@@ -72,9 +72,9 @@ namespace kaair_driver {
         if(!md485_hw_->connect()) return hardware_interface::CallbackReturn::ERROR;
 
         md485_hw_->clear_alarm();
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(800));
         md485_hw_->set_max_rpm(config.max_rpm);
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
         // 🌟 강력한 안전장치: 단독 초기화 프로그램이 선행되었는지 검사
         uint8_t init_state = 0;
@@ -94,6 +94,7 @@ namespace kaair_driver {
             hw_states_[1] = ros_main.velocity;
             hw_states_[2] = ros_main.effort;
         }
+        std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
         return hardware_interface::CallbackReturn::SUCCESS;
     }
@@ -105,62 +106,142 @@ namespace kaair_driver {
         return hardware_interface::CallbackReturn::SUCCESS;
     }
 
+    // hardware_interface::return_type LiftHwInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
+    //     RosDataPayload ros_main;
+        
+    //     std::lock_guard<std::mutex> lock(com_mutex_);
+
+    //     if(!md485_hw_->read_ros_state(ros_main)){
+    //         read_error_count_++;
+
+    //         if (read_error_count_ < MAX_READ_ERRORS) {
+    //             RCLCPP_WARN_THROTTLE(
+    //                 rclcpp::get_logger("LiftHwInterface"), *clock_, 500,
+    //                 "Sync Read Failed (%d/%d). Using last valid state.", 
+    //                 read_error_count_, MAX_READ_ERRORS
+    //             );
+    //             return hardware_interface::return_type::OK;
+    //         } 
+    //         else {
+    //             RCLCPP_ERROR(rclcpp::get_logger("LiftHwInterface"), 
+    //                         "Critical: Consecutive sync read failures! Stopping hardware.");
+    //             return hardware_interface::return_type::ERROR;
+    //         }
+    //     }
+        
+    //     if (read_error_count_ > 0) {
+    //         RCLCPP_INFO(rclcpp::get_logger("LiftHwInterface"), "Communication recovered.");
+    //     }
+    //     read_error_count_ = 0;
+
+    //     hw_states_[0]=ros_main.position;
+    //     hw_states_[1]=ros_main.velocity;
+    //     hw_states_[2]=ros_main.effort;
+
+
+    //     RCLCPP_INFO_THROTTLE(
+    //         rclcpp::get_logger("LiftHwInterface"), *clock_, 1000,
+    //         "Lift Status | Cmd: %.3f m | Pos: %.3f m, Vel: %.3f m/s, Effort: %.2f A",
+    //         hw_commands_[0], ros_main.position, ros_main.velocity, ros_main.effort
+    //     );
+
+    //     return hardware_interface::return_type::OK;
+    // }
+
+    // hardware_interface::return_type LiftHwInterface::write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
+        
+    //     // JTC(JointTrajectoryController)가 내린 목표 위치
+    //     double target_position = hw_commands_[0];
+        
+    //     {
+    //         std::lock_guard<std::mutex> lock(com_mutex_);
+    //         // 모터로 명령 전송
+    //         md485_hw_->move_abs_pose_meter_with_velocity(target_position, config.global_velocity);
+    //     }
+
+    //     return hardware_interface::return_type::OK;
+    // }
+
     hardware_interface::return_type LiftHwInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
         RosDataPayload ros_main;
-        
-        if(!md485_hw_->read_ros_state(ros_main)){
-            read_error_count_++;
+        auto start_time = clock_->now();
 
-            if (read_error_count_ < MAX_READ_ERRORS) {
-                RCLCPP_WARN_THROTTLE(
-                    rclcpp::get_logger("LiftHwInterface"), *clock_, 500,
-                    "Sync Read Failed (%d/%d). Using last valid state.", 
-                    read_error_count_, MAX_READ_ERRORS
-                );
-                return hardware_interface::return_type::OK;
-            } 
-            else {
+        {
+            std::lock_guard<std::mutex> lock(com_mutex_);
+            
+            // 1. 읽기 시도 (내부적으로 flushInput()이 포함되어 있어야 함)
+            bool success = md485_hw_->read_ros_state(ros_main);
+            auto end_time = clock_->now();
+            double duration = (end_time - start_time).seconds() * 1000.0;
+
+            if(!success) {
+                read_error_count_++;
+                data_read_success_ = false; // 읽기 실패 시 이번 주기 Write 금지
+                
                 RCLCPP_ERROR(rclcpp::get_logger("LiftHwInterface"), 
-                            "Critical: Consecutive sync read failures! Stopping hardware.");
-                return hardware_interface::return_type::ERROR;
+                    "[READ FAIL] Duration: %.3f ms | Count: %d/%d", 
+                    duration, read_error_count_, MAX_READ_ERRORS);
+
+                return (read_error_count_ < MAX_READ_ERRORS) ? 
+                    hardware_interface::return_type::OK : hardware_interface::return_type::ERROR;
             }
+            
+            // 2. 읽기 성공 처리
+            data_read_success_ = true; 
+            read_error_count_ = 0;
+            
+            hw_states_[0] = ros_main.position;
+            hw_states_[1] = ros_main.velocity;
+            hw_states_[2] = ros_main.effort;
+
+            // 디버깅용 로그 (성공 시에는 1초에 한 번만 출력하도록 Throttle 권장)
+            RCLCPP_INFO_THROTTLE(rclcpp::get_logger("LiftHwInterface"), *clock_, 1000,
+                "[READ OK] Pos: %.3f m | Dur: %.3f ms", hw_states_[0], duration);
         }
-        
-        if (read_error_count_ > 0) {
-            RCLCPP_INFO(rclcpp::get_logger("LiftHwInterface"), "Communication recovered.");
-        }
-        read_error_count_ = 0;
-
-        hw_states_[0]=ros_main.position;
-        hw_states_[1]=ros_main.velocity;
-        hw_states_[2]=ros_main.effort;
-
-        std::this_thread::sleep_for(std::chrono::microseconds(1000));
-
-        RCLCPP_INFO_THROTTLE(
-            rclcpp::get_logger("LiftHwInterface"), *clock_, 1000,
-            "Lift Status | Cmd: %.3f m | Pos: %.3f m, Vel: %.3f m/s, Effort: %.2f A",
-            hw_commands_[0], ros_main.position, ros_main.velocity, ros_main.effort
-        );
 
         return hardware_interface::return_type::OK;
     }
 
     hardware_interface::return_type LiftHwInterface::write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
-        
-        // JTC(JointTrajectoryController)가 내린 목표 위치
+        // 🌟 조건 1: 이번 주기에 Read가 성공했는가? (순차 보장)
+        if (!data_read_success_) {
+            return hardware_interface::return_type::OK;
+        }
+
         double target_position = hw_commands_[0];
         
-        // 파라미터에서 로드한 글로벌 안전 속도
-        double global_speed = config.global_velocity; 
+        // 🌟 조건 2: 목표 위치가 유의미하게 변했는가? (불필요한 통신 억제)
+        // 정지 상태일 때는 Write를 생략하여 시리얼 라인 점유율을 낮춤
+        if (std::abs(target_position - last_hw_command_) < 0.0001) {
+            data_read_success_ = false; // 플래그 초기화
+            return hardware_interface::return_type::OK;
+        }
 
-        // 모터로 위치와 속도 동시 전송
-        md485_hw_->move_abs_pose_meter_with_velocity(target_position, global_speed);
+        auto start_time = clock_->now();
+        {
+            std::lock_guard<std::mutex> lock(com_mutex_);
+            
+            // 3. 쓰기 수행
+            bool success = md485_hw_->move_abs_pose_meter_with_velocity(target_position, config.global_velocity);
+            auto end_time = clock_->now();
+            double duration = (end_time - start_time).seconds() * 1000.0;
 
-        std::this_thread::sleep_for(std::chrono::microseconds(1000));
+            if(success) {
+                last_hw_command_ = target_position;
+                // Write 직후 미세 딜레이는 필요 시 md485_hw 내부에 구현 (보통은 불필요)
+            } else {
+                RCLCPP_ERROR(rclcpp::get_logger("LiftHwInterface"), "[WRITE FAIL] Duration: %.3f ms", duration);
+            }
+        }
+
+        // 다음 주기 Read를 위해 플래그 초기화
+        data_read_success_ = false; 
 
         return hardware_interface::return_type::OK;
     }
+
+
+
 }
 
 PLUGINLIB_EXPORT_CLASS(kaair_driver::LiftHwInterface, hardware_interface::SystemInterface)

@@ -46,24 +46,43 @@ std::vector<hardware_interface::CommandInterface> HeadHwInterface::export_comman
 }
 
 CallbackReturn HeadHwInterface::on_activate(const rclcpp_lifecycle::State & /*previous_state*/) {
-  if (!dxl_hw_->open_port()) return CallbackReturn::ERROR;
-  
-  // 1. 토크를 켜기 전/후에 현재 위치를 먼저 파악 (상태 동기화)
-  dxl_hw_->sync_read_radian(dxl_ids_, hw_states_);
+  RCLCPP_INFO(rclcpp::get_logger("HeadHwInterface"), "Head 하드웨어 활성화 및 초기화 시작...");
 
-  // 2. 초기화 속도 및 가속도 설정 (값은 100~200 사이 추천)
-    // dxl_ids_는 std::vector<uint8_t> 여야 합니다.
-    uint32_t init_vel = 50;
-    dxl_hw_->write_profile_velocity(dxl_ids_, init_vel);
+  // 1. 통신 포트 열기
+  if (!dxl_hw_->open_port()) {
+    RCLCPP_ERROR(rclcpp::get_logger("HeadHwInterface"), "포트를 열 수 없습니다!");
+    return CallbackReturn::ERROR;
+  }
 
-  // 2. 명령 버퍼를 0.0으로 강제 초기화
+  // 2. 모든 모터 리부트 (Hardware Error 상태 초기화)
+  RCLCPP_INFO(rclcpp::get_logger("HeadHwInterface"), "모터 리부트 수행 중...");
+  if (!dxl_hw_->reboot(dxl_ids_)) {
+    RCLCPP_WARN(rclcpp::get_logger("HeadHwInterface"), "일부 모터 리부트 응답 없음 (계속 진행)");
+  }
+
+  // 3. 토크 ON (리부트 후에는 반드시 다시 켜야 함)
+  if (!dxl_hw_->set_torque(dxl_ids_, true)) {
+    RCLCPP_ERROR(rclcpp::get_logger("HeadHwInterface"), "토크를 켤 수 없습니다!");
+    return CallbackReturn::ERROR;
+  }
+
+  // 4. 현재 위치 읽기 (상태 동기화)
+  if (!dxl_hw_->sync_read_radian(dxl_ids_, hw_states_)) {
+    RCLCPP_ERROR(rclcpp::get_logger("HeadHwInterface"), "초기 상태를 읽을 수 없습니다!");
+    return CallbackReturn::ERROR;
+  }
+
+  // 5. 글로벌 속도 조절 (상태 동기화)
+  if (!dxl_hw_->write_profile_velocity_radian(dxl_ids_, 10.4)) {
+    RCLCPP_ERROR(rclcpp::get_logger("HeadHwInterface"), "속도를 조절할수 없습니다!!");
+    return CallbackReturn::ERROR;
+  }
+
+  // 🌟 5. 목표 위치를 0.0으로 설정 (동작 시작 시 0.0으로 이동하도록 명령)
+  // 조인트가 2개인 경우 [0.0, 0.0]으로 초기화됩니다.
   std::fill(hw_commands_.begin(), hw_commands_.end(), 0.0);
 
-  // 3. 토크 ON (이제 write 함수가 호출되면서 0,0으로 서서히 또는 설정된 속도로 이동 시작)
-  if (!dxl_hw_->set_torque(dxl_ids_, true)) return CallbackReturn::ERROR;
-  
-  RCLCPP_INFO(rclcpp::get_logger("HeadHwInterface"), "Hardware activated. Moving to [0, 0] initial position.");
-  
+  RCLCPP_INFO(rclcpp::get_logger("HeadHwInterface"), "활성화 완료: 초기 목표 위치 0.0으로 설정됨.");
   return CallbackReturn::SUCCESS;
 }
 

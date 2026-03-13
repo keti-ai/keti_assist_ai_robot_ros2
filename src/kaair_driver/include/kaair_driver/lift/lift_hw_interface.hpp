@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <mutex>
 
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/handle.hpp"
@@ -40,6 +41,10 @@ private:
     
     int read_error_count_ = 0;
     const int MAX_READ_ERRORS = 10;
+    std::mutex com_mutex_;
+    bool data_read_success_ = false; // 추가: 읽기 성공 여부 플래그
+    double last_hw_command_ = -999.0;
+
 };
 
 }  // namespace kaair_driver

@@ -118,6 +118,7 @@ def generate_launch_description():
             moveit_config.planning_pipelines,
             moveit_config.robot_description_kinematics,
         ],
+        condition=IfCondition(use_gui)
     )
 
     # 7. Orbbec Femto Bolt 카메라 런치 포함
