@@ -45,6 +45,6 @@ joint_limits:
     max_acceleration: 0
   lift_joint:
     has_velocity_limits: true
-    max_velocity: 0.34000000000000002
+    max_velocity: 0.20000000000000002
     has_acceleration_limits: false
     max_acceleration: 0

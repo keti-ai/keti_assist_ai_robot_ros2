@@ -57,7 +57,7 @@
       <axis xyz="0.0 0.0 1.0"/>
       <limit 
         upper="${max_h}"  lower="${min_h}"  effort="700" 
-        velocity="0.34"/>
+        velocity="0.2"/>
     </joint>
 
     <joint name="lift_to_arm_fix_joint" type="fixed">

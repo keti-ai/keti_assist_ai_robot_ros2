@@ -81,7 +81,9 @@ class xArmRelativeController(Node):
         req.waypoints = [target_pose]
         req.max_step = 0.005 # 5mm 간격으로 더 정밀하게 생성
         req.jump_threshold = 0.0
+        req.avoid_collisions = True
 
+        
         if not self.cartesian_client.wait_for_service(timeout_sec=5.0):
             self.get_logger().error("❌ MoveIt 서비스를 찾을 수 없습니다.")
             return False

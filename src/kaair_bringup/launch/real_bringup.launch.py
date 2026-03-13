@@ -2,14 +2,12 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, TimerAction
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.conditions import IfCondition, UnlessCondition
 from moveit_configs_utils import MoveItConfigsBuilder
-
-
 
 
 # xArm의 파라미터 파싱 유틸리티
@@ -120,6 +118,8 @@ def generate_launch_description():
         ],
         condition=IfCondition(use_gui)
     )
+
+
 
     # 7. Orbbec Femto Bolt 카메라 런치 포함
     camera_node = IncludeLaunchDescription(
