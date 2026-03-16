@@ -8,22 +8,22 @@ from rclpy.duration import Duration
 import tf2_ros
 
 from sensor_msgs.msg import PointCloud2
-from visualization_msgs.msg import Marker, MarkerArray
-from geometry_msgs.msg import Point
-from std_msgs.msg import String
+from visualization_msgs.msg import  MarkerArray
 from moveit_msgs.msg import CollisionObject
 
 import numpy as np
 
 from kaair_obstacle.utils.load_config import load_config, PipelineConfig
-from kaair_obstacle.utils.convert_pointcloud import numpy_to_ros
 from kaair_obstacle.utils.process import Process
 
+import gc
 
 class ObstacleRepresentation(Node):
 
     def __init__(self):
         super().__init__('obstacle_representation_node')
+
+        gc.set_threshold(10000, 100, 100)
 
         # ── 설정 로드 ──────────────────────────────────────────────
         self.cfg: PipelineConfig = load_config(self)
@@ -55,11 +55,8 @@ class ObstacleRepresentation(Node):
         )
 
         # ── Publishers ────────────────────────────────────────────
-        # self.pub_preprocessed    = self.create_publisher(PointCloud2,     '/pointcloud/preprocessed', 10)
-        # self.pub_downsampled     = self.create_publisher(PointCloud2,     '/pointcloud/downsampled',  10)
-        # self.pub_mesh            = self.create_publisher(MarkerArray,     '/pointcloud/mesh',          10)
-        self.pub_shape_markers   = self.create_publisher(MarkerArray,     '/obstacle_spheres',         10)
-        self.pub_collision_obj   = self.create_publisher(CollisionObject, '/collision_field',         10)
+        self.pub_shape_markers   = self.create_publisher(MarkerArray,     '/scene/obstacle_markers',         10)
+        self.pub_collision_obj   = self.create_publisher(CollisionObject, '/scene/collision_objects',         10)
 
         self.frame_count = 0
         self.get_logger().info(
@@ -105,8 +102,8 @@ class ObstacleRepresentation(Node):
             tf = self.tf_buffer.lookup_transform(
                 self.target_frame,
                 source_frame,
-                rclpy.time.Time(),      # 0 = 최신 TF 사용 (타임스탬프 불일치 방지)
-                timeout=Duration(seconds=0.1),
+                stamp,      # 0 = 최신 TF 사용 (타임스탬프 불일치 방지)
+                timeout=Duration(seconds=0.05),
             )
         except (tf2_ros.LookupException,
                 tf2_ros.ConnectivityException,
@@ -136,45 +133,44 @@ class ObstacleRepresentation(Node):
     # 메인 콜백
     # ================================================================
     def callback(self, msg: PointCloud2):
-        times = [time.time()]
-        self.frame_count += 1
+        # times = [time.time()]
+        # self.frame_count += 1
 
-        # ── 1단계: 전처리 (카메라 프레임, ROI 필터 포함) ──────────
+        # ── 전처리 (카메라 프레임, ROI 필터 포함) ──────────
         points = self.process.preprocess(msg)
         if points is None or len(points) < 10:
             return
 
-        times.append(time.time())
+        # times.append(time.time())
 
-        # ── 1.5단계: TF 변환 (카메라 프레임 → target_frame) ──────
-        points, frame_id = self._transform_points(
-            points, msg.header.frame_id, msg.header.stamp
-        )
-        times.append(time.time())
-
-        # ── 2단계: Voxel 다운샘플링 ──────────────────────────────
+        # ── Voxel 다운샘플링 ──────────────────────────────
         ds_points = self.process.downsample_voxel(points)
-        times.append(time.time())
-        if len(ds_points) == 0:
-            return
+        # times.append(time.time())
 
-        shape_mk = self.process.create_shape_markers(
-            ds_points,
-            self.marker_shape,
-            frame_id,
-            msg.header.stamp)
-        times.append(time.time())
-        self.pub_shape_markers.publish(shape_mk)
+        # ── TF 변환 (카메라 프레임 → target_frame) ──────
+        tf_points, frame_id = self._transform_points(ds_points, msg.header.frame_id, msg.header.stamp)
+        # times.append(time.time())
 
         # MoveIt2 CollisionObject 생성 및 퍼블리시
         collision_obj = self.process.create_collision_object(
-            ds_points,
+            tf_points,
             frame_id,
             msg.header.stamp,
             shape=self.marker_shape
         )
-        times.append(time.time())
+        # times.append(time.time())
         self.pub_collision_obj.publish(collision_obj)
+
+        # rviz2용 시각화 -> voxel사이즈 더 큼
+        shape_mk = self.process.create_shape_markers(
+            tf_points,
+            self.marker_shape,
+            frame_id,
+            msg.header.stamp)
+        # times.append(time.time())
+        self.pub_shape_markers.publish(shape_mk)
+
+        # times.append(time.time())
 
         # spend_time = [times[i+1] - times[i] for i in range(len(times)-1)]
         # spend_time = [f'{i*1000:.1f}ms' for i in spend_time]
