@@ -19,6 +19,7 @@
           <param name="encoder_ppr">${spec['encoder_ppr']}</param>
           <param name="lead_pitch">${spec['lead_pitch']}</param>
           <param name="reduction_ratio">${spec['reduction_ratio']}</param>
+          <param name="global_velocity">${spec['global_velocity']}</param>
           <param name="max_rpm">${spec['max_rpm']}</param>
           <param name="limit_direction">${spec['limit_direction']}</param>
           <param name="motor_direction">${spec['motor_direction']}</param>
@@ -26,18 +27,18 @@
         </xacro:unless> </hardware>
 
       <joint name="lift_joint">
-          <command_interface name="position">
-          </command_interface>
-          
-          <command_interface name="velocity"/>
+          <command_interface name="position"/>
 
           <state_interface name="position">
             <param name="initial_value">0.2</param>
           </state_interface>
-          
           <state_interface name="velocity">
             <param name="initial_value">0.0</param>
           </state_interface>
+          <state_interface name="effort">
+            <param name="initial_value">0.0</param>
+          </state_interface>
+
         </joint>
 
     </ros2_control>

@@ -16,6 +16,8 @@ public:
     bool open_port();
     void close_port();
     
+    bool reboot(const std::vector<uint8_t>& ids);
+
     // 토크 제어 (enable: true이면 ON, false이면 OFF)
     bool set_torque(const std::vector<uint8_t>& ids, bool enable);
     
@@ -28,7 +30,9 @@ public:
     bool sync_read_radian(const std::vector<uint8_t>& ids, std::vector<double>& radians);
 
     bool write_profile_velocity(const std::vector<uint8_t>& ids, uint32_t velocity);
+    bool write_profile_velocity_radian(const std::vector<uint8_t>& ids, double rad_per_sec);
 
+    
 private:
     dynamixel::PortHandler * portHandler_;
     dynamixel::PacketHandler * packetHandler_;
@@ -57,7 +61,7 @@ private:
     double dxl_to_rad(int32_t dxl) {
         return static_cast<double>(dxl - DXL_OFFSET) * (2.0 * M_PI / DXL_RESOLUTION);
     }
-
+    uint32_t rad_to_dxl_vel(double rad_per_sec);
 };
 
 } // namespace kaair_driver

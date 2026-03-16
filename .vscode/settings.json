@@ -1,3 +1,8 @@
 {
-    "cmake.sourceDirectory": "/home/smi/v2_workdir/packages/keti_assist_ai_robot_ros2/src/kaair_bringup"
+    "cmake.sourceDirectory": "/home/smi/v2_workdir/packages/keti_assist_ai_robot_ros2/src/kaair_bringup",
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/install/*/lib/python3.10/site-packages",
+        "${workspaceFolder}/src/*"
+    ],
+    "cmake.ignoreCMakeListsMissing": true
 }

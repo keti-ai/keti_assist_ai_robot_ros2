@@ -1,0 +1,26 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: kaair_description
+    relative_path: urdf/robot.urdf.xacro
+    xacro_args: use_fake_hardware:=true
+  srdf:
+    relative_path: config/kaair.srdf
+  package_settings:
+    author_name: seomi
+    author_email: seomi@keti.re.kr
+    generated_timestamp: 1773292926
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity
+  modified_urdf:
+    xacros:
+      - control_xacro
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity

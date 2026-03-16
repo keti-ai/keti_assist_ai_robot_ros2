@@ -1,5 +1,7 @@
 #include "kaair_driver/head/dxl_hw.hpp"
 #include <iostream>
+#include <thread>
+#include <chrono>
 
 namespace kaair_driver {
 
@@ -45,6 +47,23 @@ bool DxlHw::set_torque(const std::vector<uint8_t>& ids, bool enable) {
     }
     return all_success;
 }
+
+// 모터 리부트
+bool DxlHw::reboot(const std::vector<uint8_t>& ids) {
+    bool all_success = true;
+    for (uint8_t id : ids) {
+        uint8_t dxl_error = 0;
+        int result = packetHandler_->reboot(portHandler_, id, &dxl_error);
+        if (result != COMM_SUCCESS) {
+            std::cerr << "[DxlHw] ID " << (int)id << " Reboot Failed!" << std::endl;
+            all_success = false;
+        }
+    }
+    // 리부트 후 하드웨어가 다시 켜질 시간 확보
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    return all_success;
+}
+
 
 // --- Group Sync Write 적용 ---
 bool DxlHw::sync_write_position(const std::vector<uint8_t>& ids, const std::vector<int32_t>& positions) {
@@ -148,5 +167,38 @@ bool DxlHw::write_profile_velocity(const std::vector<uint8_t>& ids, uint32_t vel
 
     return (result == COMM_SUCCESS);
 }
+
+// --- Profile Velocity 설정 (rad/s 입력 버전) ---
+bool DxlHw::write_profile_velocity_radian(const std::vector<uint8_t>& ids, double rad_per_sec) {
+    // rad/s를 다이나믹셀 단위로 변환
+    uint32_t dxl_velocity = rad_to_dxl_vel(rad_per_sec);
+    
+    // 기존의 uint32_t를 받는 함수 호출
+    return write_profile_velocity(ids, dxl_velocity);
+}
+
+
+// --- 변환 유틸리티 함수 ---
+uint32_t DxlHw::rad_to_dxl_vel(double rad_per_sec) {
+    // 0.229 rev/min = 1 unit
+    // 1 rev/min = 2*pi / 60 rad/s
+    // 1 unit = 0.229 * (2*pi / 60) rad/s
+    const double DXL_VEL_UNIT = 0.229 * (2.0 * M_PI / 60.0);
+    
+    // 절대값으로 변환 후 반올림 (Profile Velocity는 음수가 없음)
+    uint32_t dxl_vel = static_cast<uint32_t>(std::round(std::abs(rad_per_sec) / DXL_VEL_UNIT));
+    
+    // Profile Velocity가 0이면 무한대 속도(제한 없음)로 동작하므로 최소값 1 권장
+    if (dxl_vel == 0 && std::abs(rad_per_sec) > 0) dxl_vel = 1;
+    
+    return dxl_vel;
+}
+
+
+
+
+
+
+
 
 } // namespace kaair_driver

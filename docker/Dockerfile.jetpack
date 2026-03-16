@@ -84,9 +84,14 @@ RUN apt-get update && apt-get install -y \
 # ---------------------------------------------------------
 RUN apt-get update && apt-get install -y \
     ros-humble-dynamixel-sdk \
+    libmodbus-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN apt-get update && apt-get install -y gdb \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y \
+    ros-humble-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 
 # 5-1. rviz-common 특정 버전 단독 설치 및 업데이트 고정
@@ -141,4 +146,4 @@ RUN mkdir -p src
 
 # 기본 쉘을 bash로 설정
 SHELL ["/bin/bash", "-c"]
-
+ENV SHELL=/bin/bash

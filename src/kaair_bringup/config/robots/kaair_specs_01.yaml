@@ -1,15 +1,16 @@
 # 리프트 모듈 설정
 lift:
-  min_h: 0.100
-  max_h: 0.700
+  min_h: 0.11                # meter
+  max_h: 0.68                # meter
   usb_port: "/dev/ttyLM"
   baud_rate: 115200
-  offset_position: 0.10733
-  encoder_ppr: 65536
-  lead_pitch: 0.010
-  reduction_ratio: 1.4736842
-  max_rpm: 3000
-  limit_direction: False
+  offset_position: 0.10733    # meter
+  global_velocity: 0.20        # meter / second [max : 0.339 m/s]
+  encoder_ppr: 16384          # encode resolution
+  lead_pitch: 0.010           # meter
+  reduction_ratio: 1.4736842  # 28/19
+  max_rpm: 3000               # RPM
+  limit_direction: False      # False->Start/stop, True->Dir 
   motor_direction: True
   motor_id: 1
 

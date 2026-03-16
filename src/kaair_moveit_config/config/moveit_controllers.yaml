@@ -1,0 +1,33 @@
+# MoveIt uses this configuration for controller management
+
+# 궤적 실행 모니터링 설정 (Timeout 방지)
+trajectory_execution:
+  execution_duration_monitoring: true
+  allowed_execution_duration_scaling: 2.0  # 예상 시간보다 2배 더 기다려줌
+  allowed_goal_duration_margin: 1.0        # 최소 1초의 추가 여유 시간 부여
+
+moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+
+moveit_simple_controller_manager:
+  controller_names:
+    - xarm7_traj_controller
+    - lift_controller
+
+  xarm7_traj_controller:
+    type: FollowJointTrajectory
+    joints:
+      - joint1
+      - joint2
+      - joint3
+      - joint4
+      - joint5
+      - joint6
+      - joint7
+    action_ns: follow_joint_trajectory
+    default: True
+  lift_controller:
+    type: FollowJointTrajectory
+    joints:
+      - lift_joint
+    action_ns: follow_joint_trajectory
+    default: True

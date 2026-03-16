@@ -1,6 +1,26 @@
 <?xml version="1.0" ?>
 <robot name="kaair" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
+  <material name="black">
+    <color rgba="0.0 0.0 0.0 1.0"/>
+  </material>
+
+  <material name="white">
+    <color rgba="1.0 1.0 1.0 1.0"/>
+  </material>
+
+  <material name="gray">
+    <color rgba="0.5 0.5 0.5 1.0"/>
+  </material>
+
+  <material name="dark_gray">
+    <color rgba="0.2 0.2 0.2 1.0"/>
+  </material>
+
+  <material name="light_gray">
+    <color rgba="0.8 0.8 0.8 1.0"/>
+  </material>
+
   <xacro:arg name="mode" default="robot"/>
   <xacro:arg name="hw_spec_file" default="$(find kaair_bringup)/config/robots/kaair_specs_01.yaml"/>
   <xacro:arg name="use_fake_hardware" default="false"/>
@@ -46,7 +66,7 @@
     />
 
   <xacro:femto_bolt prefix="femto" parent="head_camera_mount">
-    <origin xyz="0 0 0" rpy="0 0 0" />
+    <origin xyz="0 0 0.01" rpy="0 0 0" />
   </xacro:femto_bolt>
 
     <xacro:if value="${'$(arg mode)' == 'robot'}">

@@ -20,9 +20,9 @@ class GripperActionClient(Node):
         # 1. GripperCommand 목표 생성
         goal_msg = GripperCommand.Goal()
         goal_msg.command.position = position    # 목표 벌림 정도 (단위: m)
-        goal_msg.command.max_effort = effort    # 최대 힘 (설정값: 50.0)
 
-        self.get_logger().info(f'목표: 위치 {position}m, 최대 힘 {effort}N 전송 중...')
+
+        self.get_logger().info(f'목표: 위치 {position}m')
 
         # 2. 목표 전송
         self._send_goal_future = self._client.send_goal_async(goal_msg)

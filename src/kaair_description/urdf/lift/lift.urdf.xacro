@@ -2,6 +2,7 @@
 <robot name="lift" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
 
+
   <xacro:property name="m_to_mm" value="0.001 0.001 0.001"/>
   <xacro:property name="mesh_path" value="package://kaair_description/meshes/"/>
 
@@ -15,6 +16,7 @@
           <mesh filename="${mesh_path}lift/visual/lift_base.stl" scale="${m_to_mm}"/>
         </geometry>
         <origin xyz="0 0 0" rpy="0 0 0"/>
+        <material name="gray"/>
       </visual>
 
       <!-- collision -->
@@ -33,6 +35,7 @@
           <mesh filename="${mesh_path}lift/visual/lift_link.stl" scale="${m_to_mm}"/>
         </geometry>
         <origin xyz="0 0 0" rpy="0 0 0"/>
+        <material name="light_gray"/>
       </visual>
 
       <!-- collision -->
@@ -54,7 +57,7 @@
       <axis xyz="0.0 0.0 1.0"/>
       <limit 
         upper="${max_h}"  lower="${min_h}"  effort="700" 
-        velocity="0.34"/>
+        velocity="0.2"/>
     </joint>
 
     <joint name="lift_to_arm_fix_joint" type="fixed">

@@ -4,6 +4,7 @@
   <xacro:property name="m_to_mm" value="0.001 0.001 0.001"/>
   <xacro:property name="mesh_path" value="package://kaair_description/meshes/"/>
 
+
   <link name="head_base">
     <!-- visual -->
     <visual>
@@ -11,6 +12,7 @@
         <mesh filename="${mesh_path}head/visual/head_base.stl" scale="${m_to_mm}"/>
       </geometry>
       <origin xyz="0 0 0" rpy="0 0 0"/>
+      <material name="white"/>
     </visual>
 
     <!-- collision -->
@@ -29,6 +31,7 @@
         <mesh filename="${mesh_path}head/visual/head_link1.stl" scale="${m_to_mm}"/>
       </geometry>
       <origin xyz="0 0 0" rpy="0 0 0"/>
+      <material name="dark_gray"/>
     </visual>
 
     <!-- collision -->
@@ -47,6 +50,7 @@
         <mesh filename="${mesh_path}head/visual/head_link2.stl" scale="${m_to_mm}"/>
       </geometry>
       <origin xyz="0 0 0" rpy="0 0 0"/>
+      <material name="black"/>
     </visual>
 
     <!-- collision -->
@@ -65,6 +69,7 @@
         <mesh filename="${mesh_path}head/visual/head_link3.stl" scale="${m_to_mm}"/>
       </geometry>
       <origin xyz="0 0 0" rpy="0 0 0"/>
+      <material name="dark_gray"/>
     </visual>
 
     <!-- collision -->

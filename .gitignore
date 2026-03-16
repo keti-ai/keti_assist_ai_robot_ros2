@@ -79,3 +79,4 @@ Thumbs.db
 # ==========================================
 docker-compose.yml
 fastdds_profile.xml
+src/third_party/slamware_sdk/

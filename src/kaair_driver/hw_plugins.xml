@@ -13,4 +13,11 @@
       KAAIR Robot의 리프트 높이 제어를 위한 하드웨어 인터페이스입니다.
     </description>
   </class>
+  <class name="kaair_driver/ToolHwInterface"
+         type="kaair_driver::ToolHwInterface"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      KAAIR Robot의 그리퍼 폭 제어를 위한 하드웨어 인터페이스입니다.
+    </description>
+  </class>
 </library>

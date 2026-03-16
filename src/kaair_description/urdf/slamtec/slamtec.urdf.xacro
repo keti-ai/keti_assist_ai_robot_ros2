@@ -13,6 +13,7 @@
           <mesh filename="${mesh_path}slamtec/visual/slamtec_base.stl" scale="${m_to_mm}"/>
         </geometry>
         <origin xyz="0 0 0" rpy="0 0 0"/>
+        <material name="light_gray"/>
       </visual>
       <!-- collision -->
       <collision>
@@ -29,6 +30,7 @@
                 <mesh filename="${mesh_path}slamtec/visual/S2RPLIDAR.stl" scale="${m_to_mm}"/>
             </geometry>
             <origin xyz="0 0 0" rpy="0 0 0"/>
+            <material name="black"/>
         </visual>
     </link>
 
@@ -41,6 +43,7 @@
             <mesh filename="${mesh_path}slamtec/visual/left_wheel.stl" scale="${m_to_mm}"/>
             </geometry>
             <origin xyz="0 0 0" rpy="0 0 0"/>
+            <material name="black"/>
         </visual>
 
       <!-- collision -->
@@ -59,6 +62,7 @@
             <mesh filename="${mesh_path}slamtec/visual/right_wheel.stl" scale="${m_to_mm}"/>
             </geometry>
             <origin xyz="0 0 0" rpy="0 0 0"/>
+            <material name="black"/>
         </visual>
 
       <!-- collision -->
@@ -77,6 +81,7 @@
                 <mesh filename="${mesh_path}slamtec/visual/caster.stl" scale="${m_to_mm}"/>
             </geometry>
             <origin xyz="0 0 0" rpy="0 0 0"/>
+            <material name="black"/>
         </visual>
       <!-- collision -->
         <collision>
@@ -93,6 +98,7 @@
                 <mesh filename="${mesh_path}slamtec/visual/caster.stl" scale="${m_to_mm}"/>
             </geometry>
             <origin xyz="0 0 0" rpy="0 0 0"/>
+            <material name="black"/>
         </visual>
       <!-- collision -->
         <collision>
@@ -109,6 +115,7 @@
                 <mesh filename="${mesh_path}slamtec/visual/caster.stl" scale="${m_to_mm}"/>
             </geometry>
             <origin xyz="0 0 0" rpy="0 0 0"/>
+            <material name="black"/>
         </visual>
       <!-- collision -->
         <collision>
@@ -125,6 +132,7 @@
                 <mesh filename="${mesh_path}slamtec/visual/caster.stl" scale="${m_to_mm}"/>
             </geometry>
             <origin xyz="0 0 0" rpy="0 0 0"/>
+            <material name="black"/>
         </visual>
       <!-- collision -->
         <collision>

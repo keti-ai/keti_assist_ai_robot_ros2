@@ -11,9 +11,9 @@ MD485Hw::MD485Hw(const MD485HwConfig & config)
 {
     // serial 객체 초기화 (포트는 아직 열지 않음)
     serial_ = std::make_unique<serial::Serial>(
-        "", 
+        "",
         cfg_.baud_rate, 
-        serial::Timeout::simpleTimeout(100)
+        serial::Timeout::simpleTimeout(20)
     );
 }
 
@@ -43,7 +43,6 @@ void MD485Hw::disconnect()
 {
     if (serial_ && serial_->isOpen()) {
         // 안전을 위해 종료 전 모터 정지 명령(토크 오프 또는 속도 0)을 보낼 수도 있습니다.
-        set_velocity_rpm(0); 
         serial_->close();
         std::cout << "[MD485Hw] 모터 드라이버 통신 종료." << std::endl;
     }
@@ -68,7 +67,7 @@ bool MD485Hw::set_velocity_rpm(int16_t rpm)
 
 bool MD485Hw::set_linear_velocity(double velocity)
 {
-    set_velocity_rpm(meter_per_s_to_rpm(velocity));
+    return set_velocity_rpm(meter_per_s_to_rpm(velocity));
 }
 
 bool MD485Hw::set_position_with_rpm(int32_t position, uint16_t rpm)
@@ -96,22 +95,59 @@ bool MD485Hw::set_position_with_rpm(int32_t position, uint16_t rpm)
 
 bool MD485Hw::move_abs_pose_meter_with_velocity(double position,double velocity)
 {
-    set_position_with_rpm(meter_to_count(position-cfg_.offset_position),meter_per_s_to_rpm(velocity));
+    return set_position_with_rpm(meter_to_count(position-cfg_.offset_position),meter_per_s_to_rpm(velocity));
 }
 
-bool MD485Hw::init_set(uint8_t init_mode)
+bool MD485Hw::move_abs_pose_meter_rpm(double position,double rpm)
+{
+    return set_position_with_rpm(meter_to_count(position-cfg_.offset_position),rpm);
+}
+
+bool MD485Hw::set_init_set(uint8_t init_mode)
 {
     // 2. 만들어두신 마법의 템플릿에 데이터 덩어리를 그대로 투척!
     auto packet = kaair_driver::BuildPacket(
         kaair_driver::MID::BLDC_CTR, 
         kaair_driver::MID::MMI, 
         cfg_.motor_id, 
-        kaair_driver::PID::INIT_SET,
+        kaair_driver::PID::TQ_RATIO,
         init_mode
     );
 
     size_t written = serial_->write(packet);
     return (written == packet.size());
+}
+
+bool MD485Hw::read_init_set_ok(uint8_t& init_state)
+{
+    if (!serial_ || !serial_->isOpen()) return false;
+    serial_->flushInput(); 
+
+    // 1. MAIN_DATA(193)가 아닌, INIT_SET(35) 데이터를 달라고 요청!
+    auto req_packet = kaair_driver::BuildPacket(
+        kaair_driver::MID::BLDC_CTR, kaair_driver::MID::MMI, cfg_.motor_id, 
+        kaair_driver::PID::REQ_PID_DATA, 
+        static_cast<uint8_t>(kaair_driver::PID::TQ_RATIO) // 👈 35번 데이터 요청
+    );
+    
+    serial_->write(req_packet);
+
+    // 2. 응답 수신
+    std::vector<uint8_t> rx_data;
+    if (receive_packet(kaair_driver::PID::TQ_RATIO, rx_data)) {
+        if (!rx_data.empty()) {
+            // 수신된 1바이트 값을 참조 변수에 담아줌
+            init_state = rx_data[0]; 
+            
+            // 🌟 핵심 로직: 값이 1 이상이면 true, 0이면 false 리턴
+            return (init_state >= 1); 
+        }
+    } 
+
+    // 통신 실패 시
+    std::cerr << "[MD485Hw] INIT_SET 상태 읽기 실패 (Timeout)" << std::endl;
+    init_state = 0; // 안전을 위해 0으로 강제 초기화
+    return false;
 }
 
 bool MD485Hw::reset_position()
@@ -411,6 +447,35 @@ bool MD485Hw::send_command_and_wait_ack(const std::vector<uint8_t>& packet, kaai
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 }
+
+bool MD485Hw::read_init_switch_status(bool& init_status)
+{
+    kaair_driver::IoMonitorPayload io_data;
+    bool success = read_state(io_data);
+
+    if (success) {
+        // limit_direction 설정에 따라 어느 핀을 볼지 결정
+        if (cfg_.limit_direction) {
+            // dir 핀도 동일하게 걸리면 0이라고 가정하고 반전(!)
+            init_status = !io_data.dir; 
+        }
+        else {
+            // start_stop 핀: 평소 1, 걸리면 0이므로 반전(!)시킴
+            // 즉, 걸렸을 때(0일 때) init_status가 true가 됨!
+            init_status = !io_data.start_stop;
+        }
+    } else {
+        // 통신 실패 시 안전을 위해 일단 센서가 눌리지 않은 것(false)으로 처리
+        // (필요에 따라 에러 처리를 다르게 하실 수 있습니다)
+        init_status = false; 
+    }
+
+    return success;
+}
+
+
+
+
 
 double MD485Hw::count_to_meter(int count) const
 {

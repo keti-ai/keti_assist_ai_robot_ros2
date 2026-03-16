@@ -10,23 +10,23 @@
         
         <xacro:unless value="${use_fake_hardware}">
           <plugin>kaair_driver/ToolHwInterface</plugin>
-          <param name="serial_port">${spec['usb_port']}</param>
+          <param name="usb_port">${spec['usb_port']}</param>
           <param name="baud_rate">${spec['baud_rate']}</param>
         </xacro:unless> </hardware>
 
       <joint name="virtual_gripper_joint">
-          <command_interface name="position">
-          </command_interface>
-          
-          <command_interface name="velocity"/>
+          <command_interface name="position"/>
 
           <state_interface name="position">
             <param name="initial_value">0.1</param>
           </state_interface>
-          
           <state_interface name="velocity">
             <param name="initial_value">0.0</param>
           </state_interface>
+          <state_interface name="effort">
+            <param name="initial_value">0.0</param>
+          </state_interface>
+
         </joint>
 
     </ros2_control>
