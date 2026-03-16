@@ -3,6 +3,9 @@ import time
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+from rclpy.duration import Duration
+
+import tf2_ros
 
 from sensor_msgs.msg import PointCloud2
 from visualization_msgs.msg import Marker, MarkerArray
@@ -28,6 +31,13 @@ class ObstacleRepresentation(Node):
 
         # ── 파이프라인 처리 객체 ───────────────────────────────────
         self.process = Process(self)
+
+        # ── TF2 (좌표계 변환) ─────────────────────────────────────
+        self.tf_buffer   = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+        self.target_frame = self.declare_parameter(
+            'target_frame', 'base_footprint'
+        ).get_parameter_value().string_value
 
         # ── QoS (Orbbec BEST_EFFORT 호환) ──────────────────────────
         sensor_qos = QoSProfile(
@@ -71,53 +81,96 @@ class ObstacleRepresentation(Node):
         self.roi_z_max           = c.roi_z_max
 
     # ================================================================
+    # TF 변환
+    # ================================================================
+    def _transform_points(
+        self,
+        points: np.ndarray,
+        source_frame: str,
+        stamp,
+    ) -> tuple:
+        """
+        (N,3) float32 포인트를 source_frame → target_frame으로 변환.
+
+        TF 조회 실패 시 원본 포인트와 source_frame을 그대로 반환하여
+        파이프라인이 중단되지 않도록 한다.
+
+        Returns:
+            (transformed_points, actual_frame_id)
+        """
+        if source_frame == self.target_frame:
+            return points, source_frame
+
+        try:
+            tf = self.tf_buffer.lookup_transform(
+                self.target_frame,
+                source_frame,
+                rclpy.time.Time(),      # 0 = 최신 TF 사용 (타임스탬프 불일치 방지)
+                timeout=Duration(seconds=0.1),
+            )
+        except (tf2_ros.LookupException,
+                tf2_ros.ConnectivityException,
+                tf2_ros.ExtrapolationException) as e:
+            self.get_logger().warn(
+                f'TF {source_frame} → {self.target_frame} 실패: {e}',
+                throttle_duration_sec=2.0,
+            )
+            return points, source_frame
+
+        q = tf.transform.rotation
+        t = tf.transform.translation
+        x, y, z, w = q.x, q.y, q.z, q.w
+
+        # 쿼터니언 → 3×3 회전행렬 (numpy)
+        R = np.array([
+            [1 - 2*(y*y + z*z),   2*(x*y - w*z),     2*(x*z + w*y)  ],
+            [2*(x*y + w*z),       1 - 2*(x*x + z*z),  2*(y*z - w*x)  ],
+            [2*(x*z - w*y),       2*(y*z + w*x),      1 - 2*(x*x + y*y)],
+        ], dtype=np.float32)
+        T = np.array([t.x, t.y, t.z], dtype=np.float32)
+
+        transformed = (R @ points.T).T + T
+        return transformed.astype(np.float32), self.target_frame
+
+    # ================================================================
     # 메인 콜백
     # ================================================================
     def callback(self, msg: PointCloud2):
         times = [time.time()]
         self.frame_count += 1
 
-        # ── 1단계: 전처리 ─────────────────────────────────────────
+        # ── 1단계: 전처리 (카메라 프레임, ROI 필터 포함) ──────────
         points = self.process.preprocess(msg)
         if points is None or len(points) < 10:
-            # self.get_logger().warn('Preprocess: insufficient points, skipping frame')
             return
 
         times.append(time.time())
 
-        # self.pub_preprocessed.publish(numpy_to_ros(points, msg.header))
-        # self.get_logger().info(f'[1] Preprocess: {len(points)} pts')
+        # ── 1.5단계: TF 변환 (카메라 프레임 → target_frame) ──────
+        points, frame_id = self._transform_points(
+            points, msg.header.frame_id, msg.header.stamp
+        )
+        times.append(time.time())
 
         # ── 2단계: Voxel 다운샘플링 ──────────────────────────────
         ds_points = self.process.downsample_voxel(points)
         times.append(time.time())
         if len(ds_points) == 0:
             return
-        # else:
-        #     self.pub_downsampled.publish(numpy_to_ros(ds_points, msg.header))
-        # self.get_logger().info(f'[2] Downsample: {len(ds_points)} pts')
-
-        # ── 2.5단계: 메시 생성 + 퍼블리시 ───────────────────────
-        # mesh_mk = self.process.create_mesh_marker(ds_points, msg.header)
-        # times.append(time.time())
-        # if mesh_mk is not None:
-        #     ma = MarkerArray()
-        #     ma.markers.append(mesh_mk)
-        #     self.pub_mesh.publish(ma)
 
         shape_mk = self.process.create_shape_markers(
-            ds_points, 
-            self.marker_shape, 
-            msg.header.frame_id, 
+            ds_points,
+            self.marker_shape,
+            frame_id,
             msg.header.stamp)
         times.append(time.time())
         self.pub_shape_markers.publish(shape_mk)
 
         # MoveIt2 CollisionObject 생성 및 퍼블리시
         collision_obj = self.process.create_collision_object(
-            ds_points, 
-            msg.header.frame_id, 
-            msg.header.stamp, 
+            ds_points,
+            frame_id,
+            msg.header.stamp,
             shape=self.marker_shape
         )
         times.append(time.time())
