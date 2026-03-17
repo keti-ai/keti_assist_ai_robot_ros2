@@ -66,7 +66,7 @@
     />
 
   <xacro:femto_bolt prefix="femto" parent="head_camera_mount">
-    <origin xyz="0 0 0" rpy="0 0 0" />
+    <origin xyz="0 0 0.01" rpy="0 0 0" />
   </xacro:femto_bolt>
 
     <xacro:if value="${'$(arg mode)' == 'robot'}">
