@@ -3,12 +3,10 @@ import open3d as o3d
 import copy
 from sensor_msgs.msg import PointCloud2
 from visualization_msgs.msg import Marker, MarkerArray
-from std_msgs.msg import String
 from geometry_msgs.msg import Point, Pose
 from moveit_msgs.msg import CollisionObject
 from shape_msgs.msg import SolidPrimitive
 
-from kaair_obstacle.utils.convert_pointcloud import numpy_to_ros_rgb
 
 """
 =============================================================================
@@ -32,18 +30,6 @@ ObstacleRepresentation.__init__ 에서 Process(self) 로 생성하여 사용.
   - compute_aabb(voxel keys)    →  compute_aabb(pts + labels)
 =============================================================================
 """
-
-# 클러스터 시각화 색상 팔레트 (RGB 0~1)
-CLUSTER_COLORS = [
-    (1.0, 0.2, 0.2),   # red
-    (0.2, 1.0, 0.2),   # green
-    (0.2, 0.2, 1.0),   # blue
-    (1.0, 1.0, 0.2),   # yellow
-    (1.0, 0.2, 1.0),   # magenta
-    (0.2, 1.0, 1.0),   # cyan
-    (1.0, 0.6, 0.2),   # orange
-    (0.6, 0.2, 1.0),   # purple
-]
 
 
 class Process:
