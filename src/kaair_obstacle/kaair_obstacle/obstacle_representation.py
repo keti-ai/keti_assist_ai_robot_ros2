@@ -15,6 +15,7 @@ import numpy as np
 
 from kaair_obstacle.utils.load_config import load_config, PipelineConfig
 from kaair_obstacle.utils.process import Process
+from kaair_obstacle.utils.convert_pointcloud import numpy_to_ros
 
 import gc
 
@@ -67,8 +68,9 @@ class ObstacleRepresentation(Node):
         )
 
         # ── Publishers ────────────────────────────────────────────
-        self.pub_shape_markers = self.create_publisher(MarkerArray,     '/scene/obstacle_markers',  10)
-        self.pub_collision_obj = self.create_publisher(CollisionObject, '/scene/collision_objects',  10)
+        self.pub_shape_markers = self.create_publisher(MarkerArray,     '/planning_scene/obstacle_markers',  10)
+        self.pub_collision_obj = self.create_publisher(CollisionObject, '/planning_scene/collision_objects',  10)
+        self.pub_obstacle_pointcloud = self.create_publisher(PointCloud2, '/planning_scene/collision_pointcloud', 10)
 
         self.get_logger().info(
             f'ObstacleRepresentation started | '
@@ -148,14 +150,18 @@ class ObstacleRepresentation(Node):
             tf_points, frame_id = self._transform_points(ds_points, tf)
 
         # ── CollisionObject 생성 및 퍼블리시 ──────────────────────
-        collision_obj = self.process.create_collision_object(
-            tf_points, frame_id, msg.header.stamp, shape=self.marker_shape)
-        self.pub_collision_obj.publish(collision_obj)
+        # collision_obj = self.process.create_collision_object(
+        #     tf_points, frame_id, msg.header.stamp, shape=self.marker_shape)
+        # self.pub_collision_obj.publish(collision_obj)
 
         # ── MarkerArray 생성 및 퍼블리시 ──────────────────────────
         shape_mk = self.process.create_shape_markers(
             tf_points, self.marker_shape, frame_id, msg.header.stamp)
         self.pub_shape_markers.publish(shape_mk)
+
+        # MarkerArray 퍼블리시 아래에 추가
+        obstacle_pc = numpy_to_ros(tf_points, frame_id, msg.header.stamp)
+        self.pub_obstacle_pointcloud.publish(obstacle_pc)
 
 
 # ============================================================================

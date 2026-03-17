@@ -1,0 +1,10 @@
+cat > /ros_ws/src/kaair_moveit_config/config/sensors_3d.yaml << 'EOF'
+sensors:
+  - sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
+    point_cloud_topic: /femto/depth_registered/points
+    max_range: 5.0
+    padding_offset: 0.01
+    padding_scale: 1.0
+    point_subsample: 1
+    filtered_cloud_topic: /planning_scene/collision_pointcloud
+EOF

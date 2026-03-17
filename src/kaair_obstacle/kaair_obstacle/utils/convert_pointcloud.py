@@ -38,26 +38,28 @@ _XYZ_FIELDS = [
 _XYZ_POINT_STEP = 12  # float32 x 3 = 12 bytes
 
 
-def numpy_to_ros(points: np.ndarray, header: Header) -> PointCloud2:
+def numpy_to_ros(points: np.ndarray, frame_id: str, stamp) -> PointCloud2:
     """
     (N, 3) float32 numpy → XYZ PointCloud2
 
     사용 예:
         self.pub.publish(numpy_to_ros(pts, msg.header))
     """
-    pts = np.ascontiguousarray(points, dtype=np.float32)  # C-order 보장
-
     msg = PointCloud2()
-    msg.header      = header
-    msg.height      = 1
-    msg.width       = len(pts)
-    msg.fields      = _XYZ_FIELDS
+    msg.header.frame_id = frame_id
+    msg.header.stamp = stamp
+    msg.height = 1
+    msg.width = len(points)
+    msg.is_dense = True
     msg.is_bigendian = False
-    msg.point_step  = _XYZ_POINT_STEP
-    msg.row_step    = _XYZ_POINT_STEP * len(pts)
-    msg.is_dense    = True
-    msg.data        = pts.tobytes()   # 전체 배열 한 번에 직렬화
-
+    msg.point_step = 12  # 3 × float32
+    msg.row_step = msg.point_step * msg.width
+    msg.fields = [
+        PointField(name='x', offset=0,  datatype=PointField.FLOAT32, count=1),
+        PointField(name='y', offset=4,  datatype=PointField.FLOAT32, count=1),
+        PointField(name='z', offset=8,  datatype=PointField.FLOAT32, count=1),
+    ]
+    msg.data = points.astype(np.float32).tobytes()
     return msg
 
 

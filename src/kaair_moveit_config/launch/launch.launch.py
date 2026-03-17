@@ -31,6 +31,7 @@ def generate_launch_description():
         .robot_description_semantic(file_path="config/kaair.srdf")
         .trajectory_execution(file_path="config/moveit_controllers.yaml")
         .planning_pipelines(pipelines=["ompl", "chomp"], default_planning_pipeline="ompl")
+        .sensors_3d(file_path="config/sensors_3d.yaml")  # ← 추가
         .to_moveit_configs()
     )
 
@@ -51,7 +52,11 @@ def generate_launch_description():
         package="moveit_ros_move_group",
         executable="move_group",
         output="screen",
-        parameters=[moveit_config.to_dict()],
+        parameters=[
+            moveit_config.to_dict(),
+            {"octomap_resolution": 0.01},  # ← 추가 (5cm voxel)
+            {"octomap_frame": "base_footprint"},  # ← 추가
+        ],
     )
 
     # 5. [수동] 개별 컨트롤러 Spawner 정의
