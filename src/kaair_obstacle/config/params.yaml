@@ -5,6 +5,7 @@ obstacle_representation_node:
     # Orbbec 카메라 토픽명 확인 후 수정:
     #   ros2 topic list | grep point
     input_topic: '/femto/depth_registered/points'
+    input_frame: 'femto_color_optical_frame'
 
     # ── 2. ROI (Region of Interest) ───────────────────────────────
     # 카메라 기준 좌표계 (단위: m)
