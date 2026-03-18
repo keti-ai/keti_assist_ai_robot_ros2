@@ -73,7 +73,7 @@ CallbackReturn HeadHwInterface::on_activate(const rclcpp_lifecycle::State & /*pr
   }
 
   // 5. 글로벌 속도 조절 (상태 동기화)
-  if (!dxl_hw_->write_profile_velocity_radian(dxl_ids_, 10.4)) {
+  if (!dxl_hw_->write_profile_velocity_radian(dxl_ids_, 2.0)) {
     RCLCPP_ERROR(rclcpp::get_logger("HeadHwInterface"), "속도를 조절할수 없습니다!!");
     return CallbackReturn::ERROR;
   }
