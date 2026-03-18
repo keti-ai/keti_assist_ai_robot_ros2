@@ -98,8 +98,8 @@
       dof="7"
       add_gripper="false"
       attach_to="arm_base"
-      effort_control="true" 
-      velocity_control="true"
+      effort_control="false" 
+      velocity_control="false"
       robot_ip="${hw_specs['arm']['robot_ip']}"
       ros2_control_plugin="${arm_hw_plugin}"
     />

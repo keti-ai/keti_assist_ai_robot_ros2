@@ -43,6 +43,7 @@ def generate_launch_description():
         .robot_description_semantic(file_path="config/kaair.srdf")
         .trajectory_execution(file_path="config/moveit_controllers.yaml")
         .planning_pipelines(pipelines=["ompl", "chomp"], default_planning_pipeline="ompl")
+        .sensors_3d(file_path="config/sensors_3d.yaml")
         .to_moveit_configs()
     )
 
@@ -169,6 +170,6 @@ def generate_launch_description():
         lift_spawner,
         tool_spawner,
         head_spawner,
-        # camera_node,
-        # obstacle_node,
+        camera_node,
+        obstacle_node,
     ])

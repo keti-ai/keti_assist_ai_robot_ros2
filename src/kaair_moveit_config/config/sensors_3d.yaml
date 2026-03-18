@@ -1,3 +1,7 @@
+# --- 아래 두 줄을 맨 위에 새로 추가하세요! ---
+octomap_frame: base_footprint          # (현재 로봇 환경에 맞는 고정 프레임. odom, map, 혹은 base_link 등)
+octomap_resolution: 0.02      # <--- 이 숫자를 바꾸면 복셀 크기가 변합니다! (0.1 = 10cm)
+
 sensors:
   - femto_pointcloud
 femto_pointcloud:
@@ -5,7 +9,7 @@ femto_pointcloud:
     point_cloud_topic: /femto/depth/points
     max_range: 5.0
     point_subsample: 1
-    padding_offset: 0.1
-    padding_scale: 1.0
+    padding_offset: 0.15
+    padding_scale: 1.2
     max_update_rate: 1.0
     filtered_cloud_topic: /femto/filtered_cloud
