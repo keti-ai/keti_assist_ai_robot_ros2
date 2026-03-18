@@ -27,6 +27,7 @@ ROS2 파라미터 시스템 활용:
 class PipelineConfig:
     # ── 토픽 ────────────────────────────────────────────────────
     input_topic: str = '/camera/depth/color/points'
+    input_frame: str = 'camera_depth_optical_frame'
     
     # ── ROI (Region of Interest) ────────────────────────────────
     roi_x_min: float = -3.0
@@ -69,6 +70,7 @@ def load_config(node: Node) -> PipelineConfig:
 
     # ── 토픽 ──────────────────────────────────────────────────────
     cfg.input_topic = dp('input_topic', cfg.input_topic, 'Orbbec PointCloud2 입력 토픽명')
+    cfg.input_frame = dp('input_frame', cfg.input_frame, 'Orbbec PointCloud2 입력 프레임')
 
     # ── ROI ────────────────────────────────────────────────────────
     cfg.roi_x_min = dp('roi_x_min', cfg.roi_x_min, 'ROI x 최솟값 (m)')

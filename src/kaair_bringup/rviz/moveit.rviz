@@ -521,7 +521,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /obstacle_spheres
+        Value: /planning_scene/obstacle_markers
       Value: true
     - Class: rviz_default_plugins/TF
       Enabled: true

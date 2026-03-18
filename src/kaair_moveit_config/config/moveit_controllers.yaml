@@ -1,11 +1,9 @@
 # MoveIt uses this configuration for controller management
 
-# 궤적 실행 모니터링 설정 (Timeout 방지)
 trajectory_execution:
+  allowed_execution_duration_scaling: 2.0
+  allowed_goal_duration_margin: 1.0
   execution_duration_monitoring: true
-  allowed_execution_duration_scaling: 2.0  # 예상 시간보다 2배 더 기다려줌
-  allowed_goal_duration_margin: 1.0        # 최소 1초의 추가 여유 시간 부여
-
 moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
 
 moveit_simple_controller_manager:

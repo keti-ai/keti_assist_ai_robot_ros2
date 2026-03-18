@@ -1,13 +1,12 @@
 import numpy as np
 import open3d as o3d
+import copy
 from sensor_msgs.msg import PointCloud2
 from visualization_msgs.msg import Marker, MarkerArray
-from std_msgs.msg import String
 from geometry_msgs.msg import Point, Pose
 from moveit_msgs.msg import CollisionObject
 from shape_msgs.msg import SolidPrimitive
 
-from kaair_obstacle.utils.convert_pointcloud import numpy_to_ros_rgb
 
 """
 =============================================================================
@@ -31,18 +30,6 @@ ObstacleRepresentation.__init__ 에서 Process(self) 로 생성하여 사용.
   - compute_aabb(voxel keys)    →  compute_aabb(pts + labels)
 =============================================================================
 """
-
-# 클러스터 시각화 색상 팔레트 (RGB 0~1)
-CLUSTER_COLORS = [
-    (1.0, 0.2, 0.2),   # red
-    (0.2, 1.0, 0.2),   # green
-    (0.2, 0.2, 1.0),   # blue
-    (1.0, 1.0, 0.2),   # yellow
-    (1.0, 0.2, 1.0),   # magenta
-    (0.2, 1.0, 1.0),   # cyan
-    (1.0, 0.6, 0.2),   # orange
-    (0.6, 0.2, 1.0),   # purple
-]
 
 
 class Process:
@@ -100,85 +87,16 @@ class Process:
     # ================================================================
     def downsample_voxel(self, points: np.ndarray) -> np.ndarray:
         """
-        o3d.voxel_down_sample 기반 다운샘플링
+        o3d.t.geometry.PointCloud 기반 다운샘플링 (float32, CPU)
         반환: (M, 3) float32  (M << N)
         """
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points.astype(np.float64))
-        ds = pcd.voxel_down_sample(self._node.voxel_size)
-        return np.asarray(ds.points, dtype=np.float32)
-
-    # ================================================================
-    # 2.5단계: 포인트 → 메시 (TRIANGLE_LIST Marker)
-    # ================================================================
-    def create_mesh_marker(self, points: np.ndarray, header) -> 'Marker | None':
-        """
-        (M, 3) float32 포인트 → RViz2 TRIANGLE_LIST Marker
-
-        [방식] Open3D Ball Pivoting Algorithm (BPA)
-          - 법선 추정 → BPA 로 삼각형 표면 재구성
-          - voxel_size 기반 ball 반지름 자동 설정
-
-        [대안] 포인트가 너무 적거나 BPA 실패 시 Convex Hull 로 fallback
-        """
-        n = self._node
-        if len(points) < 4:
-            return None
-
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points.astype(np.float64))
-
-        # 법선 추정 (BPA 필수)
-        pcd.estimate_normals(
-            search_param=o3d.geometry.KDTreeSearchParamHybrid(
-                radius=n.voxel_size * 3, max_nn=30
-            )
+        pcd = o3d.t.geometry.PointCloud()
+        pcd.point.positions = o3d.core.Tensor(
+            points,  # float32 그대로, 변환 없음
+            dtype=o3d.core.float32
         )
-        pcd.orient_normals_consistent_tangent_plane(k=15)
-
-        # Ball Pivoting: voxel_size 배수로 여러 반지름 시도
-        vs = n.voxel_size
-        radii = o3d.utility.DoubleVector([vs, vs * 2, vs * 4])
-        mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
-            pcd, radii
-        )
-        # BPA 결과가 없으면 Convex Hull 로 fallback
-        if len(mesh.triangles) == 0:
-            mesh, _ = pcd.compute_convex_hull()
-
-        mesh.orient_triangles()          # winding order 통일 (검정 음영 방지)
-        mesh.compute_vertex_normals()    # 법선 재계산
-
-        # mesh, _ = pcd.compute_convex_hull()
-
-        verts = np.asarray(mesh.vertices)
-        tris  = np.asarray(mesh.triangles)
-        if len(tris) == 0:
-            return None
-
-        # 양면 렌더링: 뒤집힌 winding order 삼각형을 함께 추가
-        # RViz2 TRIANGLE_LIST는 단면 렌더링이므로 검정 음영 제거에 필수
-        tris_double = np.vstack([tris, tris[:, ::-1]])
-
-        mk = Marker()
-        mk.header    = header
-        mk.ns        = 'point_mesh'
-        mk.id        = 0
-        mk.type      = Marker.TRIANGLE_LIST
-        mk.action    = Marker.ADD
-        mk.scale.x   = mk.scale.y = mk.scale.z = 1.0
-        mk.color.r   = 1.0
-        mk.color.g   = 1.0
-        mk.color.b   = 1.0
-        mk.color.a   = 0.5
-
-        for tri in tris_double:
-            for vi in tri:
-                p = Point()
-                p.x, p.y, p.z = float(verts[vi, 0]), float(verts[vi, 1]), float(verts[vi, 2])
-                mk.points.append(p)
-
-        return mk
+        ds = pcd.voxel_down_sample(voxel_size=float(self._node.voxel_size))
+        return ds.point.positions.numpy()  # 이미 float32
 
     def create_shape_markers(
         self,
@@ -202,8 +120,6 @@ class Process:
 
         if len(centers) == 0:
             return marker_array
-
-
 
         # SPHERE_LIST: 구 여러 개를 마커 하나로 표현 (효율적)
         marker = Marker()
@@ -256,56 +172,117 @@ class Process:
         shape: str = 'sphere',
         object_id: str = 'obstacle_cloud',
     ) -> CollisionObject:
-        """
-        다운샘플된 포인트 배열 → MoveIt2 CollisionObject
+        
 
-        각 voxel 중심을 지정한 shape 으로 등록하여
-        /collision_object 토픽으로 퍼블리시하면 PlanningSceneMonitor가
-        플래닝 씬에 즉시 반영한다.
-
-        Args:
-            centers   : (N, 3) float32 - 중심 좌표 배열
-            frame_id  : 좌표계 프레임 ID
-            stamp     : 타임스탬프
-            shape     : 'sphere' | 'cube'
-                          sphere → 반지름 = voxel_size / 2
-                                   dimensions = [radius]
-                          cube   → 한 변 = voxel_size
-                                   dimensions = [x, y, z]
-            object_id : CollisionObject 식별자 (같은 id로 재전송 시 덮어씀)
-
-        Returns:
-            moveit_msgs/CollisionObject
-        """
         n = self._node
         vs = float(n.voxel_size)
+        N = len(centers)
 
+        # ── Primitive 템플릿 1개만 생성 후 복사 ──────────────────────────
+        primitive = SolidPrimitive()
         if shape == 'sphere':
-            prim_type = SolidPrimitive.SPHERE
-            dimensions = [vs / 2.0]          # [radius]
+            primitive.type = SolidPrimitive.SPHERE
+            primitive.dimensions = [vs / 2.0]
         elif shape == 'cube':
-            prim_type = SolidPrimitive.BOX
-            dimensions = [vs, vs, vs]        # [x, y, z]
+            primitive.type = SolidPrimitive.BOX
+            primitive.dimensions = [vs, vs, vs]
         else:
             raise ValueError(f"shape must be 'sphere' or 'cube', got '{shape}'")
 
+        # ── Pose 템플릿 1개 생성 후 복사 ─────────────────────────────────
+        template_pose = Pose()
+        template_pose.orientation.w = 1.0
+
+        # ── 리스트 사전 할당 (append 루프 제거) ──────────────────────────
+        primitives = [primitive] * N  # 참조 공유 OK (read-only)
+
+        poses = [None] * N
+        for i, c in enumerate(centers):
+            p = copy.copy(template_pose)   # shallow copy (orientation 재사용)
+            p.position.x = float(c[0])
+            p.position.y = float(c[1])
+            p.position.z = float(c[2])
+            poses[i] = p
+
+        # ── CollisionObject 조립 ──────────────────────────────────────────
         co = CollisionObject()
         co.header.frame_id = frame_id
         co.header.stamp = stamp
         co.id = object_id
         co.operation = CollisionObject.ADD
-
-        for center in centers:
-            primitive = SolidPrimitive()
-            primitive.type = prim_type
-            primitive.dimensions = dimensions
-            co.primitives.append(primitive)
-
-            pose = Pose()
-            pose.position.x = float(center[0])
-            pose.position.y = float(center[1])
-            pose.position.z = float(center[2])
-            pose.orientation.w = 1.0
-            co.primitive_poses.append(pose)
+        co.primitives = primitives
+        co.primitive_poses = poses
 
         return co
+
+    # ================================================================
+    # 2.5단계: 포인트 → 메시 (TRIANGLE_LIST Marker)
+    # ================================================================
+    # def create_mesh_marker(self, points: np.ndarray, header) -> 'Marker | None':
+    #     """
+    #     (M, 3) float32 포인트 → RViz2 TRIANGLE_LIST Marker
+
+    #     [방식] Open3D Ball Pivoting Algorithm (BPA)
+    #       - 법선 추정 → BPA 로 삼각형 표면 재구성
+    #       - voxel_size 기반 ball 반지름 자동 설정
+
+    #     [대안] 포인트가 너무 적거나 BPA 실패 시 Convex Hull 로 fallback
+    #     """
+    #     n = self._node
+    #     if len(points) < 4:
+    #         return None
+
+    #     pcd = o3d.geometry.PointCloud()
+    #     pcd.points = o3d.utility.Vector3dVector(points.astype(np.float64))
+
+    #     # 법선 추정 (BPA 필수)
+    #     pcd.estimate_normals(
+    #         search_param=o3d.geometry.KDTreeSearchParamHybrid(
+    #             radius=n.voxel_size * 3, max_nn=30
+    #         )
+    #     )
+    #     pcd.orient_normals_consistent_tangent_plane(k=15)
+
+    #     # Ball Pivoting: voxel_size 배수로 여러 반지름 시도
+    #     vs = n.voxel_size
+    #     radii = o3d.utility.DoubleVector([vs, vs * 2, vs * 4])
+    #     mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
+    #         pcd, radii
+    #     )
+    #     # BPA 결과가 없으면 Convex Hull 로 fallback
+    #     if len(mesh.triangles) == 0:
+    #         mesh, _ = pcd.compute_convex_hull()
+
+    #     mesh.orient_triangles()          # winding order 통일 (검정 음영 방지)
+    #     mesh.compute_vertex_normals()    # 법선 재계산
+
+    #     # mesh, _ = pcd.compute_convex_hull()
+
+    #     verts = np.asarray(mesh.vertices)
+    #     tris  = np.asarray(mesh.triangles)
+    #     if len(tris) == 0:
+    #         return None
+
+    #     # 양면 렌더링: 뒤집힌 winding order 삼각형을 함께 추가
+    #     # RViz2 TRIANGLE_LIST는 단면 렌더링이므로 검정 음영 제거에 필수
+    #     tris_double = np.vstack([tris, tris[:, ::-1]])
+
+    #     mk = Marker()
+    #     mk.header    = header
+    #     mk.ns        = 'point_mesh'
+    #     mk.id        = 0
+    #     mk.type      = Marker.TRIANGLE_LIST
+    #     mk.action    = Marker.ADD
+    #     mk.scale.x   = mk.scale.y = mk.scale.z = 1.0
+    #     mk.color.r   = 1.0
+    #     mk.color.g   = 1.0
+    #     mk.color.b   = 1.0
+    #     mk.color.a   = 0.5
+
+    #     for tri in tris_double:
+    #         for vi in tri:
+    #             p = Point()
+    #             p.x, p.y, p.z = float(verts[vi, 0]), float(verts[vi, 1]), float(verts[vi, 2])
+    #             mk.points.append(p)
+
+    #     return mk

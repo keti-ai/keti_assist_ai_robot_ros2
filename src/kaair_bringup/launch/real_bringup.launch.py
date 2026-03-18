@@ -169,6 +169,6 @@ def generate_launch_description():
         lift_spawner,
         tool_spawner,
         head_spawner,
-        camera_node,
-        obstacle_node,
+        # camera_node,
+        # obstacle_node,
     ])
