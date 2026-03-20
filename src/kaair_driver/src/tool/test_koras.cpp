@@ -26,7 +26,7 @@ int main() {
 
     koras_.readStatus(out);
     std::cout << "Initialized : " << out.gripper_initialize << std::endl;
-    bool suc = koras_.setFingerPositionMeter(0.0);
+    koras_.setFingerPositionMeter(0.0);
 
     
 

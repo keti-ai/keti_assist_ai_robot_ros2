@@ -156,7 +156,7 @@
     </joint>
 
     <joint name="base_to_lidar" type="fixed">
-        <origin xyz="0.1153 -0.0014 0.127035" rpy="0 0 0"/>
+        <origin xyz="0.0 0.0 0.127035" rpy="0 0 0"/>
         <parent link="slamtec_base_link"/>
         <child link="S2RPLidar_frame"/>
     </joint>
