@@ -54,11 +54,11 @@ CallbackReturn HeadHwInterface::on_activate(const rclcpp_lifecycle::State & /*pr
     return CallbackReturn::ERROR;
   }
 
-  // 2. 모든 모터 리부트 (Hardware Error 상태 초기화)
-  RCLCPP_INFO(rclcpp::get_logger("HeadHwInterface"), "모터 리부트 수행 중...");
-  if (!dxl_hw_->reboot(dxl_ids_)) {
-    RCLCPP_WARN(rclcpp::get_logger("HeadHwInterface"), "일부 모터 리부트 응답 없음 (계속 진행)");
-  }
+  // // 2. 모든 모터 리부트 (Hardware Error 상태 초기화)
+  // RCLCPP_INFO(rclcpp::get_logger("HeadHwInterface"), "모터 리부트 수행 중...");
+  // if (!dxl_hw_->reboot(dxl_ids_)) {
+  //   RCLCPP_WARN(rclcpp::get_logger("HeadHwInterface"), "일부 모터 리부트 응답 없음 (계속 진행)");
+  // }
 
   // 3. 토크 ON (리부트 후에는 반드시 다시 켜야 함)
   if (!dxl_hw_->set_torque(dxl_ids_, true)) {
@@ -87,7 +87,7 @@ CallbackReturn HeadHwInterface::on_activate(const rclcpp_lifecycle::State & /*pr
 }
 
 CallbackReturn HeadHwInterface::on_deactivate(const rclcpp_lifecycle::State & /*previous_state*/) {
-  dxl_hw_->set_torque(dxl_ids_, false);
+  //dxl_hw_->set_torque(dxl_ids_, false);
   dxl_hw_->close_port();
   return CallbackReturn::SUCCESS;
 }
@@ -127,7 +127,7 @@ hardware_interface::return_type HeadHwInterface::read(const rclcpp::Time & /*tim
     read_error_count_ = 0;
 
     // 3. (옵션) 성공 시 데이터 모니터링 로그
-    RCLCPP_INFO_THROTTLE(
+    RCLCPP_DEBUG_THROTTLE(
         rclcpp::get_logger("HeadHwInterface"),
         *clock_, 1000,
         "Status [J1] Cmd: %.3f, State: %.3f | [J2] Cmd: %.3f, State: %.3f",

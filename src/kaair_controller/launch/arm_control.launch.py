@@ -25,26 +25,28 @@ def generate_launch_description():
         description="Start RViz2 and Joint State Publisher GUI"
     )
 
+    spec_arg = DeclareLaunchArgument(
+        'spec',default_value='kaair_specs_02.yaml',
+        description='Robot Hardware Spec for URDF'
+    )
+    spec = LaunchConfiguration('spec')
+
+    # Spec 파일 경로
+    hw_spec_file = PathJoinSubstitution([FindPackageShare('kaair_bringup'), 'config', 'robots', spec])
+
+
     # 2. 인자값 가져오기
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
     use_gui = LaunchConfiguration("use_gui")
 
     # 3. URDF 로드 (전체 로봇 모드)
-    robot_description_content = Command(
-        [
-            PathJoinSubstitution([FindExecutable(name="xacro")]),
-            " ",
-            PathJoinSubstitution([
-                FindPackageShare("kaair_description"),
-                "urdf",
-                "robot.urdf.xacro"
-            ]),
-            " ",
-            "mode:=arm",  # 리프트, 헤드, 팔을 모두 불러오기 위함
-            " ",
-            "use_fake_hardware:=", use_fake_hardware,
-        ]
-    )
+    xacro_path = PathJoinSubstitution([FindPackageShare('kaair_description'), 'urdf', 'robot.urdf.xacro'])
+    robot_description_content = Command([
+        'xacro ', xacro_path, 
+        ' mode:=', 'arm',
+        ' hw_spec_file:=', hw_spec_file,
+        ' use_fake_hardware:=', use_fake_hardware,
+    ])
     robot_description = {"robot_description": robot_description_content}
 
     # 4. 컨트롤러 파라미터 경로 (xArm 패키지에서 가져옴)
@@ -109,6 +111,7 @@ def generate_launch_description():
     return LaunchDescription([
         use_fake_hardware_arg,
         use_gui_arg,
+        spec_arg,
         control_node,
         robot_state_pub_node,
         rviz_node,

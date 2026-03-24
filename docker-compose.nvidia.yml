@@ -18,7 +18,7 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=all
       # - LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/dri:${LD_LIBRARY_PATH}
 
-      - ROS_DOMAIN_ID=30         # 원하는 ID로 변경 가능
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-30}         # 원하는 ID로 변경 가능
       # Fast DDS, Cyclone DDS를 선택해서 주석처리. moveit은 cyclone dds 사용 추천
       - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
       # - RMW_IMPLEMENTATION=rmw_fastrtps_cpp

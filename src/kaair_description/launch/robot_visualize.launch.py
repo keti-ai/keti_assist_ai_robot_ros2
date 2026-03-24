@@ -15,11 +15,21 @@ def generate_launch_description():
     )
     mode = LaunchConfiguration('mode')
 
+    spec_arg = DeclareLaunchArgument(
+        'spec',default_value='kaair_specs_01.yaml',
+        description='Robot Hardware Spec for URDF'
+    )
+    spec = LaunchConfiguration('spec')
+
+    # Spec 파일 경로
+    hw_spec_file = PathJoinSubstitution([FindPackageShare('kaair_bringup'), 'config', 'robots', spec])
+
     # 2. URDF 설정 (이전과 동일)
     xacro_path = PathJoinSubstitution([FindPackageShare(pkg_name), 'urdf', 'robot.urdf.xacro'])
     robot_description_content = Command([
         'xacro ', xacro_path, 
-        ' mode:=', mode
+        ' mode:=', mode,
+        ' hw_spec_file:=', hw_spec_file,
     ])
 
     # 3. RViz 설정 파일 경로 분기 (핵심!)
@@ -53,6 +63,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         mode_arg,
+        spec_arg,
         rsp_node,
         jsp_gui_node,
         rviz_node

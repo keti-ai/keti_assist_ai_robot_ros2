@@ -56,7 +56,16 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------
-# 5-5단계: 그외 각종 제어를 위한 SDK
+# 5-5단계: Navigation 플러그인
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    ros-humble-navigation2 \
+    ros-humble-nav2-bringup \
+    && rm -rf /var/lib/apt/lists/*
+
+
+# ---------------------------------------------------------
+# 5-6단계: 그외 각종 제어를 위한 SDK
 # ---------------------------------------------------------
 RUN apt-get update && apt-get install -y \
     ros-humble-dynamixel-sdk \

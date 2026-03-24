@@ -11,12 +11,11 @@
 
   <depend>kaair_description</depend>
   <depend>kaair_controller</depend>
-  <depend>kaair_moveit_config</depend>
   <depend>kaair_obstacle</depend>
   <depend>xarm_controller</depend>
   
   <exec_depend>uf_ros_lib</exec_depend>
-
+  <exec_depend>kaair_moveit_config</exec_depend>
 
 
   <test_depend>ament_lint_auto</test_depend>

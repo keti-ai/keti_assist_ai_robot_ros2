@@ -1,10 +1,10 @@
 # 리프트 모듈 설정
 lift:
-  min_h: 0.11                # meter
-  max_h: 0.68                # meter
+  min_h: 0.108                # meter
+  max_h: 0.675                # meter
   usb_port: "/dev/ttyLM"
   baud_rate: 115200
-  offset_position: 0.10733    # meter
+  offset_position: 0.1139   # meter
   global_velocity: 0.20        # meter / second [max : 0.339 m/s]
   encoder_ppr: 16384          # encode resolution
   lead_pitch: 0.010           # meter
@@ -21,7 +21,7 @@ head:
   baud_rate: 115200
 
 arm:
-  robot_ip: "192.168.5.240"
+  robot_ip: "192.168.5.233"
 
 tool:
   usb_port: "/dev/ttyGripper"

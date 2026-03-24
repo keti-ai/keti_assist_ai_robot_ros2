@@ -106,62 +106,6 @@ namespace kaair_driver {
         return hardware_interface::CallbackReturn::SUCCESS;
     }
 
-    // hardware_interface::return_type LiftHwInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
-    //     RosDataPayload ros_main;
-        
-    //     std::lock_guard<std::mutex> lock(com_mutex_);
-
-    //     if(!md485_hw_->read_ros_state(ros_main)){
-    //         read_error_count_++;
-
-    //         if (read_error_count_ < MAX_READ_ERRORS) {
-    //             RCLCPP_WARN_THROTTLE(
-    //                 rclcpp::get_logger("LiftHwInterface"), *clock_, 500,
-    //                 "Sync Read Failed (%d/%d). Using last valid state.", 
-    //                 read_error_count_, MAX_READ_ERRORS
-    //             );
-    //             return hardware_interface::return_type::OK;
-    //         } 
-    //         else {
-    //             RCLCPP_ERROR(rclcpp::get_logger("LiftHwInterface"), 
-    //                         "Critical: Consecutive sync read failures! Stopping hardware.");
-    //             return hardware_interface::return_type::ERROR;
-    //         }
-    //     }
-        
-    //     if (read_error_count_ > 0) {
-    //         RCLCPP_INFO(rclcpp::get_logger("LiftHwInterface"), "Communication recovered.");
-    //     }
-    //     read_error_count_ = 0;
-
-    //     hw_states_[0]=ros_main.position;
-    //     hw_states_[1]=ros_main.velocity;
-    //     hw_states_[2]=ros_main.effort;
-
-
-    //     RCLCPP_INFO_THROTTLE(
-    //         rclcpp::get_logger("LiftHwInterface"), *clock_, 1000,
-    //         "Lift Status | Cmd: %.3f m | Pos: %.3f m, Vel: %.3f m/s, Effort: %.2f A",
-    //         hw_commands_[0], ros_main.position, ros_main.velocity, ros_main.effort
-    //     );
-
-    //     return hardware_interface::return_type::OK;
-    // }
-
-    // hardware_interface::return_type LiftHwInterface::write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
-        
-    //     // JTC(JointTrajectoryController)가 내린 목표 위치
-    //     double target_position = hw_commands_[0];
-        
-    //     {
-    //         std::lock_guard<std::mutex> lock(com_mutex_);
-    //         // 모터로 명령 전송
-    //         md485_hw_->move_abs_pose_meter_with_velocity(target_position, config.global_velocity);
-    //     }
-
-    //     return hardware_interface::return_type::OK;
-    // }
-
     hardware_interface::return_type LiftHwInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
         RosDataPayload ros_main;
         auto start_time = clock_->now();
@@ -195,7 +139,7 @@ namespace kaair_driver {
             hw_states_[2] = ros_main.effort;
 
             // 디버깅용 로그 (성공 시에는 1초에 한 번만 출력하도록 Throttle 권장)
-            RCLCPP_INFO_THROTTLE(rclcpp::get_logger("LiftHwInterface"), *clock_, 1000,
+            RCLCPP_DEBUG_THROTTLE(rclcpp::get_logger("LiftHwInterface"), *clock_, 1000,
                 "[READ OK] Pos: %.3f m | Dur: %.3f ms", hw_states_[0], duration);
         }
 

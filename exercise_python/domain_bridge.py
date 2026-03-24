@@ -79,6 +79,17 @@ class SlamwareBridge(Node):
             volatile_qos
         )
 
+        self.goal_sub = self.create_subscription(
+            PoseStamped,
+            '/goal_pose', # 메인 도메인(30)에서 RViz가 쏘는 토픽
+            self.goal_callback,
+            10
+        )
+        self.goal_pub = self.slam_sub_node.create_publisher(
+            PoseStamped,
+            '/move_base_simple/goal', # Slamware 도메인(35)이 기다리는 토픽
+            10
+        )
 
         self.get_logger().info('✅ Slamware Domain Bridge (35 -> 30) Started')
 
@@ -123,6 +134,11 @@ class SlamwareBridge(Node):
         # 별도의 가공 없이 바로 발행
         self.cmd_vel_pub.publish(msg)
 
+    def goal_callback(self, msg):
+        # 프레임 이름을 Slamware가 이해하는 slamware_map으로 변경
+        msg.header.frame_id = 'slamware_map'
+        self.goal_pub.publish(msg)
+
 def main():
     # 1. 도메인 35 (Slamware 측) 컨텍스트 생성
     slam_context = rclpy.context.Context()
@@ -131,7 +147,7 @@ def main():
     # 2. 도메인 30 (메인 시스템 측) 컨텍스트 생성
     # 이 컨텍스트를 익스큐터의 메인으로 사용합니다.
     main_context = rclpy.context.Context()
-    main_context.init(domain_id=30)
+    main_context.init()
 
     try:
         # 노드 생성 시 각각의 컨텍스트 주입
