@@ -90,12 +90,6 @@ def generate_launch_description():
         parameters=[moveit_config.robot_description],
     )
 
-    slamtec_bridge_node = Node(
-        package="kaair_mobile_bridge",
-        executable="slamtec_bridge_node",
-        output="screen",
-        arguments=['--config', hw_spec_file],  # ★ yaml 경로 주입
-    )
 
     # ★ orbbec_camera femto_bolt 런치파일 포함
     orbbec_launch = IncludeLaunchDescription(
@@ -156,7 +150,6 @@ def generate_launch_description():
 
         robot_state_pub_node,
         ros2_control_node,
-        slamtec_bridge_node,
         orbbec_launch,
         rviz_node,
 
