@@ -42,11 +42,11 @@ int main() {
 
     uint8_t init_state = 0;
     // 🌟 read_init_set_ok가 true/false를 리턴하도록 수정된 버전에 맞게 조건문 간소화
-    if (driver.read_init_set_ok(init_state)) {
-        std::cout << "[INFO] 이미 영점이 잡혀 있습니다. (상태: " << (int)init_state << ")" << std::endl;
-        driver.disconnect();
-        return 0;
-    }
+    // if (driver.read_init_set_ok(init_state)) {
+    //     std::cout << "[INFO] 이미 영점이 잡혀 있습니다.  (상태: " << (int)init_state << ")" << std::endl;
+    //     driver.disconnect();
+    //     return 0;
+    // }
 
     std::cout << "[INFO] 호밍 시퀀스를 시작합니다. 센서를 향해 이동합니다..." << std::endl;
 

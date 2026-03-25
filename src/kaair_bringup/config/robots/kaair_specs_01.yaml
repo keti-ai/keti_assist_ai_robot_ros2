@@ -27,5 +27,6 @@ tool:
   usb_port: "/dev/ttyGripper"
   baud_rate: 115200
 
-mobile:
+mobile_bridge:
   domain: 35
+  type: "clobot"

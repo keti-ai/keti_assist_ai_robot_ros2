@@ -98,14 +98,14 @@ def generate_launch_description():
         output="both",
     )
 
-    # [A] 단독 초기화 노드: 가짜 하드웨어가 "아닐 때(Unless)"만 실행됨
-    lift_initializer_node = Node(
-        package="kaair_driver",
-        executable="lift_initializer",
-        name="lift_initializer",
-        output="screen",
-        condition=UnlessCondition(use_fake_hardware)
-    )
+    # # [A] 단독 초기화 노드: 가짜 하드웨어가 "아닐 때(Unless)"만 실행됨
+    # lift_initializer_node = Node(
+    #     package="kaair_driver",
+    #     executable="lift_initializer",
+    #     name="lift_initializer",
+    #     output="screen",
+    #     condition=UnlessCondition(use_fake_hardware)
+    # )
 
 
     # 스포너 노드
@@ -155,18 +155,7 @@ def generate_launch_description():
         robot_state_pub_node,
         rviz_node,
 
-        lift_initializer_node,
-
-        RegisterEventHandler(
-            OnProcessExit(
-                target_action=lift_initializer_node,
-                on_exit=[
-                    LogInfo(msg="리프트 호밍 완료! ROS 2 컨트롤러 매니저를 시작합니다..."),
-                    control_node
-                ]
-            ),
-            condition=UnlessCondition(use_fake_hardware)
-        ),
+        control_node,
         # 💡 스포너 연쇄 실행 1 (Fake 컨트롤러 시작 시)
         RegisterEventHandler(
             OnProcessStart(target_action=control_node, on_start=[jsb_spawner])

@@ -77,7 +77,7 @@ orbbec_ros:
 
         point_cloud:
             enable_point_cloud: true
-            enable_colored_point_cloud: false
+            enable_colored_point_cloud: true
 
         advanced:
             enable_frame_sync: true

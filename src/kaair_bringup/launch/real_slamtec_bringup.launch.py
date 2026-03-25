@@ -1,7 +1,7 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, RegisterEventHandler, LogInfo
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler, IncludeLaunchDescription, LogInfo
 from launch.event_handlers import OnProcessStart
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch.conditions import IfCondition
@@ -9,11 +9,12 @@ from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from moveit_configs_utils import MoveItConfigsBuilder
 from uf_ros_lib.uf_robot_utils import generate_robot_api_params
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 def generate_launch_description():
     # 1. Launch Arguments 선언
     use_fake_hardware_arg = DeclareLaunchArgument(
-        "use_fake_hardware", default_value="true",
+        "use_fake_hardware", default_value="false",
         description="가짜 하드웨어(mock_components) 사용 여부"
     )
     use_gui_arg = DeclareLaunchArgument(
@@ -93,8 +94,17 @@ def generate_launch_description():
         package="kaair_mobile_bridge",
         executable="slamtec_bridge_node",
         output="screen",
+        arguments=['--config', hw_spec_file],  # ★ yaml 경로 주입
     )
 
+    # ★ orbbec_camera femto_bolt 런치파일 포함
+    orbbec_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            PathJoinSubstitution([
+                FindPackageShare('orbbec_camera'), 'launch', 'femto_bolt.launch.py'
+            ])
+        ])
+    )
 
     # [D] RViz2
     rviz_node = Node(
@@ -147,6 +157,7 @@ def generate_launch_description():
         robot_state_pub_node,
         ros2_control_node,
         slamtec_bridge_node,
+        orbbec_launch,
         rviz_node,
 
         event_manager_to_jsb,
