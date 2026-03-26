@@ -15,10 +15,10 @@ services:
 
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-30}         # 원하는 ID로 변경 가능
       # Fast DDS, Cyclone DDS를 선택해서 주석처리. moveit은 cyclone dds 사용 추천
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-      # - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      # - FASTRTPS_DEFAULT_PROFILES_FILE=/ros_ws/fastdds_profile.xml
-      # - RMW_FASTRTPS_USE_QOS_FROM_XML=1
+      #- RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/ros_ws/fastdds_profile.xml
+      - RMW_FASTRTPS_USE_QOS_FROM_XML=1
     
     volumes:
       # GUI 설정을 위한 X11 소켓 매핑
