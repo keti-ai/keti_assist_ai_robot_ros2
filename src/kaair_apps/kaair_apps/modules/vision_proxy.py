@@ -1,15 +1,15 @@
-import rclpy
+from rclpy.node import Node
 from rclpy.time import Time
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from sensor_msgs.msg import Image
 
 class VisionProxy:
-    def __init__(self, node):
-        self.node = node
+    def __init__(self, node : Node):
+        self.node = node 
         self.vision_cb_group = MutuallyExclusiveCallbackGroup()
-        self.latest_msg = None
+        self.latest_msg: Image | None = None
         # 데이터 유효 시간 설정 (예: 0.5초 이상 지난 데이터는 버림)
-        self.max_latency_sec = 0.5 
+        self.max_latency_sec = 0.1
 
         # QoS 설정 (Best Effort, Depth 1)
         from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy

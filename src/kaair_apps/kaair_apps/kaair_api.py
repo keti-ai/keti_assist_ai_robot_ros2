@@ -2,10 +2,13 @@ import rclpy
 from rclpy.node import Node
 import time
 from rclpy.executors import MultiThreadedExecutor
+
 try:
+    # ros2 node를 통한 실행시 임포트 경로
     from .modules.vision_proxy import VisionProxy
 except:
-    from modules.vision_proxy import VisionProxy
+    # python 직접 실행시 임포트 경로
+    from kaair_apps.modules.vision_proxy import VisionProxy
 
 class KaairRobotAPI:
     def __init__(self, node):
@@ -13,8 +16,7 @@ class KaairRobotAPI:
         self.vision = VisionProxy(self.node)
         self.node.get_logger().info("Kaair 통합 API가 성공적으로 초기화되었습니다.")
 
-    def get_valid_raw_image(self):
-        return self.vision.get_latest_image_msg()
+
 
 # --- 테스트용 메인 함수 ---
 def main(args=None):
