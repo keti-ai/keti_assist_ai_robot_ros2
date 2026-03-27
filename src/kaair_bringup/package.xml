@@ -12,7 +12,7 @@
   <depend>kaair_description</depend>
   <depend>kaair_controller</depend>
   <depend>kaair_obstacle</depend>
-  <depend>kaair_mobile_bridge</depend>
+  <depend>kaair_apps</depend>
   <depend>xarm_controller</depend>
   
   <exec_depend>uf_ros_lib</exec_depend>
