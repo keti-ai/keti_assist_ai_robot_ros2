@@ -4,6 +4,7 @@ import threading
 import time
 import rclpy
 from rclpy.node import Node
+from rclpy.executors import MultiThreadedExecutor
 import sys
 import os
 
@@ -11,7 +12,7 @@ import os
 from kaair_apps.kaair_api import KaairRobotAPI
 
 class KaairGuiApp:
-    def __init__(self, root):
+    def __init__(self, root : tk.Tk):
         self.root = root
         self.root.title("KAAIR Robot Task Manager")
         self.root.geometry("600x450")
@@ -22,13 +23,13 @@ class KaairGuiApp:
                 rclpy.init()
             
             # Create a dedicated node for GUI
-            self.node = rclpy.node.Node('gui_robot_manager')
+            self.node = Node('gui_robot_manager')
             
             # Initialize the integrated API with the node
             self.robot = KaairRobotAPI(self.node) 
             
             # Start ROS 2 Executor in a background thread
-            self.executor = rclpy.executors.MultiThreadedExecutor()
+            self.executor = MultiThreadedExecutor()
             self.executor.add_node(self.node)
             self.spin_thread = threading.Thread(target=self.executor.spin, daemon=True)
             self.spin_thread.start()

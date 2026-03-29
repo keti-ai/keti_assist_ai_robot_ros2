@@ -1,18 +1,24 @@
 import rclpy
 from rclpy.node import Node
-import time
+from rclpy.parameter import Parameter  # <--- 이 부분이 추가되어야 합니다.
 from rclpy.executors import MultiThreadedExecutor
+import time
 
 try:
     # ros2 node를 통한 실행시 임포트 경로
     from .modules.vision_proxy import VisionProxy
-except:
+    from .utils import parse_group_parameters, log_api_info
+except (ImportError, ValueError):
     # python 직접 실행시 임포트 경로
     from kaair_apps.modules.vision_proxy import VisionProxy
-
+    from kaair_apps.utils import parse_group_parameters, log_api_info
+    
+    
 class KaairRobotAPI:
-    def __init__(self, node):
+    def __init__(self, node : Node):
         self.node = node
+        
+
         self.vision = VisionProxy(self.node)
         self.node.get_logger().info("Kaair 통합 API가 성공적으로 초기화되었습니다.")
 

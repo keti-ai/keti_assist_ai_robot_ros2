@@ -11,6 +11,7 @@ setup(
     packages=[package_name],
     data_files=[
         (os.path.join('share', package_name), ['package.xml']),
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
