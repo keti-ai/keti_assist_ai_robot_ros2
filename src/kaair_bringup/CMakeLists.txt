@@ -19,6 +19,25 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
+# 새로운 파이썬 노드가 생길때마다 파이썬 스크립드 경로:리네임 노드 이름 정의
+set(PYTHON_NODES
+  "kaair_bringup/server/location_server.py;location_manager"
+)
+
+
+foreach(NODE_INFO "${PYTHON_NODES}")
+  # 리스트 요소를 분리 (0번: 경로, 1번: 새 이름)
+  list(GET NODE_INFO 0 NODE_PATH)
+  list(GET NODE_INFO 1 NODE_NAME)
+
+  install(PROGRAMS ${NODE_PATH}
+    DESTINATION lib/${PROJECT_NAME}
+    RENAME ${NODE_NAME}
+  )
+endforeach()
+
+
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights

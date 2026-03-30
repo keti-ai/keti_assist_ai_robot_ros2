@@ -156,9 +156,14 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,display
 USER ${USERNAME}
 
 
-# 8. 작업 디렉토리 설정 및 소스 폴더 생성
+# 8. 작업 디렉토리 설정, pip 인스톨 및 소스 폴더 생성
 WORKDIR /ros_ws
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
 RUN mkdir -p src
+
 
 # 기본 쉘을 bash로 설정
 SHELL ["/bin/bash", "-c"]

@@ -62,4 +62,4 @@ services:
     tty: true        # docker run -t
     working_dir: /ros_ws
     command: >
-      bash -c "pip install -r requirements.txt && /bin/bash"
+      bash -c "/bin/bash"
