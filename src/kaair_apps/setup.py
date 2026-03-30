@@ -22,7 +22,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'kaair_api_node = kaair_apps.kaair_api:main',
+            'kaair_app_test = kaair_apps.app:main',
         ],
     },
 )

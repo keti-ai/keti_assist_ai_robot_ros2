@@ -1,3 +1,4 @@
 py-trees
 open3d
 numpy==1.26.4
+PySide6

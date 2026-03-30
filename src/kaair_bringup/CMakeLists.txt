@@ -19,21 +19,32 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
-# 새로운 파이썬 노드가 생길때마다 파이썬 스크립드 경로:리네임 노드 이름 정의
+# 1. 경로와 이름을 공백이나 줄바꿈으로 나열 (세미콜론 제외)
 set(PYTHON_NODES
-  "kaair_bringup/server/location_server.py;location_manager"
+  "kaair_bringup/server/location_server.py" "location_manager"
+  "kaair_bringup/server/xarm_bridge.py"     "xarm_manager"
+  # "추가경로" "추가이름"
 )
 
+# 2. 2개씩(NODE_PATH, NODE_NAME) 세트로 가져오기
+# foreach(variable IN ITEMS list) 구문을 사용합니다.
+list(LENGTH PYTHON_NODES NODE_COUNT)
 
-foreach(NODE_INFO "${PYTHON_NODES}")
-  # 리스트 요소를 분리 (0번: 경로, 1번: 새 이름)
-  list(GET NODE_INFO 0 NODE_PATH)
-  list(GET NODE_INFO 1 NODE_NAME)
+math(EXPR STOP_INDEX "${NODE_COUNT} - 1")
+foreach(INDEX RANGE 0 ${STOP_INDEX} 2)
+  # 현재 인덱스(경로)와 다음 인덱스(이름) 가져오기
+  list(GET PYTHON_NODES ${INDEX} NODE_PATH)
+  
+  math(EXPR NAME_INDEX "${INDEX} + 1")
+  list(GET PYTHON_NODES ${NAME_INDEX} NODE_NAME)
 
+  # 설치 실행
   install(PROGRAMS ${NODE_PATH}
     DESTINATION lib/${PROJECT_NAME}
     RENAME ${NODE_NAME}
   )
+  
+  message(STATUS "Installing node: ${NODE_PATH} as ${NODE_NAME}")
 endforeach()
 
 
