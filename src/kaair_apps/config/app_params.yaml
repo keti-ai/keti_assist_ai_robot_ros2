@@ -1,15 +1,18 @@
 vision:
-  rgb:
+  color:
     topic: "/femto/color/image_raw"
     reliability: "best_effort"
+    durability: "volatile"
     depth: 1
     
   depth:
     topic: "/femto/depth/image_raw"
     reliability: "best_effort"
+    durability: "volatile"
     depth: 1
     
   points:
     topic: "/femto/depth/points"
     reliability: "best_effort"
+    durability: "volatile"
     depth: 1

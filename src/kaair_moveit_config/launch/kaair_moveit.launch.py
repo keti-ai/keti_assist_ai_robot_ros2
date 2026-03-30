@@ -30,20 +30,22 @@ def generate_launch_description():
     spec = LaunchConfiguration("spec")
 
     # 2. 경로 설정
-    pkg_name = 'kaair_moveit_config'
+    moveit_pkg_name = 'kaair_moveit_config'
+    moveit_pkg_path = get_package_share_directory(moveit_pkg_name)
     hw_spec_file = PathJoinSubstitution([
         FindPackageShare('kaair_bringup'), 'config', 'robots', spec
     ])
 
     # 3. MoveIt 설정 빌드 (URDF/SRDF/컨트롤러 파라미터 추출)
     moveit_config = (
-        MoveItConfigsBuilder("kaair", package_name=pkg_name)
+        MoveItConfigsBuilder("kaair", package_name=moveit_pkg_name)
         .robot_description(
-            file_path=os.path.join(get_package_share_directory("kaair_description"), "urdf", "robot.urdf.xacro"),
+            file_path=os.path.join(moveit_pkg_path, "config", "kaair.urdf.xacro"),
             mappings={
                 "use_fake_hardware": use_fake_hardware, 
                 "mode": "robot",
                 "hw_spec_file": hw_spec_file,
+                "initial_positions_file": os.path.join(moveit_pkg_path, "config", "initial_positions.yaml"),
             }
         )
         .robot_description_semantic(file_path="config/kaair.srdf")
@@ -52,6 +54,25 @@ def generate_launch_description():
         .sensors_3d(file_path="config/sensors_3d.yaml")
         .to_moveit_configs()
     )
+
+    # 3. MoveIt 설정 빌드 (URDF/SRDF/컨트롤러 파라미터 추출)
+    # moveit_config = (
+    #     MoveItConfigsBuilder("kaair", package_name=moveit_pkg_name)
+    #     .robot_description(
+    #         file_path=os.path.join(get_package_share_directory("kaair_description"), "urdf", "robot.urdf.xacro"),
+    #         mappings={
+    #         "use_fake_hardware": use_fake_hardware,
+    #         "mode": "robot",
+    #         "hw_spec_file": hw_spec_file,
+    #         }
+    #     )
+    #     .robot_description_semantic(file_path="config/kaair.srdf")
+    #     .trajectory_execution(file_path="config/moveit_controllers.yaml")
+    #     .planning_pipelines(pipelines=["ompl", "chomp"], default_planning_pipeline="ompl")
+    #     .sensors_3d(file_path="config/sensors_3d.yaml")
+    #     .to_moveit_configs()
+    # )
+
 
     # 4. xArm API 파라미터 로드
     robot_params = generate_robot_api_params(
@@ -104,7 +125,7 @@ def generate_launch_description():
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",
-        arguments=["-d", os.path.join(get_package_share_directory(pkg_name), "config", "moveit.rviz")],
+        arguments=["-d", os.path.join(get_package_share_directory(moveit_pkg_name), "config", "moveit.rviz")],
         parameters=[
             moveit_config.robot_description,
             moveit_config.robot_description_semantic,

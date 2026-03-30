@@ -2,6 +2,11 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="kaair">
     <xacro:arg name="initial_positions_file" default="initial_positions.yaml" />
 
+    <xacro:arg name="use_fake_hardware" default="true" />
+    <xacro:arg name="mode" default="robot" />
+    <xacro:property name="hw_specs" value="${xacro.load_yaml('$(arg hw_spec_file)')}"/>
+
+
     <!-- Import kaair urdf file -->
     <xacro:include filename="$(find kaair_description)/urdf/robot.urdf.xacro" />
 

@@ -1,79 +1,160 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.parameter import Parameter  # <--- 이 부분이 추가되어야 합니다.
 from rclpy.executors import MultiThreadedExecutor
-import time
+import threading
+from typing import TYPE_CHECKING, Optional
 
 try:
     # ros2 node를 통한 실행시 임포트 경로
     from .modules.vision_proxy import VisionProxy
-    from .utils import parse_group_parameters, log_api_info
+    from .modules.tf_proxy import TFProxy
+    from .utils import load_yaml_config, resolve_config_path
 except (ImportError, ValueError):
     # python 직접 실행시 임포트 경로
     from kaair_apps.modules.vision_proxy import VisionProxy
-    from kaair_apps.utils import parse_group_parameters, log_api_info
+    from kaair_apps.modules.tf_proxy import TFProxy
+    from kaair_apps.utils import load_yaml_config, resolve_config_path
     
     
-class KaairRobotAPI:
-    def __init__(self, node : Node):
-        self.node = node
-        
+class KaairRobotAPI(Node):
+    def __init__(self, config_input: str, filename: str = 'app_params.yaml'):
+        super().__init__('kaair_api_node')
 
-        self.vision = VisionProxy(self.node)
-        self.node.get_logger().info("Kaair 통합 API가 성공적으로 초기화되었습니다.")
+        self.vision: Optional['VisionProxy'] = None
+        self.tf: Optional['TFProxy'] = None
+
+        try:
+            # 유틸리티를 통해 실제 경로 확보
+            final_path = resolve_config_path(config_input, filename)
+            self.get_logger().info(f"Using config file: {final_path}")
+            
+            # YAML 로드 및 주입
+            config_dict = load_yaml_config(final_path)
+
+            self.vision = VisionProxy(self, config_dict.get('vision', {}))
+            self.tf = TFProxy(self)
+
+            self.get_logger().info("Kaair Robot API initialized successfully.")
+            
+        except Exception as e:
+            self.get_logger().fatal(f"Failed to initialize: {e}")
+            raise e
 
 
+import cv2
+import os
+import time
+from cv_bridge import CvBridge
+from rclpy.time import Time
 
-# --- 테스트용 메인 함수 ---
+# 이미지 변환용 브릿지
+bridge = CvBridge()
+
+def terminal_menu(node : Node):
+    """사용자로부터 명령을 입력받아 실행하는 루프"""
+    print("\n" + "="*40)
+    print(" 🚀 Kaair API Snapshot & Sync Test")
+    print(" 1: Capture RGB (Now) - 즉시 반환")
+    print(" 2: Capture RGB (Latest) - 호출 이후 대기")
+    print(" q: Quit")
+    print("="*40)
+
+    save_dir = "captures"
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    while rclpy.ok():
+        user_input = input("\n[Enter Command]: ").strip().lower()
+
+        # --- 1. 요청 시점 기록 (ROS Time 기준) ---
+        request_time = node.get_clock().now()
+        req_sec = request_time.to_msg().sec
+        req_nanosec = request_time.to_msg().nanosec
+
+        img_msg = None
+        mode_str = ""
+
+        if user_input == '1':
+            mode_str = "NOW (Non-blocking)"
+            print(f"📡 [{mode_str}] 요청 시점: {req_sec}.{req_nanosec:09d}")
+            img_msg = node.vision.get_rgb(is_latest=False)
+            
+        elif user_input == '2':
+            mode_str = "LATEST (Blocking Wait)"
+            timeout = 1.0
+            print(f"⏳ [{mode_str}] 요청 시점: {req_sec}.{req_nanosec:09d}")
+            print(f"   ㄴ 새 데이터 대기 중... (Max {timeout}s)")
+            img_msg = node.vision.get_rgb(is_latest=True, timeout_sec=timeout)
+
+        elif user_input == '3':
+            print("TF 테스트")
+
+        elif user_input == '4':
+            print("📡 실시간 토픽 연결 상태 확인 중...")
+            node.vision.check_topics_existence()
+
+        elif user_input == 'q':
+            print("테스트를 종료합니다.")
+            break
+
+        # --- 2. 결과 출력 및 저장 ---
+        if img_msg:
+            # 이미지 타임스탬프 추출
+            msg_sec = img_msg.header.stamp.sec
+            msg_nanosec = img_msg.header.stamp.nanosec
+            
+            # 시차 계산 (이미지 시간 - 요청 시간)
+            diff = (msg_sec + msg_nanosec*1e-9) - (req_sec + req_nanosec*1e-9)
+            
+            print(f"✅ 데이터 취득 성공!")
+            print(f"   - 이미지 타임스탬프: {msg_sec}.{msg_nanosec:09d}")
+            print(f"   - 요청 대비 시차: {diff:+.4f} 초 (양수면 최신 데이터)")
+
+            try:
+                cv_image = bridge.imgmsg_to_cv2(img_msg, desired_encoding='bgr8')
+                file_name = f"{save_dir}/rgb_{msg_sec}_{msg_nanosec}.png"
+                cv2.imwrite(file_name, cv_image)
+                print(f"📂 파일 저장 완료: {file_name}")
+            except Exception as e:
+                print(f"❌ 이미지 처리 에러: {e}")
+                
+        elif user_input in ['1', '2']:
+            print(f"⚠️ [{mode_str}] 결과: 데이터를 가져오지 못했습니다.")
+
+    print("Terminal Menu Closed.")
+
+# --- 수정된 메인 함수 ---
 def main(args=None):
     rclpy.init(args=args)
-    test_node = Node('api_test_node')
     
-    api = KaairRobotAPI(test_node)
-    
-    executor = MultiThreadedExecutor()
-    executor.add_node(test_node)
-    
+    # 1. 노드 생성 (질문하신 경로 방식 유지)
     try:
-        api = KaairRobotAPI(test_node)
-        test_node.get_logger().info("🚀 테스트 시작: 데이터의 최신성(Freshness)을 비교합니다.")
-        
-        start_time = time.time()
-        while rclpy.ok() and (time.time() - start_time < 5.0):
-            # 1. 노드 이벤트 처리 (이미지 콜백 실행)
-            rclpy.spin_once(test_node, timeout_sec=0.01)
-            
-            # 2. 함수 호출 시점 기록 (System Time)
-            call_time = test_node.get_clock().now()
-            
-            # 3. 데이터 가져오기
-            img_msg = api.vision.get_latest_image_msg()
-            
-            if img_msg:
-                # 4. 이미지 타임스탬프 추출 (Message Time)
-                from rclpy.time import Time
-                msg_time = Time.from_msg(img_msg.header.stamp)
-                
-                # 5. 시간차 계산 (Latency)
-                latency = call_time - msg_time
-                latency_ms = latency.nanoseconds / 1e6  # 밀리초 단위 변환
-                
-                # 6. 상세 로깅
-                test_node.get_logger().info("-" * 50)
-                test_node.get_logger().info(f"✅ 데이터 수신 성공!")
-                test_node.get_logger().info(f"📍 호출 시점: {call_time.nanoseconds / 1e9:.3f}s")
-                test_node.get_logger().info(f"📸 촬영 시점: {msg_time.nanoseconds / 1e9:.3f}s")
-                test_node.get_logger().info(f"⏱️ 지연 시간(Latency): {latency_ms:.2f} ms")
-                test_node.get_logger().info("-" * 50)
-                break
-        else:
-            test_node.get_logger().error("❌ 5초 동안 이미지 데이터를 수신하지 못했습니다.")
+        # 패키지 방식 혹은 절대경로 방식 선택 가능
+        node = KaairRobotAPI(config_input='/ros_ws/src/kaair_apps/config/app_params.yaml')
+    except Exception as e:
+        print(f"❌ 초기화 실패: {e}")
+        return
+
+    # 2. MultiThreadedExecutor 설정
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+
+    # 3. ROS 2 Spin을 별도 스레드에서 실행 (백그라운드)
+    spin_thread = threading.Thread(target=executor.spin, daemon=True)
+    spin_thread.start()
+
+    try:
+        # 4. 메인 스레드에서 터미널 메뉴 실행
+        terminal_menu(node)
 
     except Exception as e:
-        test_node.get_logger().error(f"❌ 테스트 중 에러 발생: {e}")
+        print(f"❌ 실행 중 에러 발생: {e}")
     finally:
-        test_node.destroy_node()
-        rclpy.shutdown()
+        # 종료 처리
+        node.destroy_node()
+        rclpy.try_shutdown()
+        # 스레드가 안전하게 멈출 수 있도록 대기 (선택 사항)
+        # spin_thread.join()
 
 if __name__ == '__main__':
     main()
