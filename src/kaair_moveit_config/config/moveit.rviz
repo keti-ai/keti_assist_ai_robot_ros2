@@ -3,10 +3,9 @@ Panels:
     Help Height: 70
     Name: Displays
     Property Tree Widget:
-      Expanded:
-        - /MotionPlanning1
+      Expanded: ~
       Splitter Ratio: 0.5
-    Tree Height: 184
+    Tree Height: 174
   - Class: rviz_common/Help
     Name: Help
   - Class: rviz_common/Views
@@ -509,6 +508,163 @@ Visualization Manager:
         Show Robot Visual: true
       Value: true
       Velocity_Scaling_Factor: 0.1
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Frame Timeout: 15
+      Frames:
+        All Enabled: true
+        S2RPLidar_frame:
+          Value: true
+        arm_base:
+          Value: true
+        base_footprint:
+          Value: true
+        femto_base_link:
+          Value: true
+        femto_color_frame:
+          Value: true
+        femto_color_optical_frame:
+          Value: true
+        femto_depth_frame:
+          Value: true
+        femto_depth_optical_frame:
+          Value: true
+        femto_ir_frame:
+          Value: true
+        femto_ir_optical_frame:
+          Value: true
+        femto_link:
+          Value: true
+        gripper_body_link:
+          Value: true
+        hand_base_link:
+          Value: true
+        head_base:
+          Value: true
+        head_camera_mount:
+          Value: true
+        head_link1:
+          Value: true
+        head_link2:
+          Value: true
+        head_link3:
+          Value: true
+        lb_caster:
+          Value: true
+        left_finger_tip:
+          Value: true
+        left_wheel:
+          Value: true
+        lf_caster:
+          Value: true
+        lift_base_link:
+          Value: true
+        lift_link:
+          Value: true
+        link1:
+          Value: true
+        link2:
+          Value: true
+        link3:
+          Value: true
+        link4:
+          Value: true
+        link5:
+          Value: true
+        link6:
+          Value: true
+        link7:
+          Value: true
+        link_base:
+          Value: true
+        link_eef:
+          Value: true
+        rb_caster:
+          Value: true
+        rf_caster:
+          Value: true
+        right_finger_tip:
+          Value: true
+        right_wheel:
+          Value: true
+        robot_base_link:
+          Value: true
+        slamtec_base_link:
+          Value: true
+        slamware_map:
+          Value: true
+        tool_tcp_link:
+          Value: true
+        virtual_gripper_link:
+          Value: true
+        vision_frame_link:
+          Value: true
+      Marker Scale: 0.5
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: false
+      Tree:
+        slamware_map:
+          base_footprint:
+            slamtec_base_link:
+              S2RPLidar_frame:
+                {}
+              lb_caster:
+                {}
+              left_wheel:
+                {}
+              lf_caster:
+                {}
+              rb_caster:
+                {}
+              rf_caster:
+                {}
+              right_wheel:
+                {}
+              robot_base_link:
+                lift_base_link:
+                  head_base:
+                    head_link1:
+                      head_link2:
+                        head_link3:
+                          head_camera_mount:
+                            femto_base_link:
+                              femto_link:
+                                femto_depth_frame:
+                                  femto_color_frame:
+                                    femto_color_optical_frame:
+                                      {}
+                                  femto_depth_optical_frame:
+                                    {}
+                                  femto_ir_frame:
+                                    femto_ir_optical_frame:
+                                      {}
+                  lift_link:
+                    arm_base:
+                      link_base:
+                        link1:
+                          link2:
+                            link3:
+                              link4:
+                                link5:
+                                  link6:
+                                    link7:
+                                      link_eef:
+                                        hand_base_link:
+                                          gripper_body_link:
+                                            left_finger_tip:
+                                              {}
+                                            right_finger_tip:
+                                              {}
+                                            tool_tcp_link:
+                                              {}
+                                          virtual_gripper_link:
+                                            {}
+                                          vision_frame_link:
+                                            {}
+      Update Interval: 0
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -527,30 +683,30 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 2.5088000297546387
+      Distance: 1.929311990737915
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.27692925930023193
-        Y: 0.11521998047828674
-        Z: 0.5949933528900146
+        X: 0.06473711133003235
+        Y: 0.09231255948543549
+        Z: 0.4399099051952362
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4700000286102295
+      Pitch: 0.42000001668930054
       Target Frame: base_footprint
       Value: Orbit (rviz_default_plugins)
-      Yaw: 4.065186023712158
+      Yaw: 4.055182456970215
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 1041
+  Height: 1011
   Help:
     collapsed: false
   Hide Left Dock: false
@@ -559,9 +715,9 @@ Window Geometry:
     collapsed: false
   MotionPlanning - Trajectory Slider:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000002b4000003bbfc0200000005fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000003f00fffffffb000000100044006900730070006c006100790073010000003b00000139000000c700fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e0067010000017a000001b40000016900fffffffb0000000800480065006c0070000000029a0000006e0000006e00fffffffb0000000a005600690065007700730100000334000000c2000000a000ffffff0000035c000003bb00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000100000000000002b40000039dfc0200000005fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000001600000016fb000000100044006900730070006c006100790073010000003b0000012f000000c700fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e00670100000170000001a60000016900fffffffb0000000800480065006c0070000000029a0000006e0000006e00fffffffb0000000a00560069006500770073010000031c000000bc000000a000ffffff000002250000039d00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Views:
     collapsed: false
-  Width: 1558
-  X: 97
-  Y: 48
+  Width: 1247
+  X: 66
+  Y: 32

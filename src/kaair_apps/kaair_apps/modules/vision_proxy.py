@@ -1,7 +1,6 @@
 from typing import Optional, Any, TYPE_CHECKING
-from rclpy.node import Node
-from rclpy.time import Time, Duration
-from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
+from rclpy.time import Time
+import time
 from sensor_msgs.msg import Image, PointCloud2
 
 from kaair_apps.utils import create_generic_sub
@@ -13,24 +12,19 @@ if TYPE_CHECKING:
 
 class VisionProxy:
     def __init__(self, api: 'KaairRobotAPI', config: dict):
-        
-        self.api = api
         self.node = api 
 
-        # 콜백 그룹: 센서 데이터 수신을 독립적으로 처리
-        self.cb_groups = [MutuallyExclusiveCallbackGroup() for _ in range(3)]
-        
         self.latest_color: Optional[Image] = None
         self.latest_depth: Optional[Image] = None
         self.latest_points: Optional[PointCloud2] = None
 
         # 설정 추출 및 구독 (QoS는 utils 내부에서 처리)
         self.sub_rgb = create_generic_sub(self.node, Image, config.get('color', {}), 
-                                          self._rgb_cb, callback_group=self.cb_groups[0])
+                                          self._rgb_cb, callback_group=self.node.cb_image_group)
         self.sub_depth = create_generic_sub(self.node, Image, config.get('depth', {}), 
-                                            self._depth_cb, callback_group=self.cb_groups[1])
+                                            self._depth_cb, callback_group=self.node.cb_image_group)
         self.sub_points = create_generic_sub(self.node, PointCloud2, config.get('points', {}), 
-                                             self._points_cb, callback_group=self.cb_groups[2])
+                                             self._points_cb, callback_group=self.node.cb_pc_group)
         
         self.node.get_logger().info("VisionProxy: 최신성 검사 대기 로직 활성화")
         # 초기화 시점에 토픽 존재 여부를 점검 (로그 출력용)
@@ -95,27 +89,22 @@ class VisionProxy:
 
     # --- Core Logic ---
     def _wait_for_msg(self, attr_name: str, timeout_sec: float) -> Optional[Any]:
-        """
-        공통 대기 로직: 호출 시점보다 큰 타임스탬프를 가진 데이터가 올 때까지 Polling
-        """
         clock = self.node.get_clock()
         request_time = clock.now()
-        timeout_duration = Duration(seconds=timeout_sec)
         
-        # 100Hz 체크 주기
-        check_rate = self.node.create_rate(100) 
-        start_wait_time = clock.now()
+        start_wait_time = time.time() # 시스템 시간 기준
         
-        while (clock.now() - start_wait_time) < timeout_duration:
+        while (time.time() - start_wait_time) < timeout_sec:
             current_msg = getattr(self, attr_name)
             
             if current_msg is not None:
+                # 메시지의 타임스탬프가 요청 시점보다 '이후'인지 확인
                 msg_time = Time.from_msg(current_msg.header.stamp)
-                # 메시지 시간이 요청 시점보다 '이후'인 경우에만 성공으로 간주
                 if msg_time > request_time:
                     return current_msg
             
-            check_rate.sleep()
+            # 10ms 대기 (100Hz 상당) - 새로운 스레드를 생성하지 않음
+            time.sleep(0.01)
             
         self.node.get_logger().warn(f"VisionProxy: [{attr_name}] 새 데이터 수신 타임아웃 ({timeout_sec}s)")
         return None

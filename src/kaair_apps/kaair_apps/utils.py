@@ -1,9 +1,37 @@
 import yaml
 import os
+import threading
 from typing import Any, Dict
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
+from action_msgs.msg import GoalStatus
 from ament_index_python.packages import get_package_share_directory
+
+class RobotActionHandle:
+    def __init__(self, action_name: str):
+        self.action_name = action_name
+        self._event = threading.Event()
+        self._result = None
+        self._status = GoalStatus.STATUS_UNKNOWN
+        self.accepted = False
+
+    def wait(self, timeout: float = None) -> bool:
+        """이벤트가 set될 때까지 메인 스레드를 블로킹합니다."""
+        return self._event.wait(timeout=timeout)
+
+    def set_done(self, status, result):
+        """액션 결과가 나왔을 때 콜백에서 호출합니다."""
+        self._status = status
+        self._result = result
+        self._event.set()
+
+    @property
+    def result(self):
+        return self._result
+
+    @property
+    def status(self):
+        return self._status
 
 def resolve_config_path(path_or_pkg: str, filename: str = None) -> str:
     """

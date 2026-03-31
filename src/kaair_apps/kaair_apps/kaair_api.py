@@ -3,16 +3,18 @@ from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
 import threading
 from typing import TYPE_CHECKING, Optional
-
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
 try:
     # ros2 node를 통한 실행시 임포트 경로
     from .modules.vision_proxy import VisionProxy
     from .modules.tf_proxy import TFProxy
+    from .modules.controller_proxy import ControllerProxy
     from .utils import load_yaml_config, resolve_config_path
 except (ImportError, ValueError):
     # python 직접 실행시 임포트 경로
     from kaair_apps.modules.vision_proxy import VisionProxy
     from kaair_apps.modules.tf_proxy import TFProxy
+    from kaair_apps.modules.controller_proxy import ControllerProxy
     from kaair_apps.utils import load_yaml_config, resolve_config_path
     
     
@@ -20,8 +22,15 @@ class KaairRobotAPI(Node):
     def __init__(self, config_input: str, filename: str = 'app_params.yaml'):
         super().__init__('kaair_api_node')
 
+        # 프록시 객체의 타입 정의 
         self.vision: Optional['VisionProxy'] = None
         self.tf: Optional['TFProxy'] = None
+        self.controller: Optional['ControllerProxy'] = None
+
+        # Callback 그룹 사전 정의. 각 Proxy 코드에서 사용 가능
+        self.cb_control_group = ReentrantCallbackGroup()    # joint_states등 제어부 콜백그룹
+        self.cb_image_group = MutuallyExclusiveCallbackGroup()  # rgb,depth등 이미지 콜백그룹
+        self.cb_pc_group = MutuallyExclusiveCallbackGroup() # Point Cloud를 위한 콜백그룹
 
         try:
             # 유틸리티를 통해 실제 경로 확보
@@ -31,8 +40,10 @@ class KaairRobotAPI(Node):
             # YAML 로드 및 주입
             config_dict = load_yaml_config(final_path)
 
-            self.vision = VisionProxy(self, config_dict.get('vision', {}))
-            self.tf = TFProxy(self)
+            # 각 프록시 클래스 선언 및 yaml 파일 인자 전달
+            self.vision = VisionProxy(self, config_dict.get('vision_node', {}))
+            self.tf = TFProxy(self, config_dict.get('tf_node', {}))
+            self.controller = ControllerProxy(self, config_dict.get('controller_node', {}))
 
             self.get_logger().info("Kaair Robot API initialized successfully.")
             
@@ -87,9 +98,16 @@ def terminal_menu(node : Node):
             img_msg = node.vision.get_rgb(is_latest=True, timeout_sec=timeout)
 
         elif user_input == '3':
-            print("TF 테스트")
+            target_angles = [1.57, -0.6] 
+            print(f"👀 헤드 이동 요청 -> {target_angles}")
+            node.controller.set_head(target_angles, duration_sec=3)
 
         elif user_input == '4':
+            target_angles = [-1.57, 0.3] 
+            print(f"👀 헤드 이동 요청 -> {target_angles}")
+            node.controller.set_head(target_angles, duration_sec=3)
+
+        elif user_input == '5':
             print("📡 실시간 토픽 연결 상태 확인 중...")
             node.vision.check_topics_existence()
 

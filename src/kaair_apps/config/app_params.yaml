@@ -1,4 +1,4 @@
-vision:
+vision_node:
   color:
     topic: "/femto/color/image_raw"
     reliability: "best_effort"
@@ -16,3 +16,52 @@ vision:
     reliability: "best_effort"
     durability: "volatile"
     depth: 1
+
+tf_node:
+  joint_states:
+    topic: "/joint_states"
+    reliability: "reliable"
+    durability: "volatile"
+    depth: 1
+
+    # 관리할 조인트 목록 (시스템에 정의된 전체 조인트 이름)
+    target_joints:
+      - "lift_joint"
+      - "head_joint1"
+      - "head_joint2"
+      - "virtual_gripper_joint"
+      - "joint1"
+      - "joint2"
+      - "joint3"
+      - "joint4"
+      - "joint5"
+      - "joint6"
+      - "joint7"
+
+controller_node:
+  gripper:
+    action: '/tool_controller/gripper_cmd'
+    joints: 
+      - 'virtual_gripper_joint'
+
+  head:
+    action: '/head_controller/follow_joint_trajectory'
+    joints:
+      - 'head_joint1'
+      - 'head_joint2'
+
+  arm:
+    action: '/arm_controller/follow_joint_trajectory'
+    joints:
+      - 'joint1'
+      - 'joint2'
+      - 'joint3'
+      - 'joint4'
+      - 'joint5'
+      - 'joint6'
+      - 'joint7'
+
+  lift:
+    action: '/lift_controller/follow_joint_trajectory'
+    joints:
+      - 'lift_joint'

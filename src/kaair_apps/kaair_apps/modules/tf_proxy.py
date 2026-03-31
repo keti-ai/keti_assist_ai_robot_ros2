@@ -1,7 +1,10 @@
-from rclpy.node import Node
 from rclpy.time import Time, Duration
 from tf2_ros import Buffer, TransformListener
 from geometry_msgs.msg import TransformStamped
+from sensor_msgs.msg import JointState
+
+from kaair_apps.utils import create_generic_sub
+
 from typing import TYPE_CHECKING, Optional
 
 # VSCode 인텔리센스를 위한 타입 힌트 (실행 시에는 무시됨)
@@ -9,19 +12,25 @@ if TYPE_CHECKING:
     from ..kaair_api import KaairRobotAPI
 
 class TFProxy:
-    def __init__(self, api: 'KaairRobotAPI'):
+    def __init__(self, api: 'KaairRobotAPI', config: dict):
         """
         TFProxy 초기화
         :param api: Main API 객체 (KaairRobotAPI 인스턴스)
         """
-        self.api = api
         self.node = api  # KaairRobotAPI가 Node를 상속받았으므로 바로 사용
         
+        # /joint_states 전용 구독 설정
+        self.latest_joint: Optional[JointState]
+        self.sub_joint = create_generic_sub(self.node, JointState, config.get('joint_states', {}), 
+                                          self._joints_cb, callback_group=self.node.cb_control_group)
+
         # TF 전용 버퍼 및 리스너
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self.node)
         
         self.node.get_logger().info("TFProxy: 초기화 완료 (base_footprint -> arm_base 추적 시작)")
+
+    def _joints_cb(self, msg: JointState): self.latest_joint = msg
 
     def get_transform(self, target_frame: str, source_frame: str) -> Optional[TransformStamped]:
         """기본 좌표 변환 획득 함수"""
