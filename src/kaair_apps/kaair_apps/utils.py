@@ -1,37 +1,39 @@
 import yaml
 import os
-import threading
-from typing import Any, Dict
+from rclpy.task import Future
+from typing import Any, Dict, Optional
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from action_msgs.msg import GoalStatus
+
 from ament_index_python.packages import get_package_share_directory
 
-class RobotActionHandle:
-    def __init__(self, action_name: str):
-        self.action_name = action_name
-        self._event = threading.Event()
-        self._result = None
-        self._status = GoalStatus.STATUS_UNKNOWN
-        self.accepted = False
 
-    def wait(self, timeout: float = None) -> bool:
-        """이벤트가 set될 때까지 메인 스레드를 블로킹합니다."""
-        return self._event.wait(timeout=timeout)
+class ActionState:
+    """액션의 상태와 Future들을 하나로 관리하는 컨테이너"""
+    def __init__(self, name: str):
+        self.name = name
+        self.goal_fut: Optional[Future] = None    # 서버 수락 대기용
+        self.goal_handle: Any = None              # 취소 명령용 (GoalHandle)
+        self.user_future: Optional[Future] = None # 메인 루프 반환용
+        self.is_running: bool = False
+        self.status: int = GoalStatus.STATUS_UNKNOWN
 
-    def set_done(self, status, result):
-        """액션 결과가 나왔을 때 콜백에서 호출합니다."""
-        self._status = status
-        self._result = result
-        self._event.set()
+    def reset(self):
+        """새로운 명령 시작 시 초기화"""
+        self.user_future = Future()
+        self.goal_handle = None
+        self.is_running = True
+        self.status = GoalStatus.STATUS_EXECUTING
+        return self.user_future
 
-    @property
-    def result(self):
-        return self._result
-
-    @property
-    def status(self):
-        return self._status
+    def finish(self, result_wrapped):
+        """동작 종료 시 호출"""
+        self.status = result_wrapped.status
+        self.is_running = False
+        self.goal_handle = None
+        if self.user_future and not self.user_future.done():
+            self.user_future.set_result(result_wrapped)
 
 def resolve_config_path(path_or_pkg: str, filename: str = None) -> str:
     """

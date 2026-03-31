@@ -57,6 +57,7 @@ import os
 import time
 from cv_bridge import CvBridge
 from rclpy.time import Time
+from action_msgs.msg import GoalStatus
 
 # 이미지 변환용 브릿지
 bridge = CvBridge()
@@ -73,6 +74,8 @@ def terminal_menu(node : Node):
     save_dir = "captures"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
+
+    current_future = None
 
     while rclpy.ok():
         user_input = input("\n[Enter Command]: ").strip().lower()
@@ -98,16 +101,60 @@ def terminal_menu(node : Node):
             img_msg = node.vision.get_rgb(is_latest=True, timeout_sec=timeout)
 
         elif user_input == '3':
-            target_angles = [1.57, -0.6] 
-            print(f"👀 헤드 이동 요청 -> {target_angles}")
-            node.controller.set_head(target_angles, duration_sec=3)
+            # set_head가 rclpy.task.Future를 반환하도록 구현되어 있어야 함
+            current_future = node.controller.set_head([-1.0, 0.0], duration_sec=3.0)
+            print("🚀 [명령] Head 이동 시작 명령을 보냈습니다.")
 
+        # --- 4. 상태 확인 (if future.done() 방식) ---
         elif user_input == '4':
-            target_angles = [-1.57, 0.3] 
-            print(f"👀 헤드 이동 요청 -> {target_angles}")
-            node.controller.set_head(target_angles, duration_sec=3)
+            if current_future is None:
+                print("❌ [상태] 진행 중인 명령이 없습니다.")
+            elif current_future.done():
+                # Future가 완료되었다면 결과를 꺼낼 수 있음
+                result_wrapped = current_future.result()
+                if result_wrapped:
+                    status = result_wrapped.status
+                    # GoalStatus.STATUS_SUCCEEDED 는 보통 4번입니다.
+                    status_text = "성공(SUCCEEDED)" if status == GoalStatus.STATUS_SUCCEEDED else f"상태코드:{status}"
+                    print(f"✅ [상태] 동작 완료! 결과: {status_text}")
+                else:
+                    print("⚠️ [상태] 동작이 거절되었거나 내부 에러가 발생했습니다.")
+                current_future = None # 확인 후 초기화
+            else:
+                # 아직 동작 중인 경우 메인 스레드는 멈추지 않고 바로 여기로 옵니다.
+                print("⏳ [상태] 로봇이 아직 이동 중입니다... (다른 작업 가능)")
 
+        # --- 5. 동기식 대기 (While 루프 폴링) ---
         elif user_input == '5':
+            if current_future and not current_future.done():
+                print("⏳ [대기] 동작이 끝날 때까지 메인 스레드를 멈추고 기다립니다...")
+                start_wait = time.time()
+                
+                # spin은 다른 스레드에서 돌고 있으므로, 여기서는 완료 여부만 체크
+                while not current_future.done():
+                    time.sleep(0.1) # CPU 점유율 방지
+                    if time.time() - start_wait > 10.0: # 10초 타임아웃 예시
+                        print("⏰ [대기] 너무 오래 걸려 대기를 중단합니다.")
+                        break
+                
+                if current_future.done():
+                    print("✅ [대기] 동작이 완료되어 대기 루프를 탈출했습니다.")
+            else:
+                print("❌ [대기] 기다릴 액션이 없습니다.")
+
+        # --- 취소 테스트 ---
+        elif user_input == 'c':
+            if current_future and not current_future.done():
+                # ControllerProxy에 구현된 취소 함수 호출
+                node.controller.cancel_head()
+                print("🛑 [취소] 사용자 요청으로 이동을 취소합니다.")
+            else:
+                print("❌ [취소] 취소할 액션이 없습니다.")
+
+        elif user_input == '6':
+            node.controller.set_gripper(0.1)
+
+        elif user_input == '7':
             print("📡 실시간 토픽 연결 상태 확인 중...")
             node.vision.check_topics_existence()
 
