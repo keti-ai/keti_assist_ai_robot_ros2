@@ -103,9 +103,19 @@ RUN apt-get update && apt-get install -y \
 RUN apt-get update && apt-get install -y gdb \
     && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y \
-    ros-humble-rmw-cyclonedds-cpp \
-    ros-humble-moveit-ros-perception \
+# 필요시 Cyclone DDS 설치
+# RUN apt-get update && apt-get install -y \
+#     ros-humble-rmw-cyclonedds-cpp \
+#     && rm -rf /var/lib/apt/lists/*
+
+# Zenoh 브릿지를 위한 패키지 설치
+RUN mkdir -p /etc/apt/keyrings \
+    && curl -L https://download.eclipse.org/zenoh/debian-repo/zenoh-public-key \
+       | gpg --dearmor -o /etc/apt/keyrings/zenoh-public-key.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/zenoh-public-key.gpg] https://download.eclipse.org/zenoh/debian-repo/ /" \
+       > /etc/apt/sources.list.d/zenoh.list \
+    && apt-get update \
+    && apt-get install -y zenoh-bridge-ros2dds \
     && rm -rf /var/lib/apt/lists/*
 
 # 5-1. rviz-common 특정 버전 단독 설치 및 업데이트 고정

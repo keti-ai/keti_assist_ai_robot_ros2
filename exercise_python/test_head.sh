@@ -14,14 +14,12 @@ do
     # Humble에서는 기본적으로 결과를 출력할 때까지 대기합니다.
     ros2 action send_goal /head_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "$TARGET1"
     
-    echo "Target 1 완료 대기 중... (안정화 0.5초)"
-    sleep 0.5
+    echo "Target 1 완료 대기 중..."
 
     echo "--- [회차 $i/$LOOP_COUNT] Target 2 이동 시작 ---"
     ros2 action send_goal /head_controller/follow_joint_trajectory control_msgs/action/FollowJointTrajectory "$TARGET2"
 
-    echo "Target 2 완료 대기 중... (안정화 0.5초)"
-    sleep 0.5
+    echo "Target 2 완료 대기 중..."
 done
 
 echo "🎉 모든 테스트 완료!"
