@@ -1,0 +1,316 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <gazebo>
+        <plugin filename="libgazebo_ros2_control.so" name="gazebo_ros2_control">
+        <parameters>$(find former_bringup)/config/controllers_former_gazebo.yaml</parameters>
+        </plugin>
+    </gazebo>
+
+    <gazebo reference="l_wheel">
+        <mu1>200</mu1>
+        <mu2>200</mu2>
+        <kp>10000000.0</kp>
+        <kd>1.0</kd>
+        <!-- <minDepth>0.001</minDepth> -->
+    </gazebo>
+
+    <gazebo reference="r_wheel">
+        <mu1>200</mu1>
+        <mu2>200</mu2>
+        <kp>10000000.0</kp>
+        <kd>1.0</kd>
+        <!-- <minDepth>0.001</minDepth> -->
+    </gazebo>
+
+    <gazebo reference="f_l_caster_wheel">
+        <mu1>0.1</mu1>
+        <mu2>0.1</mu2>
+        <kp>10000000.0</kp>
+        <kd>1.0</kd>
+        <!-- <minDepth>0.001</minDepth> -->
+    </gazebo>
+
+    <gazebo reference="f_r_caster_wheel">
+        <mu1>0.1</mu1>
+        <mu2>0.1</mu2>
+        <kp>10000000.0</kp>
+        <kd>1.0</kd>
+        <!-- <minDepth>0.001</minDepth> -->
+    </gazebo>
+
+    <gazebo reference="r_l_caster_wheel">
+        <mu1>0.1</mu1>
+        <mu2>1</mu2>
+        <kp>10000000.0</kp>
+        <kd>1.0</kd>
+        <!-- <minDepth>0.001</minDepth> -->
+    </gazebo>
+
+    <gazebo reference="r_r_caster_wheel">
+        <mu1>0.1</mu1>
+        <mu2>0.1</mu2>
+        <kp>10000000.0</kp>
+        <kd>1.0</kd>
+        <!-- <minDepth>0.001</minDepth> -->
+    </gazebo>
+
+    <gazebo reference="l_wheel_suspension_joint">
+        <dynamics>
+            <spring_stiffness>10</spring_stiffness>
+            <spring_reference>0.06</spring_reference>
+            <damping>10.0</damping>
+            <friction>0.75</friction>
+        </dynamics>
+    </gazebo>
+
+    <gazebo reference="r_wheel_suspension_joint">
+        <dynamics>
+            <spring_stiffness>10</spring_stiffness>
+            <spring_reference>0.06</spring_reference>
+            <damping>10.0</damping>
+            <friction>0.75</friction>
+        </dynamics>
+    </gazebo>
+
+    <gazebo reference="l_wheel">
+        <self_collide>0</self_collide>
+    </gazebo>
+
+    <gazebo reference="r_wheel">
+        <self_collide>0</self_collide>
+    </gazebo>
+
+    <gazebo reference="base_footprint">
+        <self_collide>0</self_collide>
+    </gazebo>
+
+    <gazebo reference="laser_link">
+        <sensor name="laser" type="ray">
+            <pose>0 0 0 0 0 0</pose>
+            <always_on>1</always_on>
+            <update_rate>15</update_rate>
+            <visualize>true</visualize>
+            <ray>
+                <scan>
+                    <horizontal>
+                        <samples>660</samples>
+                        <resolution>1</resolution>
+                        <min_angle>${-110*pi/180}</min_angle>
+                        <max_angle>${110*pi/180}</max_angle>
+                    </horizontal>
+                </scan>
+                <range>
+                    <min>0.05</min>
+                    <max>15</max>
+                    <resolution>0.01</resolution>
+                </range>
+                <noise>
+                    <type>gaussian</type>
+                    <mean>0.0</mean>
+                    <stddev>0.005</stddev>
+                </noise>
+            </ray>
+            <plugin name="laser" filename="libgazebo_ros_ray_sensor.so">
+                <ros>
+                    <remapping>~/out:=scan</remapping>
+                </ros>
+                <frame_name>laser_link</frame_name>
+                <output_type>sensor_msgs/LaserScan</output_type>
+            </plugin>
+        </sensor>
+    </gazebo>
+
+    <gazebo reference="l_sonar_sensor">
+        <sensor name="l_sonar_sensor" type="ray">
+            <pose>0 0 0 0 0 0</pose>
+            <always_on>1</always_on>
+            <update_rate>10</update_rate>
+            <visualize>true</visualize>
+            <ray>
+                <scan>
+                    <horizontal>
+                        <samples>10</samples>
+                        <resolution>1.0</resolution>
+                        <min_angle>-0.1745</min_angle>
+                        <max_angle>0.1745</max_angle>
+                    </horizontal>
+                    <vertical>
+                        <samples>10</samples>
+                        <resolution>1.0</resolution>
+                        <min_angle>-0.1745</min_angle>
+                        <max_angle>0.1745</max_angle>
+                    </vertical>
+                </scan>
+                <range>
+                    <min>0.05</min>
+                    <max>2.0</max>
+                </range>
+            </ray>
+
+            <plugin name="l_sonar_sensor_plugin" filename="libgazebo_ros_ray_sensor.so">
+                <ros>
+                    <remapping>~/out:=l_sonar/range</remapping>
+                </ros>
+                <frame_name>l_sonar_sensor</frame_name>
+                <output_type>sensor_msgs/Range</output_type>
+            </plugin>
+        </sensor>
+    </gazebo>
+
+    <gazebo reference="r_sonar_sensor">
+        <sensor name="r_sonar_sensor" type="ray">
+            <pose>0 0 0 0 0 0</pose>
+            <always_on>1</always_on>
+            <update_rate>10</update_rate>
+            <visualize>true</visualize>
+            <ray>
+                <scan>
+                    <horizontal>
+                        <samples>10</samples>
+                        <resolution>1.0</resolution>
+                        <min_angle>-0.1745</min_angle>
+                        <max_angle>0.1745</max_angle>
+                    </horizontal>
+                    <vertical>
+                        <samples>10</samples>
+                        <resolution>1.0</resolution>
+                        <min_angle>-0.1745</min_angle>
+                        <max_angle>0.1745</max_angle>
+                    </vertical>
+                </scan>
+                <range>
+                    <min>0.05</min>
+                    <max>2.0</max>
+                </range>
+            </ray>
+
+            <plugin name="r_sonar_sensor_plugin" filename="libgazebo_ros_ray_sensor.so">
+                <ros>
+                    <remapping>~/out:=r_sonar/range</remapping>
+                </ros>
+                <frame_name>r_sonar_sensor</frame_name>
+                <output_type>sensor_msgs/Range</output_type>
+            </plugin>
+        </sensor>
+    </gazebo>
+
+    <gazebo reference="imu_link">
+        <sensor name="imu" type="imu">
+            <always_on>true</always_on>
+            <update_rate>100</update_rate>
+            <visualize>true</visualize>
+            <imu>
+                <angular_velocity>
+                    <x>
+                        <noise type="gaussian">
+                            <mean>0.0</mean>
+                            <stddev>2e-4</stddev>
+                            <bias_mean>0.0000075</bias_mean>
+                            <bias_stddev>0.0000008</bias_stddev>
+                        </noise>
+                    </x>
+                    <y>
+                        <noise type="gaussian">
+                            <mean>0.0</mean>
+                            <stddev>2e-4</stddev>
+                            <bias_mean>0.0000075</bias_mean>
+                            <bias_stddev>0.0000008</bias_stddev>
+                        </noise>
+                    </y>
+                    <z>
+                        <noise type="gaussian">
+                            <mean>0.0</mean>
+                            <stddev>2e-4</stddev>
+                            <bias_mean>0.0000075</bias_mean>
+                            <bias_stddev>0.0000008</bias_stddev>
+                        </noise>
+                    </z>
+                </angular_velocity>
+                <linear_acceleration>
+                    <x>
+                        <noise type="gaussian">
+                            <mean>0.0</mean>
+                            <stddev>1.7e-2</stddev>
+                            <bias_mean>0.1</bias_mean>
+                            <bias_stddev>0.001</bias_stddev>
+                        </noise>
+                    </x>
+                    <y>
+                        <noise type="gaussian">
+                            <mean>0.0</mean>
+                            <stddev>1.7e-2</stddev>
+                            <bias_mean>0.1</bias_mean>
+                            <bias_stddev>0.001</bias_stddev>
+                        </noise>
+                    </y>
+                    <z>
+                        <noise type="gaussian">
+                            <mean>0.0</mean>
+                            <stddev>1.7e-2</stddev>
+                            <bias_mean>0.1</bias_mean>
+                            <bias_stddev>0.001</bias_stddev>
+                        </noise>
+                    </z>
+                </linear_acceleration>
+            </imu>
+            <plugin name="ros_imu_sensor_plugin" filename="libgazebo_ros_imu_sensor.so">
+                <ros>
+                    <remapping>~/out:=imu</remapping>
+                </ros>
+                <initial_orientation_as_reference>false</initial_orientation_as_reference>
+                <frame_name>imu_link</frame_name>
+            </plugin>
+        </sensor>
+    </gazebo>
+
+    <gazebo reference="camera_link">
+        <sensor type="depth" name="camera">
+            <pose>0 0 0 0 0 0</pose>
+            <update_rate>30</update_rate>
+            <visualize>true</visualize>
+            <camera>
+                <horizontal_fov>1.2113</horizontal_fov>
+                <image>
+                    <width>640</width>
+                    <height>480</height>
+                    <format>B8G8R8</format>
+                </image>
+                <depth_camera>
+                </depth_camera>
+                <clip>
+                    <near>0.02</near>
+                    <far>300</far>
+                </clip>
+                <noise>
+                    <type>gaussian</type>
+                    <mean>0.0</mean>
+                    <stddev>0.02</stddev>
+                </noise>
+            </camera>
+            <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+                <ros>
+                </ros>
+
+                <baseline>0.2</baseline>
+                <alwaysOn>true</alwaysOn>
+                <updateRate>0.0</updateRate>
+                <camera_name>camera</camera_name>
+                <frame_name>camera_depth_frame</frame_name>
+                <pointCloudCutoff>0.5</pointCloudCutoff>
+                <pointCloudCutoffMax>3.0</pointCloudCutoffMax>
+                <distortionK1>0</distortionK1>
+                <distortionK2>0</distortionK2>
+                <distortionK3>0</distortionK3>
+                <distortionT1>0</distortionT1>
+                <distortionT2>0</distortionT2>
+                <CxPrime>0</CxPrime>
+                <Cx>0</Cx>
+                <Cy>0</Cy>
+                <focalLength>0</focalLength>
+                <hackBaseline>0</hackBaseline>
+                <min_depth>0.1</min_depth>
+                <max_depth>10</max_depth>
+            </plugin>
+        </sensor>
+    </gazebo>
+</robot>

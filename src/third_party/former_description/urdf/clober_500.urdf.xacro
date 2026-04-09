@@ -1,0 +1,135 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="former">
+  <xacro:macro name="insert_robot" params="prefix">
+  <xacro:include filename="$(find former_description)/urdf/common/tim571.urdf.xacro" />
+  <xacro:include filename="$(find realsense2_description)/urdf/_d435i.urdf.xacro" />
+
+  <xacro:property name="PI" value="3.1415926535897931" />
+
+  <material name="black">
+    <color rgba="0.15 0.15 0.15 1.0" />
+  </material>
+
+  <link name="base_footprint"/>
+  <joint name="${prefix}base_link_fixed_joint" type="fixed">
+    <parent link="${prefix}base_footprint"/>
+    <child link="${prefix}base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://former_description/meshes/clober_500.STL" />
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://former_description/meshes/clober_500.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="left_wheel_joint" type="continuous">
+    <parent link="base_link" />
+    <child link="left_wheel_link" />
+    <origin xyz="0 0.2 0.0625" rpy="0 0 0" />
+    <axis xyz="0 1 0" rpy="0 0 0" />
+  </joint>
+
+  <link name="left_wheel_link">
+  </link>
+
+  <joint name="right_wheel_joint" type="continuous">
+    <parent link="base_link" />
+    <child link="right_wheel_link" />
+    <origin xyz="0 -0.2 0.0625" rpy="0 0 0" />
+    <axis xyz="0 1 0" rpy="0 0 0" />
+  </joint>
+
+  <link name="right_wheel_link">
+  </link>
+
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="imu_link" />
+    <origin xyz="0.134 0 0.067" rpy="0 0 0" />
+  </joint>
+
+  <link name="imu_link" />
+
+  <joint name="front_left_ultrasonic_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="front_left_ultrasonic" />
+    <origin xyz="0.25 0.1475 0.155" rpy="0 0 0" />
+  </joint>
+
+  <link name="front_left_ultrasonic" />
+
+  <joint name="front_right_ultrasonic_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="front_right_ultrasonic" />
+    <origin xyz="0.25 -0.1475 0.155" rpy="0 0 0" />
+  </joint>
+
+  <link name="front_right_ultrasonic" />
+
+  <joint name="rear_left_ultrasonic_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="rear_left_ultrasonic" />
+    <origin xyz="-0.25 0.1475 0.155" rpy="0 0 ${PI}" />
+  </joint>
+
+  <link name="rear_left_ultrasonic" />
+
+  <joint name="rear_right_ultrasonic_joint" type="fixed">
+    <parent link="base_link" />
+    <child link="rear_right_ultrasonic" />
+    <origin xyz="-0.25 -0.1475 0.155" rpy="0 0 ${PI}" />
+  </joint>
+
+  <link name="rear_right_ultrasonic" />
+
+  <xacro:sensor_tim571 parent="base_link">
+    <origin xyz="0.197 0 0.2885" rpy="${PI} 0 0" />
+  </xacro:sensor_tim571>
+
+  <xacro:sensor_d435 parent="base_link" name="front_camera">
+    <origin xyz="0.225 0 0.135" rpy="0 0 0" />
+  </xacro:sensor_d435>
+
+  <xacro:sensor_d435 parent="base_link" name="rear_camera">
+    <origin xyz="-0.225 0 0.135" rpy="0 0 3.14" />
+  </xacro:sensor_d435>
+
+  <!-- <ros2_control name="FormerSystem" type="system">
+    <hardware>
+      <plugin>former_hardware/FormerHardware</plugin>
+      <param name="port">/dev/former</param>
+      <param name="baud">115200</param>
+      <param name="robot">former</param>
+      <param name="wheel_radius">0.085</param>
+      <param name="max_speed">1.5</param>
+      <param name="max_rpm">200.0</param>
+    </hardware>
+    <joint name="left_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-1</param>
+        <param name="max">1</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="right_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-1</param>
+        <param name="max">1</param>
+      </command_interface>
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+  </ros2_control> -->
+  </xacro:macro>
+</robot>
