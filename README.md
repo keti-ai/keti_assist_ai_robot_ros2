@@ -5,56 +5,6 @@ It improves upon the original repository to enable easier and more seamless use 
 
 - [Documentation for KETI Assist AI ROBOT](https://bittersweet-singer-2da.notion.site/2fcb18ffad91806cbfd2c2f29d54d1cd?v=2fcb18ffad9180a6b2e6000c43cecc10&source=copy_link)
 
-## Prerequisition
-
-- Ubuntu 22.04 + ROS Humble
-- Use `fastdds_profile.xml` for dds tuning.
-  ```bash
-  # Copy fastdds profile xml in home directory
-  cp fastdds_profile.xml ${HOME}
-
-  # add this in ~/.bashrc
-  export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-  export FASTRTPS_DEFAULT_PROFILES_FILE=${HOME}/fastdds_profile.xml
-  export RMW_FASTRTPS_USE_QOS_FROM_XML=1
-
-  source /opt/ros/humble/setup.bash
-  ```
-- Edit if you want to communicate other PC.(Another PC also need to export fastdds_profile.xml)
-  ```xml
-  <participant profile_name="shm_udp_participant" is_default_profile="true">
-    <rtps>
-        <useBuiltinTransports>false</useBuiltinTransports>
-        
-        <userTransports>
-            <transport_id>shm_transport</transport_id>
-            <transport_id>udp_transport</transport_id>
-        </userTransports>
-
-        <builtin>
-            <initialPeersList>
-                <locator>
-                    <udpv4>
-                        <address>127.0.0.1</address> 
-                    </udpv4>
-                </locator>
-                <locator>
-                    <udpv4>
-                        <address>192.168.1.xxx</address>
-                    </udpv4>
-                </locator>
-                <locator>
-                    <udpv4>
-                        <address>192.168.1.xx1</address> 
-                    </udpv4>
-                </locator>
-            </initialPeersList>
-        </builtin>
-    </rtps>
-</participant>
-  ```
-
-
 
 ## How To Use Quickly
 
@@ -62,19 +12,19 @@ It improves upon the original repository to enable easier and more seamless use 
   ```bash
   # Just Clone this repository. Repository has its own ros2 workspace directory
   git clone https://github.com/keti-ai/keti_assist_ai_robot_ros2.git
+  ```
 
-  # Move to repository
+- ### Setup Network Buffer
+  #### Resize Network socket buffer size for ROS2 DDS Communication optimization
+  ```bash
   cd keti_assist_ai_robot_ros2
-
-  # get third party submodules
-  git submodule update --init --recursive
-  git submodule update --remote --recursive
+  bash script/setup_network_buffer.sh
   ```
 
 - ### Build with Docker
   #### Move to Repository directory
     ```bash
-    cd <repository_directory>
+    cd keti_assist_ai_robot_ros2
     ```
   #### Build Docker Image .sh what you want
   ```bash
@@ -91,31 +41,13 @@ It improves upon the original repository to enable easier and more seamless use 
   docker exec -it keti_ros2_container /bin/bash
   ```
 
-- ### Build ROS2 Package(Host installation)
-  #### Move to Repository directory
+  #### In the docker shell, build ros2 packages using colcon command
   ```bash
-  # Remember to source ros2 environment settings first
-  cd <repository_directory>
+  colcon build --symlink-install
+  source install/setup.bash
   ```
 
-  #### Build all packages (Release Mode, except xarm_sdk(Debug build need))
+  #### Test Kaair Fake MoveIT is working
   ```bash
-  colcon build --symlink-install \
-  --metas .build_config/colcon_build.meta \
-  --packages-up-to $(cat .build_config/pkgs-control.txt) \
-  --cmake-args -DCMAKE_BUILD_TYPE=Release
+  ros2 launch kaair_moveit_config kaair_moveit.launch.py use_fake_hardware:=true
   ```
-  - #### Tip for Python venv/conda users
-    If the `colcon build` command is not directly recognized or you need to ensure the specific interpreter is used, prefix the command with `python -m`:
-
-    `python -m colcon build --symlink-install --metas .build_config/colcon_build.meta --packages-up-to $(cat .build_config/pkgs-control.txt) --cmake-args -DCMAKE_BUILD_TYPE=Release`
-
-  #### If you want to build interface only
-  ```bash
-  colcon build --symlink-install \
-  --packages-up-to $(cat .build_config/pkgs-interfaces.txt) \
-  --cmake-args -DCMAKE_BUILD_TYPE=Release
-  ```
-
-  - #### For Python venv/conda users
-    `python -m colcon build --symlink-install --packages-up-to $(cat .build_config/pkgs-interfaces.txt) --cmake-args -DCMAKE_BUILD_TYPE=Release`

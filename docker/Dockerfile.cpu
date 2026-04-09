@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     build-essential \
     cmake \
+    gdb \
     software-properties-common \
     python3-pip \
     python-is-python3 \
@@ -73,26 +74,37 @@ RUN apt-get update && apt-get install -y \
     libmodbus-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y gdb \
-    && rm -rf /var/lib/apt/lists/*
+# ---------------------------------------------------------
+# xarm ros2, orbbec camera, realsense 설치
+# ---------------------------------------------------------
+SHELL ["/bin/bash", "-c"]
+RUN mkdir -p /xarm_ws/src
+RUN mkdir -p /camera_ws/src
 
-# 필요시 Cyclone DDS 설치
-# RUN apt-get update && apt-get install -y \
-#     ros-humble-rmw-cyclonedds-cpp \
-#     && rm -rf /var/lib/apt/lists/*
+WORKDIR /xarm_ws/src
+RUN git clone https://github.com/xArm-Developer/xarm_ros2.git --recursive -b humble
+WORKDIR /xarm_ws/src/xarm_ros2
+RUN git submodule update --init --recursive
+RUN git pull --recurse-submodules
+WORKDIR /xarm_ws
+RUN . /opt/ros/humble/setup.bash && \
+    colcon build \
+    --build-base build \
+    --install-base install \
+    --packages-up-to xarm_api xarm_controller uf_ros_lib
 
-# Zenoh 브릿지를 위한 패키지 설치
-RUN mkdir -p /etc/apt/keyrings \
-    && curl -L https://download.eclipse.org/zenoh/debian-repo/zenoh-public-key \
-       | gpg --dearmor -o /etc/apt/keyrings/zenoh-public-key.gpg \
-    && echo "deb [signed-by=/etc/apt/keyrings/zenoh-public-key.gpg] https://download.eclipse.org/zenoh/debian-repo/ /" \
-       > /etc/apt/sources.list.d/zenoh.list \
-    && apt-get update \
-    && apt-get install -y zenoh-bridge-ros2dds \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /camera_ws/src
+RUN git clone https://github.com/orbbec/OrbbecSDK_ROS2.git
+WORKDIR /camera_ws
+RUN . /opt/ros/humble/setup.bash && \
+    colcon build \
+    --build-base build \
+    --install-base install \
+    --event-handlers console_direct+ \
+    --cmake-args -DCMAKE_BUILD_TYPE=Release
 
     
-# 5-1. rviz-common 특정 버전 아키텍처별 자동 설치 및 고정
+# 5-7. rviz-common 특정 버전 아키텍처별 자동 설치 및 고정
 RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates \
     && ARCH=$(dpkg --print-architecture) \
     && if [ "$ARCH" = "amd64" ]; then \
@@ -108,6 +120,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certifi
     && rm -rf /var/lib/apt/lists/*
 
 RUN cp -r /root/ws_moveit /ws_moveit
+
+# 8. 작업 디렉토리 설정, pip 인스톨 및 소스 폴더 생성
+WORKDIR /ros_ws
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+
 
 ARG USERNAME=developer
 # 여기서 기본값을 1000으로 두되, 빌드 시 --build-arg USER_UID=2002 로 덮어쓸 수 있습니다.
@@ -137,9 +157,12 @@ RUN echo 'export PS1="\[\e[01;31m\]\u@container\[\e[00m\]:\[\e[01;37m\]\w\[\e[00
 RUN for user_home in /root /home/${USERNAME}; do \
     echo "alias eb='nano ~/.bashrc'" >> ${user_home}/.bashrc && \
     echo "alias sb='source ~/.bashrc'" >> ${user_home}/.bashrc && \
+    echo "alias cbs='colcon build --symlink-install'" >> ${user_home}/.bashrc && \
     echo "source /opt/ros/humble/setup.bash" >> ${user_home}/.bashrc && \
     # 기존 ros_ws 소싱
     echo 'if [ -f "/ros_ws/install/setup.bash" ]; then source "/ros_ws/install/setup.bash"; fi' >> ${user_home}/.bashrc && \
+    echo 'if [ -f "/xarm_ws/install/setup.bash" ]; then source "/xarm_ws/install/setup.bash"; fi' >> ${user_home}/.bashrc; \
+    echo 'if [ -f "/camera_ws/install/setup.bash" ]; then source "/camera_ws/install/setup.bash"; fi' >> ${user_home}/.bashrc; \
     # 추가: ws_moveit 소싱 (install/setup.bash가 있을 경우)
     echo 'if [ -f "/ws_moveit/install/setup.bash" ]; then source "/ws_moveit/install/setup.bash"; fi' >> ${user_home}/.bashrc; \
     done
@@ -149,10 +172,6 @@ USER ${USERNAME}
 # 8. 작업 디렉토리 설정, pip 인스톨 및 소스 폴더 생성
 WORKDIR /ros_ws
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-RUN mkdir -p src
 
 # 기본 쉘을 bash로 설정
 SHELL ["/bin/bash", "-c"]

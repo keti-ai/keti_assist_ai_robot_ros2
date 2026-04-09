@@ -1,2 +1,0 @@
-orbbec_camera
-kaair_bringup
