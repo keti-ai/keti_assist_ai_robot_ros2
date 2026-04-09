@@ -176,6 +176,7 @@ RUN for user_home in /root /home/${USERNAME}; do \
     echo "alias eb='nano ~/.bashrc'" >> ${user_home}/.bashrc && \
     echo "alias sb='source ~/.bashrc'" >> ${user_home}/.bashrc && \
     echo "alias cbs='colcon build --symlink-install'" >> ${user_home}/.bashrc && \
+    echo "alias cclean='rm -rf build/ install/ log/'" >> ${user_home}/.bashrc && \
     echo "source /opt/ros/humble/setup.bash" >> ${user_home}/.bashrc && \
     echo 'if [ -f "/ros_ws/install/setup.bash" ]; then source "/ros_ws/install/setup.bash"; fi' >> ${user_home}/.bashrc; \
     echo 'if [ -f "/xarm_ws/install/setup.bash" ]; then source "/xarm_ws/install/setup.bash"; fi' >> ${user_home}/.bashrc; \
