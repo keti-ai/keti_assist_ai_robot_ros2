@@ -1,0 +1,12 @@
+[submodule "src/third_party/xarm_ros2"]
+	path = src/third_party/xarm_ros2
+	url = https://github.com/xArm-Developer/xarm_ros2.git
+	branch = humble
+[submodule "src/third_party/OrbbecSDK_ROS2"]
+	path = src/third_party/OrbbecSDK_ROS2
+	url = https://github.com/orbbec/OrbbecSDK_ROS2.git
+	branch = v2-main
+[submodule "src/third_party/Realsense_ROS2"]
+	path = src/third_party/Realsense_ROS2
+	url = https://github.com/realsenseai/realsense-ros.git
+	branch = ros2-master
