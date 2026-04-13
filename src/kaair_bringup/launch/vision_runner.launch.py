@@ -23,6 +23,7 @@ def generate_launch_description():
             'color_qos': 'SENSOR_DATA',
             'depth_qos': 'SENSOR_DATA',
             'point_cloud_qos': 'SENSOR_DATA',
+            'publish_tf': 'false',
         }.items()
     )
 
