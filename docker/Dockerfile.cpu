@@ -75,6 +75,11 @@ RUN apt-get update && apt-get install -y \
     libmodbus-dev \
     && rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update && apt install -y \
+    ros-humble-librealsense2* \
+    && rm -rf /var/lib/apt/lists/*
+
+
 # ---------------------------------------------------------
 # xarm ros2, orbbec camera, realsense 설치 및 빌드 환경 설정
 # ---------------------------------------------------------
