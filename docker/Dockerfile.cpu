@@ -143,6 +143,8 @@ ARG USERNAME=developer
 ARG USER_UID=1000
 ARG USER_GID=1000
 
+ENTRYPOINT []
+
 # sudo 패키지 설치 및 사용자 권한 부여
 RUN apt-get update && apt-get install -y sudo \
     && groupadd --gid $USER_UID $USERNAME \
@@ -159,7 +161,8 @@ RUN for user_home in /root /home/${USERNAME}; do \
     echo 'alias cbs="colcon build --symlink-install"' >> ${user_home}/.bashrc && \
     echo 'alias cclean="rm -rf build/ install/ log/"' >> ${user_home}/.bashrc && \
     echo "source /opt/ros/humble/setup.bash" >> ${user_home}/.bashrc && \
-    echo 'for ws in /ws_moveit /xarm_ws /camera_ws /ros_ws; do [ -f "$ws/install/setup.bash" ] && source "$ws/install/setup.bash"; done' >> ${user_home}/.bashrc; \
+    echo 'for ws in /xarm_ws /camera_ws /ros_ws; do [ -f "$ws/install/setup.bash" ] && source "$ws/install/setup.bash"; done' >> ${user_home}/.bashrc; \
+    echo 'if [ -f "/ws_moveit/install/setup.bash" ]; then source "/ws_moveit/install/setup.bash"; fi' >> ${user_home}/.bashrc; \
     done
 
 # 사용자별 터미널 색상 구분
