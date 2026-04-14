@@ -1,10 +1,197 @@
+# ==========================================
+# 1. 베이스 이미지 및 환경 설정
+# ==========================================
 FROM moveit/moveit2:humble-source
 
-# 2. 환경 변수 설정 (터미널 입력 방지 및 언어 설정)
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 ENV ROS_DISTRO=humble
+SHELL ["/bin/bash", "-c"]
+
+# ==========================================
+# 2. 시스템 기본 도구 및 ROS 2 리포지토리 설정
+# ==========================================
+RUN apt-get update && apt-get install -y \
+    locales nano net-tools git curl wget gnupg2 lsb-release ca-certificates \
+    build-essential cmake gdb software-properties-common \
+    python3-pip python-is-python3 \
+    && locale-gen en_US.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
+
+
+# ==========================================
+# 3. ROS 2 기본 데스크탑 및 개발 도구
+# ==========================================
+RUN apt-get update && apt-get install -y \
+    ros-$ROS_DISTRO-desktop \
+    ros-dev-tools \
+    libgl1-mesa-dri libgl1-mesa-glx libglu1-mesa-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------
+# 3-1. ROS 2 Control 핵심 (Control, Manager, HW IF)
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    ros-$ROS_DISTRO-ros2-control \
+    ros-$ROS_DISTRO-controller-manager \
+    ros-$ROS_DISTRO-hardware-interface \
+    ros-$ROS_DISTRO-pluginlib \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------
+# 3-2. 표준 컨트롤러 및 브로드캐스터
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    ros-$ROS_DISTRO-ros2-controllers \
+    ros-$ROS_DISTRO-joint-state-broadcaster \
+    ros-$ROS_DISTRO-joint-state-publisher \
+    ros-$ROS_DISTRO-joint-state-publisher-gui \
+    ros-$ROS_DISTRO-diff-drive-controller \
+    ros-$ROS_DISTRO-joint-trajectory-controller \
+    ros-$ROS_DISTRO-xacro \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------
+# 3-3. 이미지 및 비전 관련 플러그인
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    libgflags-dev nlohmann-json3-dev \
+    ros-$ROS_DISTRO-image-transport ros-$ROS_DISTRO-image-transport-plugins ros-$ROS_DISTRO-compressed-image-transport \
+    ros-$ROS_DISTRO-image-publisher ros-$ROS_DISTRO-camera-info-manager \
+    ros-$ROS_DISTRO-diagnostic-updater ros-$ROS_DISTRO-diagnostic-msgs ros-$ROS_DISTRO-statistics-msgs \
+    ros-$ROS_DISTRO-backward-ros libdw-dev libssl-dev mesa-utils libgl1 libgoogle-glog-dev \
+    ros-$ROS_DISTRO-image-view ros-$ROS_DISTRO-tf-transformations ros-$ROS_DISTRO-find-object-2d \
+    ros-$ROS_DISTRO-pcl-ros \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------
+# 3-4. Navigation 2 관련 플러그인
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    ros-$ROS_DISTRO-navigation2 \
+    ros-$ROS_DISTRO-nav2-bringup \
+    ros-$ROS_DISTRO-nav2-rviz-plugins \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------
+# 3-5. 하드웨어 SDK (Dynamixel, Modbus, RealSense Binary)
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    ros-$ROS_DISTRO-dynamixel-sdk \
+    libmodbus-dev \
+    ros-$ROS_DISTRO-librealsense2* \
+    && rm -rf /var/lib/apt/lists/*
+
+# ==========================================
+# 4. 워크스페이스 구조 생성
+# ==========================================
+RUN mkdir -p /ws_moveit/src /xarm_ws/src /camera_ws/src /ros_ws
+
+# ==========================================
+# 5. MoveIt 2 소스 기반 빌드 PASS
+# ==========================================
+
+# ==========================================
+# 6. xArm ROS 2 패키지 설치 및 빌드
+# ==========================================
+WORKDIR /xarm_ws/src
+RUN git clone https://github.com/xArm-Developer/xarm_ros2.git --recursive -b $ROS_DISTRO
+
+WORKDIR /xarm_ws
+RUN . /opt/ros/$ROS_DISTRO/setup.bash && \
+    colcon build --packages-up-to xarm_api xarm_controller uf_ros_lib
+
+# ==========================================
+# 7. 카메라 SDK (Orbbec & RealSense) 빌드
+# ==========================================
+WORKDIR /camera_ws/src
+RUN git clone https://github.com/orbbec/OrbbecSDK_ROS2.git && \
+    git clone https://github.com/IntelRealSense/realsense-ros.git -b ros2-master
+
+WORKDIR /camera_ws
+RUN apt-get update && \
+    rosdep install -i --from-path src --rosdistro $ROS_DISTRO --skip-keys="librealsense2" -y && \
+    . /opt/ros/$ROS_DISTRO/setup.bash && \
+    colcon build --event-handlers console_direct+ --cmake-args -DCMAKE_BUILD_TYPE=Release && \
+    rm -rf /var/lib/apt/lists/*
+
+# ==========================================
+# 8. RViz2 특정 버전 고정 설치 (Snapshot)
+# ==========================================
+RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates \
+    && ARCH=$(dpkg --print-architecture) \
+    && if [ "$ARCH" = "amd64" ]; then \
+        URL="http://snapshots.ros.org/humble/2025-06-18/ubuntu/pool/main/r/ros-humble-rviz-common/ros-humble-rviz-common_11.2.17-1jammy.20250617.234657_amd64.deb"; \
+    elif [ "$ARCH" = "arm64" ]; then \
+        URL="http://snapshots.ros.org/humble/2025-06-18/ubuntu/pool/main/r/ros-humble-rviz-common/ros-humble-rviz-common_11.2.17-1jammy.20250607.163324_arm64.deb"; \
+    fi \
+    && echo "Downloading rviz-common for $ARCH..." \
+    && wget "$URL" -O /tmp/rviz-common.deb \
+    && dpkg -i /tmp/rviz-common.deb || apt-get install -y -f \
+    && apt-mark hold ros-humble-rviz-common \
+    && rm /tmp/rviz-common.deb \
+    && rm -rf /var/lib/apt/lists/*
+
+# ==========================================
+# 9. 사용자 계정 설정 및 터미널 환경 최적화
+# ==========================================
+ARG USERNAME=developer
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+# sudo 패키지 설치 및 사용자 권한 부여
+RUN apt-get update && apt-get install -y sudo \
+    && groupadd --gid $USER_UID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_UID -m $USERNAME \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME \
+    && rm -rf /var/lib/apt/lists/*
+
+# 환경 변수 및 Alias 설정 (root 및 사용자 공통)
+RUN for user_home in /root /home/${USERNAME}; do \
+    echo 'export TERM=xterm-256color' >> ${user_home}/.bashrc && \
+    echo 'alias eb="nano ~/.bashrc"' >> ${user_home}/.bashrc && \
+    echo 'alias sb="source ~/.bashrc"' >> ${user_home}/.bashrc && \
+    echo 'alias cbs="colcon build --symlink-install"' >> ${user_home}/.bashrc && \
+    echo 'alias cclean="rm -rf build/ install/ log/"' >> ${user_home}/.bashrc && \
+    echo "source /opt/ros/humble/setup.bash" >> ${user_home}/.bashrc && \
+    echo 'for ws in /ws_moveit /xarm_ws /camera_ws /ros_ws; do [ -f "$ws/install/setup.bash" ] && source "$ws/install/setup.bash"; done' >> ${user_home}/.bashrc; \
+    done
+
+# 사용자별 터미널 색상 구분
+RUN echo 'export PS1="\[\e[01;36m\]\u@docker\[\e[00m\]:\[\e[01;33m\]\w\[\e[00m\]\$ "' >> /home/${USERNAME}/.bashrc && \
+    echo 'export PS1="\[\e[01;31m\]\u@container\[\e[00m\]:\[\e[01;37m\]\w\[\e[00m\]# "' >> /root/.bashrc
+
+# ==========================================
+# 10. 최종 작업 환경 설정
+# ==========================================
+WORKDIR /ros_ws
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+ENV SHELL=/bin/bash
+
+USER ${USERNAME}
+CMD ["/bin/bash"]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # 3. 필수 기본 도구 및 네트워크 도구 설치
 RUN apt-get update && apt-get install -y \
