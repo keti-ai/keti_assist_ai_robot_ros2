@@ -91,11 +91,11 @@ def generate_launch_description():
     )
 
 
-    # ★ orbbec_camera femto_bolt 런치파일 포함
-    orbbec_launch = IncludeLaunchDescription(
+    # ★ realsense, Orbbec Camera 런치파일 포함
+    vision_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             PathJoinSubstitution([
-                FindPackageShare('orbbec_camera'), 'launch', 'femto_bolt.launch.py'
+                FindPackageShare('kaair_bringup'), 'launch', 'vision_runner.launch.py'
             ])
         ])
     )
