@@ -94,7 +94,7 @@ RUN mkdir -p /ws_moveit/src /xarm_ws/src /camera_ws/src /ros_ws
 # 5. MoveIt 2 소스 기반 빌드 (Main Branch)
 # ==========================================
 WORKDIR /ws_moveit/src
-RUN git clone https://github.com/moveit/moveit2.git -b main && \
+RUN git clone https://github.com/moveit/moveit2.git -b $ROS_DISTRO && \
     vcs import < moveit2/moveit2.repos && \
     if [ -f "moveit2/moveit2_$ROS_DISTRO.repos" ]; then \
         vcs import < "moveit2/moveit2_$ROS_DISTRO.repos"; \
