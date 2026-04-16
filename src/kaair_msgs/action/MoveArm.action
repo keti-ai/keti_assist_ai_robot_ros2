@@ -1,0 +1,13 @@
+# Goal: 목표 조인트 각도 (rad) 및 실행 시간
+float64[] target_joint_positions
+float64 execution_time  # 목표 도달 제한 시간 (초)
+---
+# Result: 최종 도달 위치와 성공 여부
+bool success
+string message
+float64[] final_joint_positions
+---
+# Feedback: 현재 진행률 및 현재 위치
+float32 progress_percent         # 0.0 ~ 100.0
+float64[] current_joint_positions
+float64 remaining_time           # 남은 시간 (초)

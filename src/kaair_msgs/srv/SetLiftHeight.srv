@@ -1,0 +1,8 @@
+# Request: 리프트 목표 높이 (m)
+float32 target_height
+float32 speed  # 이동 속도 (m/s), 0이면 기본값 사용
+---
+# Response
+bool success
+string message
+float32 reached_height  # 실제 도달한 높이 (m)
