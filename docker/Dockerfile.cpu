@@ -134,7 +134,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certifi
     && rm -rf /var/lib/apt/lists/*
 
 # MoveIT WS 복사
-RUN cp -r /root/ws_moveit /ws_moveit
+RUN cp -r /root/ws_moveit /
 
 # ==========================================
 # 9. 사용자 계정 설정 및 터미널 환경 최적화
