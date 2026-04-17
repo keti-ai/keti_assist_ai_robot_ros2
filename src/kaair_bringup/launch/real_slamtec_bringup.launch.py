@@ -25,7 +25,18 @@ def generate_launch_description():
         "spec", default_value="kaair_specs_01.yaml",
         description="로봇 하드웨어 스펙 파일 (.yaml)"
     )
+    use_head_camera_arg = DeclareLaunchArgument(
+        "use_head_camera", default_value="true",
+        description="헤드 카메라 사용 여부"
+    )
 
+    use_hand_camera_arg = DeclareLaunchArgument(
+        "use_hand_camera", default_value="true",
+        description="핸드 카메라 사용 여부"
+    )
+
+    use_head_camera = LaunchConfiguration("use_head_camera")
+    use_hand_camera = LaunchConfiguration("use_hand_camera")
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
     use_gui = LaunchConfiguration("use_gui")
     spec = LaunchConfiguration("spec")
@@ -97,7 +108,11 @@ def generate_launch_description():
             PathJoinSubstitution([
                 FindPackageShare('kaair_bringup'), 'launch', 'vision_runner.launch.py'
             ])
-        ])
+        ]),
+        launch_arguments={
+            'use_head_camera': use_head_camera,
+            'use_hand_camera': use_hand_camera,
+        }.items(),
     )
 
     # [D] RViz2
@@ -144,13 +159,15 @@ def generate_launch_description():
 
     # 최종 실행 리스트
     return LaunchDescription([
+        use_head_camera_arg,
+        use_hand_camera_arg,
         use_fake_hardware_arg,
         use_gui_arg,
         spec_arg,
 
         robot_state_pub_node,
         ros2_control_node,
-        orbbec_launch,
+        vision_launch,
         rviz_node,
 
         event_manager_to_jsb,
