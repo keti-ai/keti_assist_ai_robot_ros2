@@ -23,6 +23,7 @@ install(DIRECTORY
 set(PYTHON_NODES
   "kaair_bringup/server_worker/location_server.py" "location_manager"
   "kaair_bringup/server_worker/xarm_bridge.py"     "xarm_manager"
+  "kaair_bringup/motion_worker/lift_move_action_server.py" "lift_move_action_server"
   # "추가경로" "추가이름"
 )
 

@@ -1,0 +1,12 @@
+# Goal: 상대방이 보내는 목적지 및 옵션
+float64 target_height      # 목표 리프트 높이
+bool plan_only false      # True일 경우 실제 이동은 하지 않고 플래닝 성공 여부만 확인
+---
+# Result: 최종 결과
+bool success              # 이동 또는 플래닝 성공 여부
+string message            # 실패 시 원인 (예: "Collision detected", "Out of bounds")
+float64 final_height      # 작업 완료 후의 실제 높이
+---
+# Feedback: 진행 상태 (필요 시)
+float64 current_height    # 현재 리프트 높이
+string status             # 현재 상태 (예: "Planning", "Moving", "Validating")

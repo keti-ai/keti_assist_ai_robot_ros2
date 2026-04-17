@@ -1,10 +1,10 @@
 # 리프트 모듈 설정
 lift:
-  min_h: 0.108                # meter
-  max_h: 0.675                # meter
+  min_h: 0.1065                # meter
+  max_h: 0.6700                # meter
   usb_port: "/dev/ttyLM"
   baud_rate: 115200
-  offset_position: 0.1139   # meter
+  offset_position: 0.1015   # meter
   global_velocity: 0.20        # meter / second [max : 0.339 m/s]
   encoder_ppr: 16384          # encode resolution
   lead_pitch: 0.010           # meter

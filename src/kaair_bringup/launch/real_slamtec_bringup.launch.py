@@ -1,7 +1,7 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, RegisterEventHandler, IncludeLaunchDescription, LogInfo
+from launch.actions import DeclareLaunchArgument, RegisterEventHandler, IncludeLaunchDescription
 from launch.event_handlers import OnProcessStart
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch.conditions import IfCondition
@@ -101,6 +101,15 @@ def generate_launch_description():
         parameters=[moveit_config.robot_description],
     )
 
+    # [D] Server Worker Loader (launch file → IncludeLaunchDescription으로 포함)
+    server_worker_loader_node = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+            PathJoinSubstitution([
+                FindPackageShare('kaair_bringup'), 'launch', 'server_worker_loader.py'
+            ])
+        ])
+    )
+
 
     # ★ realsense, Orbbec Camera 런치파일 포함
     vision_launch = IncludeLaunchDescription(
@@ -168,6 +177,7 @@ def generate_launch_description():
         robot_state_pub_node,
         ros2_control_node,
         vision_launch,
+        server_worker_loader_node,
         rviz_node,
 
         event_manager_to_jsb,
