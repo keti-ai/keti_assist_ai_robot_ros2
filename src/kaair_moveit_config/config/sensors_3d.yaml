@@ -1,18 +1,11 @@
-# --- 아래 두 줄을 맨 위에 새로 추가하세요! ---
-octomap_frame: slamware_map          # (현재 로봇 환경에 맞는 고정 프레임. odom, map, 혹은 base_link 등)
-octomap_resolution: 0.05      # <--- 이 숫자를 바꾸면 복셀 크기가 변합니다! (0.1 = 10cm)
-
 sensors:
-  - femto_pointcloud
-femto_pointcloud:
-    sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
-    point_cloud_topic: /femto/depth/points
-    max_range: 3.0
-    point_subsample: 2
-    padding_offset: 0.05
-    padding_scale: 1.2
-    max_update_rate: 5.0
-    filtered_cloud_topic: /femto/filtered_cloud
-
-    near_clipping_plane_distance: 0.3 # 센서 바로 앞 노이즈 제거
-    shadow_threshold: 0.1             # 그림자 효과로 인한 잔상 제거 속도 조절
+  - default_sensor
+default_sensor:
+  filtered_cloud_topic: /femto/filtered_cloud
+  max_range: 3.0
+  max_update_rate: 5.0
+  padding_offset: 0.05
+  padding_scale: 1.2
+  point_cloud_topic: /femto/depth/points
+  point_subsample: 2
+  sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater

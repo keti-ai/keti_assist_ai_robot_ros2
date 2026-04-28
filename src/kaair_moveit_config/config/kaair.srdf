@@ -46,6 +46,22 @@
     <passive_joint name="right_finger_tip_joint"/>
     <passive_joint name="virtual_gripper_joint"/>
     <!--DISABLE COLLISIONS: By default it is assumed that any link of the robot could potentially come into collision with any other link in the robot. This tag disables collision checking between a specified pair of links. -->
+    <disable_collisions link1="camera_link" link2="gripper_body_link" reason="Never"/>
+    <disable_collisions link1="camera_link" link2="hand_base_link" reason="Never"/>
+    <disable_collisions link1="camera_link" link2="lb_caster" reason="Never"/>
+    <disable_collisions link1="camera_link" link2="left_finger_tip" reason="Never"/>
+    <disable_collisions link1="camera_link" link2="left_wheel" reason="Never"/>
+    <disable_collisions link1="camera_link" link2="lf_caster" reason="Never"/>
+    <disable_collisions link1="camera_link" link2="link3" reason="Never"/>
+    <disable_collisions link1="camera_link" link2="link4" reason="Never"/>
+    <disable_collisions link1="camera_link" link2="link6" reason="Never"/>
+    <disable_collisions link1="camera_link" link2="link7" reason="Never"/>
+    <disable_collisions link1="camera_link" link2="rb_caster" reason="Never"/>
+    <disable_collisions link1="camera_link" link2="rf_caster" reason="Never"/>
+    <disable_collisions link1="camera_link" link2="right_finger_tip" reason="Never"/>
+    <disable_collisions link1="camera_link" link2="right_wheel" reason="Never"/>
+    <disable_collisions link1="camera_link" link2="vision_frame_link" reason="Adjacent"/>
+    <disable_collisions link1="femto_base_link" link2="head_link1" reason="Never"/>
     <disable_collisions link1="femto_base_link" link2="head_link2" reason="Never"/>
     <disable_collisions link1="femto_base_link" link2="head_link3" reason="Adjacent"/>
     <disable_collisions link1="femto_base_link" link2="lb_caster" reason="Never"/>
@@ -64,6 +80,7 @@
     <disable_collisions link1="gripper_body_link" link2="left_finger_tip" reason="Adjacent"/>
     <disable_collisions link1="gripper_body_link" link2="left_wheel" reason="Never"/>
     <disable_collisions link1="gripper_body_link" link2="lf_caster" reason="Never"/>
+    <disable_collisions link1="gripper_body_link" link2="link3" reason="Never"/>
     <disable_collisions link1="gripper_body_link" link2="link6" reason="Never"/>
     <disable_collisions link1="gripper_body_link" link2="link7" reason="Never"/>
     <disable_collisions link1="gripper_body_link" link2="rb_caster" reason="Never"/>
@@ -207,7 +224,6 @@
     <disable_collisions link1="lift_base_link" link2="slamtec_base_link" reason="Adjacent"/>
     <disable_collisions link1="lift_link" link2="link1" reason="Never"/>
     <disable_collisions link1="lift_link" link2="link2" reason="Never"/>
-    <disable_collisions link1="lift_link" link2="link3" reason="Never"/>
     <disable_collisions link1="lift_link" link2="link_base" reason="Adjacent"/>
     <disable_collisions link1="lift_link" link2="rb_caster" reason="Never"/>
     <disable_collisions link1="lift_link" link2="rf_caster" reason="Never"/>

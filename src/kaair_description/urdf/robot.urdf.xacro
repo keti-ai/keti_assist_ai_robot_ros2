@@ -124,6 +124,14 @@
       use_fake_hardware="$(arg use_fake_hardware)"
     />
 
+
+    <xacro:arg name="use_nominal_extrinsics" default="false"/>
+    <xacro:include filename="$(find realsense2_description)/urdf/_d405.urdf.xacro" />
+    
+    <xacro:sensor_d405 parent="vision_frame_link" use_nominal_extrinsics="$(arg use_nominal_extrinsics)">
+      <origin xyz="0.04428 0 0.02185" rpy="0 -1.5707963267948966 -3.1415926535897931"/>
+    </xacro:sensor_d405>
+
   </xacro:if>
 
 

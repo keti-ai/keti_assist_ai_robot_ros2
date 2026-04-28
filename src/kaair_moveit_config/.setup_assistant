@@ -8,4 +8,19 @@ moveit_setup_assistant_config:
   package_settings:
     author_name: seomi
     author_email: seomi@keti.re.kr
-    generated_timestamp: 1773726450
+    generated_timestamp: 1777383443
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity
+  modified_urdf:
+    xacros:
+      - control_xacro
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity

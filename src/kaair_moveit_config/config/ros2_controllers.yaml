@@ -29,17 +29,19 @@ arm_controller:
       - joint6
       - joint7
     command_interfaces:
-      []
+      - position
     state_interfaces:
-      []
+      - position
+      - velocity
 lift_controller:
   ros__parameters:
     joints:
       - lift_joint
     command_interfaces:
-      []
+      - position
     state_interfaces:
-      []
+      - position
+      - velocity
 head_controller:
   ros__parameters:
     joints:
