@@ -18,7 +18,7 @@ It improves upon the original repository to enable easier and more seamless use 
   #### Resize Network socket buffer size for ROS2 DDS Communication optimization
   ```bash
   cd keti_assist_ai_robot_ros2
-  bash script/setup_network_buffer.sh
+  bash scripts/setup_network_buffer.sh
   ```
 
 - ### Build with Docker
@@ -29,7 +29,7 @@ It improves upon the original repository to enable easier and more seamless use 
   #### Build Docker Image .sh what you want
   ```bash
   # change input argument (cpu,nvidia,jetpack)
-  bash script/build_docker.sh -t nvidia
+  bash scripts/build_docker.sh -t nvidia
   ```
   #### This copies `docker-compose.yml` in your workspace repository
   #### Move to Workspace Directory and docker-compose up. You can edit docker-compse.yml and rerun this code.
