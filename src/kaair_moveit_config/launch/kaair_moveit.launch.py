@@ -1,4 +1,5 @@
 import os
+import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler
@@ -68,7 +69,10 @@ def launch_setup(context, *args, **kwargs):
             cmd += ' ' + extra_args
         return {'robot_description': ParameterValue(Command(cmd), value_type=str)}
 
-    arm_robot_description  = xacro_to_param(arm_hw_xacro)
+    arm_robot_description  = xacro_to_param(
+        arm_hw_xacro,
+        f'initial_positions_file:={initial_positions_file}'
+    )
     body_robot_description = xacro_to_param(
         body_hw_xacro,
         f'initial_positions_file:={initial_positions_file}'
@@ -171,6 +175,9 @@ def launch_setup(context, *args, **kwargs):
     # · /arm/joint_states  : joint1-7
     # · /body/joint_states : lift_joint, head_joint1/2, virtual_gripper_joint
     # → /joint_states      : 전체 (RSP 가 이 토픽을 구독)
+    with open(initial_positions_file, 'r') as _f:
+        _initial_pos = yaml.safe_load(_f).get('initial_positions', {})
+
     joint_state_merger = Node(
         package='joint_state_publisher',
         executable='joint_state_publisher',
@@ -178,10 +185,11 @@ def launch_setup(context, *args, **kwargs):
         parameters=[{
             'source_list': ['/arm/joint_states', '/body/joint_states'],
             'rate': 50,
+            # HW 연결 전 공백 구간(fake: JSB 준비 전 / real: 드라이버 연결 전)에
+            # initial_positions.yaml 값을 fallback 으로 사용한다.
+            # source 가 해당 관절을 발행하기 시작하면 즉시 실제 값으로 전환된다.
+            'initial_positions': _initial_pos,
         }],
-        # robot_description 은 파라미터 서버에서 자동으로 읽음
-        # (RSP 와 같은 전체 URDF 가 필요하므로 moveit_config 에서 제공)
-        # ※ joint_state_publisher 는 /robot_description 토픽도 구독한다.
         remappings=[
             ('robot_description', '/robot_description'),
         ],
@@ -310,7 +318,7 @@ def generate_launch_description():
             description='RViz2 실행 여부'
         ),
         DeclareLaunchArgument(
-            'spec', default_value='kaair_specs_01.yaml',
+            'spec', default_value='kaair_specs_02.yaml',
             description='로봇 하드웨어 스펙 파일 (.yaml)'
         ),
         OpaqueFunction(function=launch_setup),

@@ -1,4 +1,5 @@
 import os
+import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler
@@ -62,6 +63,7 @@ def launch_setup(context, *args, **kwargs):
             'xacro ', arm_hw_xacro,
             ' hw_spec_file:=', hw_spec_file,
             ' use_fake_hardware:=', use_fake_str,
+            ' initial_positions_file:=', initial_positions_file,
         ])
     }
 
@@ -121,6 +123,9 @@ def launch_setup(context, *args, **kwargs):
     #
     #     mode 가 arm 전용이면 /body/joint_states 소스가 비어도 무해하며,
     #     body 전용이면 /arm/joint_states 가 비어도 무해하다.
+    with open(initial_positions_file, 'r') as _f:
+        _initial_pos = yaml.safe_load(_f).get('initial_positions', {})
+
     joint_state_merger = Node(
         package='joint_state_publisher',
         executable='joint_state_publisher',
@@ -128,6 +133,7 @@ def launch_setup(context, *args, **kwargs):
         parameters=[{
             'source_list': ['/arm/joint_states', '/body/joint_states'],
             'rate': 50,
+            'initial_positions': _initial_pos,
         }],
         remappings=[('robot_description', '/robot_description')],
     )

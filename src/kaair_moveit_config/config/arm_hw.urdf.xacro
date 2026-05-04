@@ -7,43 +7,53 @@
     arm 의 <ros2_control> 블록만 포함한다.
 
     · use_fake_hardware=false → UFRobotSystemHardware  (실제 xArm7)
-    · use_fake_hardware=true  → UFRobotFakeSystemHardware (MoveIt fake)
+    · use_fake_hardware=true  → arm.ros2_control.xacro / mock_components/GenericSystem
+                                 initial_positions_file 로 초기 자세 설정 가능
 
     body_controller_manager / robot_state_publisher 에는 사용하지 않는다.
     RSP 는 kaair.urdf.xacro (mode=robot) 전체 URDF 를 사용한다.
   -->
-  <xacro:arg name="use_fake_hardware" default="false"/>
+  <xacro:arg name="use_fake_hardware"      default="false"/>
   <xacro:arg name="hw_spec_file"
              default="$(find kaair_bringup)/config/robots/kaair_specs_01.yaml"/>
-
-  <xacro:property name="hw_specs" value="${xacro.load_yaml('$(arg hw_spec_file)')}"/>
+  <xacro:arg name="initial_positions_file"
+             default="$(find kaair_moveit_config)/config/initial_positions.yaml"/>
 
   <!-- URDF 유효성을 위한 최소 루트 링크 -->
-  <link name="arm_base"/>
+  <link name="arm_hw_base"/>
 
-  <!-- arm hw plugin 선택 -->
-  <xacro:if value="$(arg use_fake_hardware)">
-    <xacro:property name="arm_hw_plugin"
-                    value="uf_robot_hardware/UFRobotFakeSystemHardware"/>
-  </xacro:if>
+  <!-- ── 실제 하드웨어 ──────────────────────────────────────────────────── -->
   <xacro:unless value="$(arg use_fake_hardware)">
-    <xacro:property name="arm_hw_plugin"
-                    value="uf_robot_hardware/UFRobotSystemHardware"/>
+    <xacro:property name="hw_specs" value="${xacro.load_yaml('$(arg hw_spec_file)')}"/>
+
+    <xacro:include filename="$(find xarm_description)/urdf/xarm_device_macro.xacro"/>
+    <xacro:xarm_device
+      prefix=""
+      hw_ns="xarm"
+      dof="7"
+      add_gripper="false"
+      attach_to="arm_hw_base"
+      effort_control="false"
+      velocity_control="false"
+      limited="true"
+      robot_ip="${hw_specs['arm']['robot_ip']}"
+      ros2_control_plugin="uf_robot_hardware/UFRobotSystemHardware"
+    />
   </xacro:unless>
 
-  <!-- xArm7 링크 + ros2_control 블록 생성 -->
-  <xacro:include filename="$(find xarm_description)/urdf/xarm_device_macro.xacro"/>
-  <xacro:xarm_device
-    prefix=""
-    hw_ns="xarm"
-    dof="7"
-    add_gripper="false"
-    attach_to="arm_base"
-    effort_control="false"
-    velocity_control="false"
-    limited="true"
-    robot_ip="${hw_specs['arm']['robot_ip']}"
-    ros2_control_plugin="${arm_hw_plugin}"
-  />
+  <!-- ── 가짜 하드웨어 (MoveIt fake mode) ──────────────────────────────── -->
+  <!--
+    xarm_device_macro 는 initial_positions_file 을 지원하지 않으므로
+    (UFRobotFakeSystemHardware = GenericSystem without initial_value),
+    arm.ros2_control.xacro 에서 직접 GenericSystem 블록을 정의하고
+    initial_value 를 삽입한다.
+  -->
+  <xacro:if value="$(arg use_fake_hardware)">
+    <xacro:include
+      filename="$(find kaair_moveit_config)/config/arm.ros2_control.xacro"/>
+    <xacro:arm_ros2_control
+      name="ArmFakeSystem"
+      initial_positions_file="$(arg initial_positions_file)"/>
+  </xacro:if>
 
 </robot>
