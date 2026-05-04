@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<robot name="kaair" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!--
+    arm_hw.urdf.xacro
+    ─────────────────────────────────────────────────────────────────────
+    arm_controller_manager 전용 robot_description.
+    arm 의 <ros2_control> 블록만 포함한다.
+
+    · use_fake_hardware=false → UFRobotSystemHardware  (실제 xArm7)
+    · use_fake_hardware=true  → UFRobotFakeSystemHardware (MoveIt fake)
+
+    body_controller_manager / robot_state_publisher 에는 사용하지 않는다.
+    RSP 는 kaair.urdf.xacro (mode=robot) 전체 URDF 를 사용한다.
+  -->
+  <xacro:arg name="use_fake_hardware" default="false"/>
+  <xacro:arg name="hw_spec_file"
+             default="$(find kaair_bringup)/config/robots/kaair_specs_01.yaml"/>
+
+  <xacro:property name="hw_specs" value="${xacro.load_yaml('$(arg hw_spec_file)')}"/>
+
+  <!-- URDF 유효성을 위한 최소 루트 링크 -->
+  <link name="arm_base"/>
+
+  <!-- arm hw plugin 선택 -->
+  <xacro:if value="$(arg use_fake_hardware)">
+    <xacro:property name="arm_hw_plugin"
+                    value="uf_robot_hardware/UFRobotFakeSystemHardware"/>
+  </xacro:if>
+  <xacro:unless value="$(arg use_fake_hardware)">
+    <xacro:property name="arm_hw_plugin"
+                    value="uf_robot_hardware/UFRobotSystemHardware"/>
+  </xacro:unless>
+
+  <!-- xArm7 링크 + ros2_control 블록 생성 -->
+  <xacro:include filename="$(find xarm_description)/urdf/xarm_device_macro.xacro"/>
+  <xacro:xarm_device
+    prefix=""
+    hw_ns="xarm"
+    dof="7"
+    add_gripper="false"
+    attach_to="arm_base"
+    effort_control="false"
+    velocity_control="false"
+    limited="true"
+    robot_ip="${hw_specs['arm']['robot_ip']}"
+    ros2_control_plugin="${arm_hw_plugin}"
+  />
+
+</robot>

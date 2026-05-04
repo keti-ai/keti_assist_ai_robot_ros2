@@ -1,6 +1,8 @@
-# MoveIt trajectory execution config for FAKE hardware mode.
-# Controller names must match those defined in
-# kaair_moveit_config/config/ros2_controllers.yaml.
+# MoveIt trajectory execution config – fake 하드웨어 모드 (MoveIt mock)
+#
+# 두 개의 controller_manager 를 사용하는 구성:
+#   /arm/controller_manager  → arm_controller
+#   /body/controller_manager → lift_controller, head_controller, tool_controller
 
 trajectory_execution:
   allowed_execution_duration_scaling: 2.0
@@ -11,12 +13,12 @@ moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControll
 
 moveit_simple_controller_manager:
   controller_names:
-    - arm_controller
-    - lift_controller
-    - head_controller
-    - tool_controller
+    - /arm/arm_controller
+    - /body/lift_controller
+    - /body/head_controller
+    - /body/tool_controller
 
-  arm_controller:
+  /arm/arm_controller:
     action_ns: follow_joint_trajectory
     type: FollowJointTrajectory
     default: true
@@ -29,14 +31,14 @@ moveit_simple_controller_manager:
       - joint6
       - joint7
 
-  lift_controller:
+  /body/lift_controller:
     action_ns: follow_joint_trajectory
     type: FollowJointTrajectory
     default: true
     joints:
       - lift_joint
 
-  head_controller:
+  /body/head_controller:
     action_ns: follow_joint_trajectory
     type: FollowJointTrajectory
     default: true
@@ -44,7 +46,7 @@ moveit_simple_controller_manager:
       - head_joint1
       - head_joint2
 
-  tool_controller:
+  /body/tool_controller:
     action_ns: gripper_cmd
     type: GripperCommand
     default: true
