@@ -1,6 +1,6 @@
-# MoveIt trajectory execution config for FAKE hardware mode.
+# MoveIt trajectory execution config for REAL hardware mode.
 # Controller names must match those defined in
-# kaair_moveit_config/config/ros2_controllers.yaml.
+# kaair_controller/config/kaair_controllers.yaml.
 
 trajectory_execution:
   allowed_execution_duration_scaling: 2.0
@@ -11,12 +11,12 @@ moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControll
 
 moveit_simple_controller_manager:
   controller_names:
-    - arm_controller
+    - xarm7_traj_controller
     - lift_controller
     - head_controller
     - tool_controller
 
-  arm_controller:
+  xarm7_traj_controller:
     action_ns: follow_joint_trajectory
     type: FollowJointTrajectory
     default: true
@@ -45,8 +45,8 @@ moveit_simple_controller_manager:
       - head_joint2
 
   tool_controller:
-    action_ns: follow_joint_trajectory
-    type: FollowJointTrajectory
+    action_ns: gripper_action
+    type: GripperCommand
     default: true
     joints:
       - virtual_gripper_joint

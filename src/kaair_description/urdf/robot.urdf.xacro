@@ -39,11 +39,14 @@
       min_h="${hw_specs['lift']['min_h']}" 
       max_h="${hw_specs['lift']['max_h']}" 
     />
-    <xacro:lift_ros2_control
-      name="LiftHardware" 
-      spec="${hw_specs['lift']}"
-      use_fake_hardware="$(arg use_fake_hardware)"
-    />
+    <!-- real hw only: fake mode uses kaair_moveit_config/kaair.ros2_control.xacro FakeSystem -->
+    <xacro:unless value="$(arg use_fake_hardware)">
+      <xacro:lift_ros2_control
+        name="LiftHardware" 
+        spec="${hw_specs['lift']}"
+        use_fake_hardware="false"
+      />
+    </xacro:unless>
     <xacro:if value="${'$(arg mode)' == 'robot'}">
       <joint name="lift_to_mobile_joint" type="fixed">
         <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
@@ -59,11 +62,14 @@
     <xacro:include filename="$(find kaair_description)/urdf/head/head.ros2_control.xacro"/>
     <xacro:include filename="$(find orbbec_description)/urdf/femto_bolt.urdf.xacro"/>
   
-    <xacro:head_ros2_control 
-      name="HeadHardware" 
-      spec="${hw_specs['head']}"
-      use_fake_hardware="$(arg use_fake_hardware)"
-    />
+    <!-- real hw only: fake mode uses kaair_moveit_config/kaair.ros2_control.xacro FakeSystem -->
+    <xacro:unless value="$(arg use_fake_hardware)">
+      <xacro:head_ros2_control 
+        name="HeadHardware" 
+        spec="${hw_specs['head']}"
+        use_fake_hardware="false"
+      />
+    </xacro:unless>
 
   <xacro:femto_bolt prefix="femto" parent="head_camera_mount">
     <origin xyz="0 0 0.01" rpy="0 0 0" />
@@ -118,11 +124,14 @@
       </joint>
     </xacro:if>
 
-    <xacro:tool_ros2_control 
-      name="ToolHardware" 
-      spec="${hw_specs['tool']}"
-      use_fake_hardware="$(arg use_fake_hardware)"
-    />
+    <!-- real hw only: fake mode uses kaair_moveit_config/kaair.ros2_control.xacro FakeSystem -->
+    <xacro:unless value="$(arg use_fake_hardware)">
+      <xacro:tool_ros2_control 
+        name="ToolHardware" 
+        spec="${hw_specs['tool']}"
+        use_fake_hardware="false"
+      />
+    </xacro:unless>
 
 
     <xacro:arg name="use_nominal_extrinsics" default="false"/>

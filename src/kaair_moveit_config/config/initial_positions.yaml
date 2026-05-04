@@ -1,11 +1,14 @@
 # Default initial positions for kaair's ros2_control fake system
 
 initial_positions:
+  head_joint1: 0
+  head_joint2: 0
   joint1: 0
-  joint2: 0
+  joint2: 0.261799
   joint3: 0
-  joint4: 0
-  joint5: 0
+  joint4: 0.261799
+  joint5: -3.14159
   joint6: 0
   joint7: 0
-  lift_joint: 0
+  lift_joint: 0.2
+  virtual_gripper_joint: 0.1

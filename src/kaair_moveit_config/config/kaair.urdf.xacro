@@ -1,14 +1,44 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="kaair">
-    <xacro:arg name="initial_positions_file" default="initial_positions.yaml" />
 
-    <!-- Import kaair urdf file -->
-    <xacro:include filename="$(find kaair_description)/urdf/robot.urdf.xacro" />
+    <!-- ── Arguments ──────────────────────────────────────────────────────────
+         use_fake_hardware      : true  → MoveIt fake mode (mock_components)
+                                  false → real hardware drivers
+         mode                   : robot | lift | arm | head | tool | slamtec
+         hw_spec_file           : robot hardware spec YAML (USB ports, limits …)
+         initial_positions_file : initial joint positions for FakeSystem
+    ──────────────────────────────────────────────────────────────────────── -->
+    <xacro:arg name="use_fake_hardware"      default="true"/>
+    <xacro:arg name="mode"                   default="robot"/>
+    <xacro:arg name="hw_spec_file"           default="$(find kaair_bringup)/config/robots/kaair_specs_01.yaml"/>
+    <xacro:arg name="initial_positions_file" default="$(find kaair_moveit_config)/config/initial_positions.yaml"/>
 
-    <!-- Import control_xacro -->
-    <xacro:include filename="kaair.ros2_control.xacro" />
+    <!-- ── Robot description ──────────────────────────────────────────────────
+         Kinematics (links, joints, meshes) are always loaded from here.
 
+         ros2_control behaviour:
+           use_fake_hardware=false → per-subsystem real HW plugins are generated
+                                     (LiftHwInterface, HeadHwInterface,
+                                      UFRobotSystemHardware, ToolHwInterface)
+           use_fake_hardware=true  → kaair subsystem ros2_control blocks are
+                                     suppressed; arm gets UFRobotFakeSystemHardware
+                                     (joint1–7 only)
+    ──────────────────────────────────────────────────────────────────────── -->
+    <xacro:include filename="$(find kaair_description)/urdf/robot.urdf.xacro"/>
 
-    <xacro:kaair_ros2_control name="FakeSystem" initial_positions_file="$(arg initial_positions_file)"/>
+    <!-- ── Fake hardware: single FakeSystem for KAAIR joints ─────────────────
+         Covers: lift_joint, head_joint1, head_joint2, virtual_gripper_joint
+         Initial positions loaded from initial_positions_file YAML.
+
+         arm joints (joint1–7) are NOT listed here — they are already provided
+         by UFRobotFakeSystemHardware in robot.urdf.xacro above. Listing them
+         in two ros2_control blocks would cause a ResourceManager conflict.
+    ──────────────────────────────────────────────────────────────────────── -->
+    <xacro:if value="$(arg use_fake_hardware)">
+        <xacro:include filename="$(find kaair_moveit_config)/config/kaair.ros2_control.xacro"/>
+        <xacro:kaair_ros2_control
+            name="FakeSystem"
+            initial_positions_file="$(arg initial_positions_file)"/>
+    </xacro:if>
 
 </robot>
