@@ -45,8 +45,8 @@ moveit_simple_controller_manager:
       - head_joint2
 
   tool_controller:
-    action_ns: follow_joint_trajectory
-    type: FollowJointTrajectory
+    action_ns: gripper_cmd
+    type: GripperCommand
     default: true
     joints:
       - virtual_gripper_joint

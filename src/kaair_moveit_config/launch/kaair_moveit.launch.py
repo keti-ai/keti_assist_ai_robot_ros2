@@ -2,7 +2,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler
-from launch.event_handlers import OnProcessStart
+from launch.event_handlers import OnProcessExit, OnProcessStart
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
@@ -157,9 +157,13 @@ def launch_setup(context, *args, **kwargs):
             on_start=[arm_spawner, lift_spawner, head_spawner, tool_spawner],
         )
     )
-    # 3. arm 컨트롤러 시작 → MoveGroup 실행 (플래닝 준비 완료)
-    event_arm_to_movegroup = RegisterEventHandler(
-        OnProcessStart(target_action=arm_spawner, on_start=[move_group_node])
+    # 3. tool 컨트롤러 스포너 종료(= 모든 HW 활성화 완료) → MoveGroup 실행
+    #    OnProcessStart 대신 OnProcessExit 사용: tool_spawner 가 exit 해야
+    #    ToolHwInterface::on_activate (USB 오픈·그리퍼 초기화) 가 끝났음이 보장됨.
+    #    이 시점에는 tool_controller/gripper_action 서버도 이미 올라와 있으므로
+    #    move_group 의 action client 가 즉시 연결된다.
+    event_tool_to_movegroup = RegisterEventHandler(
+        OnProcessExit(target_action=tool_spawner, on_exit=[move_group_node])
     )
 
     return [
@@ -169,7 +173,7 @@ def launch_setup(context, *args, **kwargs):
         rviz_node,
         event_manager_to_jsb,
         event_jsb_to_spawners,
-        event_arm_to_movegroup,
+        event_tool_to_movegroup,
     ]
 
 

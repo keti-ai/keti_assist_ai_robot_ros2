@@ -15,9 +15,9 @@ namespace kaair_driver {
         device_name_ = info.hardware_parameters.at("usb_port");
         baudrate_ = std::stoi(info.hardware_parameters.at("baud_rate"));
         
-        // 2. 조인트 개수만큼 버퍼 초기화
-        hw_states_.resize(info.joints.size(), 0.0);
-        hw_commands_.resize(info.joints.size(), 0.0);
+        // 2. 조인트 버퍼 초기화 (state: position/velocity/effort 3개, command: position 1개)
+        hw_states_.resize(3, 0.0);
+        hw_commands_.resize(1, 0.0);
         
         // 3. 다이나믹셀 객체 생성
         koras_hw_ = std::make_unique<KorasHw>(device_name_, baudrate_);

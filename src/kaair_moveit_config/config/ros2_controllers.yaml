@@ -16,7 +16,7 @@ controller_manager:
 
 
     tool_controller:
-      type: joint_trajectory_controller/JointTrajectoryController
+      type: position_controllers/GripperActionController
 
 
     joint_state_broadcaster:
@@ -58,10 +58,9 @@ head_controller:
       - velocity
 tool_controller:
   ros__parameters:
-    joints:
-      - virtual_gripper_joint
-    command_interfaces:
-      - position
-    state_interfaces:
-      - position
-      - velocity
+    joint: virtual_gripper_joint
+    action_monitor_rate: 20.0
+    goal_tolerance: 0.005
+    allow_stalling: true
+    stall_timeout: 0.8
+    stall_velocity_threshold: 0.001
