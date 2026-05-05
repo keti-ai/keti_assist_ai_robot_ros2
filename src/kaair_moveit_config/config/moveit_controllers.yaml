@@ -1,8 +1,11 @@
-# MoveIt trajectory execution config – fake 하드웨어 모드 (MoveIt mock)
+# MoveIt trajectory execution config – fake / real 공통
 #
 # 두 개의 controller_manager 를 사용하는 구성:
-#   /arm/controller_manager  → arm_controller
+#   /arm/controller_manager  → xarm7_traj_controller  (fake: mock_components, real: UFRobot)
 #   /body/controller_manager → lift_controller, head_controller, tool_controller
+#
+# HW 구분은 arm_hw / body_hw xacro 의 ros2_control 플러그인으로만 처리한다.
+# 컨트롤러 이름(xarm7_traj_controller)은 fake/real 동일하다.
 
 trajectory_execution:
   allowed_execution_duration_scaling: 2.0
@@ -13,12 +16,12 @@ moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControll
 
 moveit_simple_controller_manager:
   controller_names:
-    - /arm/arm_controller
+    - /arm/xarm7_traj_controller
     - /body/lift_controller
     - /body/head_controller
     - /body/tool_controller
 
-  /arm/arm_controller:
+  /arm/xarm7_traj_controller:
     action_ns: follow_joint_trajectory
     type: FollowJointTrajectory
     default: true

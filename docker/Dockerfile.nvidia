@@ -95,6 +95,7 @@ RUN mkdir -p /xarm_ws/src /camera_ws/src /ros_ws
 # ==========================================
 RUN apt-get update && apt-get install -y \
     ros-$ROS_DISTRO-moveit \
+    ros-$ROS_DISTRO-moveit-servo \
     ros-$ROS_DISTRO-moveit-ros-planning \
     ros-$ROS_DISTRO-moveit-ros-move-group \
     ros-$ROS_DISTRO-moveit-ros-perception \

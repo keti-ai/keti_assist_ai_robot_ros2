@@ -21,32 +21,36 @@
     <color rgba="0.8 0.8 0.8 1.0"/>
   </material>
 
-  <xacro:arg name="mode" default="robot"/>
-  <xacro:arg name="hw_spec_file" default="$(find kaair_bringup)/config/robots/kaair_specs_01.yaml"/>
-  <xacro:arg name="use_fake_hardware" default="false"/>
+  <xacro:arg name="mode"                  default="robot"/>
+  <xacro:arg name="hw_spec_file"          default="$(find kaair_bringup)/config/robots/kaair_specs_01.yaml"/>
+  <xacro:arg name="use_fake_hardware"     default="false"/>
+  <!--
+    include_ros2_control
+      true  (default) – 모든 <ros2_control> 블록 포함. 단일 CM 또는 하위 호환용.
+      false           – body 계열(lift/head/tool) <ros2_control> 블록 제외.
+                        RSP 전용 URDF로 사용할 때 지정한다.
+                        arm 섹션은 xacro:xarm_device 매크로가 <ros2_control> 블록을
+                        자동 생성하므로 완전 제외 불가. RSP 동작에는 영향 없음.
+                        2-CM 구조에서 arm CM은 arm_hw.urdf.xacro,
+                        body CM은 body_hw.urdf.xacro 를 각자의 robot_description 으로 사용한다.
+  -->
+  <xacro:arg name="include_ros2_control"  default="true"/>
 
   <xacro:property name="hw_specs" value="${xacro.load_yaml('$(arg hw_spec_file)')}"/>
 
+  <!-- ── Slamtec (mobile base) ────────────────────────────────────────── -->
   <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'slamtec'}">
     <xacro:include filename="$(find kaair_description)/urdf/slamtec/slamtec.urdf.xacro"/>
   </xacro:if>
 
-
+  <!-- ── Lift ─────────────────────────────────────────────────────────── -->
   <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'lift'}">
     <xacro:include filename="$(find kaair_description)/urdf/lift/lift.urdf.xacro"/>
     <xacro:include filename="$(find kaair_description)/urdf/lift/lift.ros2_control.xacro"/>
-    <xacro:lift_module 
-      min_h="${hw_specs['lift']['min_h']}" 
-      max_h="${hw_specs['lift']['max_h']}" 
+    <xacro:lift_module
+      min_h="${hw_specs['lift']['min_h']}"
+      max_h="${hw_specs['lift']['max_h']}"
     />
-    <!-- real hw only: fake mode uses kaair_moveit_config/kaair.ros2_control.xacro FakeSystem -->
-    <xacro:unless value="$(arg use_fake_hardware)">
-      <xacro:lift_ros2_control
-        name="LiftHardware" 
-        spec="${hw_specs['lift']}"
-        use_fake_hardware="false"
-      />
-    </xacro:unless>
     <xacro:if value="${'$(arg mode)' == 'robot'}">
       <joint name="lift_to_mobile_joint" type="fixed">
         <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
@@ -54,26 +58,27 @@
         <child link="lift_base_link"/>
       </joint>
     </xacro:if>
-
+    <!-- ros2_control: include_ros2_control=true 이고 real HW 일 때만 삽입 -->
+    <xacro:if value="$(arg include_ros2_control)">
+      <xacro:unless value="$(arg use_fake_hardware)">
+        <xacro:lift_ros2_control
+          name="LiftHardware"
+          spec="${hw_specs['lift']}"
+          use_fake_hardware="false"
+        />
+      </xacro:unless>
+    </xacro:if>
   </xacro:if>
 
+  <!-- ── Head ─────────────────────────────────────────────────────────── -->
   <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'head'}">
     <xacro:include filename="$(find kaair_description)/urdf/head/head.urdf.xacro"/>
     <xacro:include filename="$(find kaair_description)/urdf/head/head.ros2_control.xacro"/>
     <xacro:include filename="$(find orbbec_description)/urdf/femto_bolt.urdf.xacro"/>
-  
-    <!-- real hw only: fake mode uses kaair_moveit_config/kaair.ros2_control.xacro FakeSystem -->
-    <xacro:unless value="$(arg use_fake_hardware)">
-      <xacro:head_ros2_control 
-        name="HeadHardware" 
-        spec="${hw_specs['head']}"
-        use_fake_hardware="false"
-      />
-    </xacro:unless>
 
-  <xacro:femto_bolt prefix="femto" parent="head_camera_mount">
-    <origin xyz="0 0 0.01" rpy="0 0 0" />
-  </xacro:femto_bolt>
+    <xacro:femto_bolt prefix="femto" parent="head_camera_mount">
+      <origin xyz="0 0 0.01" rpy="0 0 0"/>
+    </xacro:femto_bolt>
 
     <xacro:if value="${'$(arg mode)' == 'robot'}">
       <joint name="lift_to_head_fix_joint" type="fixed">
@@ -82,37 +87,56 @@
         <child link="head_base"/>
       </joint>
     </xacro:if>
-    
+    <!-- ros2_control: include_ros2_control=true 이고 real HW 일 때만 삽입 -->
+    <xacro:if value="$(arg include_ros2_control)">
+      <xacro:unless value="$(arg use_fake_hardware)">
+        <xacro:head_ros2_control
+          name="HeadHardware"
+          spec="${hw_specs['head']}"
+          use_fake_hardware="false"
+        />
+      </xacro:unless>
+    </xacro:if>
   </xacro:if>
 
+  <!-- ── Arm (xArm7) ──────────────────────────────────────────────────── -->
+  <!--
+    xacro:xarm_device 는 URDF 키네마틱과 <ros2_control> 블록을 함께 생성하는 매크로이므로
+    include_ros2_control=false 여도 <ros2_control> 블록이 포함된다.
+    RSP 는 이를 무시하므로 동작에 영향 없다.
+    2-CM 구조에서 실제 arm hardware 는 arm_hw.urdf.xacro 를 통해 arm CM 이 관리한다.
+  -->
   <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'arm'}">
     <xacro:unless value="${'$(arg mode)' == 'robot'}">
       <link name="arm_base"/>
     </xacro:unless>
-    
+
     <xacro:property name="arm_hw_plugin" value="uf_robot_hardware/UFRobotSystemHardware"/>
-    
     <xacro:if value="$(arg use_fake_hardware)">
       <xacro:property name="arm_hw_plugin" value="uf_robot_hardware/UFRobotFakeSystemHardware"/>
     </xacro:if>
+    <!-- include_ros2_control=false(RSP 전용)일 때는 GenericSystem 으로 대체하여
+         실제 HW 연결 시도 없이 키네마틱 구조만 사용한다. -->
+    <xacro:if value="${not '$(arg include_ros2_control)' == 'true'}">
+      <xacro:property name="arm_hw_plugin" value="mock_components/GenericSystem"/>
+    </xacro:if>
 
     <xacro:include filename="$(find xarm_description)/urdf/xarm_device_macro.xacro"/>
-
-    <xacro:xarm_device 
+    <xacro:xarm_device
       prefix=""
       hw_ns="xarm"
       dof="7"
       add_gripper="false"
       attach_to="arm_base"
-      effort_control="false" 
+      effort_control="false"
       velocity_control="false"
       limited="true"
       robot_ip="${hw_specs['arm']['robot_ip']}"
       ros2_control_plugin="${arm_hw_plugin}"
     />
-  
   </xacro:if>
 
+  <!-- ── Tool (gripper + D405) ────────────────────────────────────────── -->
   <xacro:if value="${'$(arg mode)' == 'robot' or '$(arg mode)' == 'tool'}">
     <xacro:include filename="$(find kaair_description)/urdf/tool/tool.urdf.xacro"/>
     <xacro:include filename="$(find kaair_description)/urdf/tool/tool_ros2_control.xacro"/>
@@ -124,25 +148,23 @@
         <child link="hand_base_link"/>
       </joint>
     </xacro:if>
-
-    <!-- real hw only: fake mode uses kaair_moveit_config/kaair.ros2_control.xacro FakeSystem -->
-    <xacro:unless value="$(arg use_fake_hardware)">
-      <xacro:tool_ros2_control 
-        name="ToolHardware" 
-        spec="${hw_specs['tool']}"
-        use_fake_hardware="false"
-      />
-    </xacro:unless>
-
+    <!-- ros2_control: include_ros2_control=true 이고 real HW 일 때만 삽입 -->
+    <xacro:if value="$(arg include_ros2_control)">
+      <xacro:unless value="$(arg use_fake_hardware)">
+        <xacro:tool_ros2_control
+          name="ToolHardware"
+          spec="${hw_specs['tool']}"
+          use_fake_hardware="false"
+        />
+      </xacro:unless>
+    </xacro:if>
 
     <xacro:arg name="use_nominal_extrinsics" default="false"/>
-    <xacro:arg name="add_plug" default="true"/>
-    <xacro:include filename="$(find realsense2_description)/urdf/_d405.urdf.xacro" />
-    
+    <xacro:arg name="add_plug"               default="true"/>
+    <xacro:include filename="$(find realsense2_description)/urdf/_d405.urdf.xacro"/>
     <xacro:sensor_d405 parent="vision_frame_link" use_nominal_extrinsics="$(arg use_nominal_extrinsics)">
       <origin xyz="0.04428 0 0.02185" rpy="0 -1.5707963267948966 -3.1415926535897931"/>
     </xacro:sensor_d405>
-
   </xacro:if>
 
 

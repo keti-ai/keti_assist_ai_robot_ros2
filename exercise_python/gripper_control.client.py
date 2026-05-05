@@ -9,7 +9,7 @@ class GripperActionClient(Node):
     def __init__(self):
         super().__init__('gripper_action_client')
         # 설정파일의 'tool_controller' 이름과 일치하도록 경로 수정
-        self._client = ActionClient(self, GripperCommand, '/tool_controller/gripper_cmd')
+        self._client = ActionClient(self, GripperCommand, '/body/tool_controller/gripper_cmd')
 
     def send_goal(self, position, effort=50.0):
         self.get_logger().info('그리퍼 액션 서버 대기 중...')

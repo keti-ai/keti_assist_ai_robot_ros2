@@ -14,7 +14,7 @@ class HeadDirectController(Node):
         self.JOINT_NAMES = ['head_joint1', 'head_joint2']
 
         # 컨트롤러 액션 클라이언트
-        self._client = ActionClient(self, FollowJointTrajectory, '/head_controller/follow_joint_trajectory')
+        self._client = ActionClient(self, FollowJointTrajectory, '/body/head_controller/follow_joint_trajectory')
 
     def move_head(self, target_pos):
         if not self._client.wait_for_server(timeout_sec=5.0):

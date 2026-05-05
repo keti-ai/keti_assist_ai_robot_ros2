@@ -21,9 +21,10 @@ install(DIRECTORY
 
 # 1. 경로와 이름을 공백이나 줄바꿈으로 나열 (세미콜론 제외)
 set(PYTHON_NODES
-  "kaair_bringup/server_worker/location_server.py" "location_server"
-  "kaair_bringup/server_worker/xarm_bridge.py"     "xarm_bridge"
-  "kaair_bringup/motion_worker/lift_move_action_server.py" "lift_move_action_server"
+  "kaair_bringup/server_worker/location_server.py"          "location_server"
+  "kaair_bringup/server_worker/xarm_bridge.py"              "xarm_bridge"
+  "kaair_bringup/motion_worker/lift_move_action_server.py"  "lift_move_action_server"
+  "kaair_bringup/motion_worker/servo_manager.py"            "servo_manager"
   # "추가경로" "추가이름"
 )
 

@@ -1,0 +1,66 @@
+###############################################################################
+# servo_config.yaml
+# MoveIt Servo 설정 (kaair xArm7, 2-CM 구조)
+#
+# 출력 방식: trajectory_msgs/JointTrajectory 토픽 → /arm/xarm7_traj_controller
+#   - controller 를 추가/교체할 필요 없이 기존 JTC 그대로 사용
+#   - servo ON/OFF 는 servo_manager 노드의 ~/enable (SetBool) 서비스로 제어
+#
+# 입력 토픽 (servo_manager 가 enable 후 외부에서 publish):
+#   Cartesian: /servo_node/delta_twist_cmds  (geometry_msgs/TwistStamped)
+#   Joint    : /servo_node/delta_joint_cmds  (control_msgs/JointJog)
+###############################################################################
+
+moveit_servo:
+
+  # ── 출력 설정 ──────────────────────────────────────────────────────────────
+  # JTC 의 joint_trajectory 토픽에 직접 publish (action 아님)
+  command_out_type: trajectory_msgs/JointTrajectory
+  command_out_topic: /arm/xarm7_traj_controller/joint_trajectory
+
+  publish_joint_positions:     true
+  publish_joint_velocities:    true
+  publish_joint_accelerations: false
+
+  # ── 주기 및 horizon 설정 ───────────────────────────────────────────────────
+  # publish_period: servo 출력 주기 (sec)
+  #   xArm 권장: 0.034 (약 30Hz). 너무 짧으면 JTC 큐가 비어 진동 발생.
+  publish_period: 0.034
+
+  # incoming_command_timeout: 이 시간(sec) 내에 명령이 없으면 servo 내부적으로 정지
+  incoming_command_timeout: 0.1
+
+  # ── 입력 토픽 ──────────────────────────────────────────────────────────────
+  cartesian_command_in_topic: ~/delta_twist_cmds
+  joint_command_in_topic:     ~/delta_joint_cmds
+  robot_link_command_frame:   link_eef
+
+  # ── 상태/진단 ──────────────────────────────────────────────────────────────
+  joint_topic:  /arm/joint_states
+  status_topic: ~/status
+
+  # ── 플래닝 그룹 및 엔드이펙터 ──────────────────────────────────────────────
+  move_group_name: xarm7
+  ee_frame_name:   link_eef
+  planning_frame:  arm_base
+
+  # ── 충돌 체크 ──────────────────────────────────────────────────────────────
+  check_collisions:                     true
+  collision_check_rate:                 10.0       # Hz
+  self_collision_proximity_threshold:   0.01       # m
+  scene_collision_proximity_threshold:  0.02       # m
+
+  # ── 싱귤래리티 처리 ─────────────────────────────────────────────────────────
+  lower_singularity_threshold: 17.0   # 이 값 이하에서 감속 시작
+  hard_stop_singularity_threshold: 30.0  # 이 값 이하에서 완전 정지
+
+  # ── 저역통과 필터 ──────────────────────────────────────────────────────────
+  # 클수록 부드러움(과거값 가중↑), 작을수록 빠른 응답
+  low_pass_filter_coeff: 2.0
+
+  # ── 관절 제한 ──────────────────────────────────────────────────────────────
+  # override_velocity_scaling_factor: 최대 속도 비율 (0.0~1.0, 0=자동)
+  override_velocity_scaling_factor: 0.0
+
+  # ── 내부 파라미터 ──────────────────────────────────────────────────────────
+  use_gazebo: false
