@@ -17,14 +17,23 @@ kaair_moveit.launch.py
   │       fake: arm.ros2_control.xacro → mock_components/GenericSystem  │
   │       real: xacro:xarm_device      → UFRobotSystemHardware          │
   │     kaair_controller/config/arm_controllers.yaml                   │
-  │     spawner: joint_state_broadcaster, xarm7_traj_controller         │
+  │     spawner: joint_state_broadcaster                                 │
+  │             xarm7_traj_controller [ACTIVE]                          │
+  │             xarm7_forward_controller [INACTIVE]                     │
   ├─────────────────────────────────────────────────────────────────────┤
   │  /body/controller_manager                                           │
   │  └─ body_hw.urdf.xacro                                             │
   │       fake: kaair.ros2_control.xacro → mock_components/GenericSystem│
   │       real: lift/head/tool HW interfaces                            │
   │     kaair_controller/config/body_controllers.yaml                  │
-  │     spawner: joint_state_broadcaster, lift/head/tool_controller     │
+  │     spawner: joint_state_broadcaster                                │
+  │             lift/head/tool_controller       [ACTIVE]               │
+  │             lift/head/tool_forward_controller [INACTIVE]           │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │  controller_mode_switcher                                           │
+  │  └─ ~/switch_mode (SetBool)                                         │
+  │       true  → FORWARD 모드 (ForwardCommandController, 토픽 제어)    │
+  │       false → NORMAL  모드 (JTC/Action, MoveIt 제어) ← 기본값       │
   ├─────────────────────────────────────────────────────────────────────┤
   │  joint_state_publisher (merger)                                     │
   │  └─ /arm/joint_states + /body/joint_states → /joint_states         │
@@ -132,6 +141,9 @@ def launch_setup(context, *args, **kwargs):
         .to_moveit_configs()
     )
 
+    # ── servo_config.yaml 경로 ────────────────────────────────────────────
+    servo_config_file = os.path.join(moveit_pkg, 'config', 'servo_config.yaml')
+
     # ── xArm API 파라미터 (실제 HW + arm CM 에서만 사용) ─────────────────
     xarm_api_params = {}
     if not use_fake:
@@ -154,6 +166,22 @@ def launch_setup(context, *args, **kwargs):
         executable='move_group',
         output='screen',
         parameters=[moveit_config.to_dict()],
+    )
+
+    # [F] MoveIt Servo ─ 실시간 관절 속도 명령 처리 (move_group 기동 후 시작)
+    # 입력 : /servo_node/delta_joint_cmds  (control_msgs/JointJog)
+    # 출력 : /arm/xarm7_traj_controller/joint_trajectory
+    servo_node = Node(
+        package='moveit_servo',
+        executable='servo_node_main',
+        name='servo_node',
+        output='screen',
+        parameters=[
+            servo_config_file,
+            moveit_config.robot_description,
+            moveit_config.robot_description_semantic,
+            moveit_config.robot_description_kinematics,
+        ],
     )
 
     # [B] Robot State Publisher ─ kaair.urdf.xacro (kinematics only)
@@ -239,6 +267,15 @@ def launch_setup(context, *args, **kwargs):
             '--controller-manager', '/arm/controller_manager',
         ],
     )
+    xarm7_fwd_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=[
+            'xarm7_forward_controller',
+            '--controller-manager', '/arm/controller_manager',
+            '--inactive',
+        ],
+    )
 
     # ════════════════════════════════════════════════════════════════════════
     # body Controller Manager (namespace: /body)
@@ -259,6 +296,7 @@ def launch_setup(context, *args, **kwargs):
             '--controller-manager', '/body/controller_manager',
         ],
     )
+    # ── body 정규 컨트롤러 (ACTIVE) ─────────────────────────────────────
     lift_spawner = Node(
         package='controller_manager',
         executable='spawner',
@@ -276,6 +314,39 @@ def launch_setup(context, *args, **kwargs):
         executable='spawner',
         arguments=['tool_controller',
                    '--controller-manager', '/body/controller_manager'],
+    )
+
+    # ── body Forward 컨트롤러 (INACTIVE) ─────────────────────────────────
+    # 기동 시 configured 상태로만 올라옴. 전환은 controller_mode_switcher 서비스로.
+    lift_fwd_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['lift_forward_controller',
+                   '--controller-manager', '/body/controller_manager',
+                   '--inactive'],
+    )
+    head_fwd_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['head_forward_controller',
+                   '--controller-manager', '/body/controller_manager',
+                   '--inactive'],
+    )
+    tool_fwd_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['tool_forward_controller',
+                   '--controller-manager', '/body/controller_manager',
+                   '--inactive'],
+    )
+
+    # ── 컨트롤러 모드 전환 노드 ───────────────────────────────────────────
+    # tool_spawner 종료(모든 정규 컨트롤러 활성화 완료) 후 기동
+    ctrl_mode_switcher_node = Node(
+        package='kaair_bringup',
+        executable='controller_mode_switcher',
+        name='controller_mode_switcher',
+        output='screen',
     )
 
     # ════════════════════════════════════════════════════════════════════════
@@ -313,7 +384,8 @@ def launch_setup(context, *args, **kwargs):
         )),
         RegisterEventHandler(OnProcessStart(
             target_action=arm_jsb_spawner,
-            on_start=[arm_ctrl_spawner],
+            # xarm7_traj_controller(ACTIVE) + xarm7_forward_controller(INACTIVE) 동시 스폰
+            on_start=[arm_ctrl_spawner, xarm7_fwd_spawner],
         )),
 
         # body Controller Manager
@@ -324,13 +396,19 @@ def launch_setup(context, *args, **kwargs):
         )),
         RegisterEventHandler(OnProcessStart(
             target_action=body_jsb_spawner,
-            on_start=[lift_spawner, head_spawner, tool_spawner],
+            # 정규(ACTIVE) + Forward(INACTIVE) 동시 스폰
+            on_start=[
+                lift_spawner, lift_fwd_spawner,
+                head_spawner, head_fwd_spawner,
+                tool_spawner, tool_fwd_spawner,
+            ],
         )),
 
-        # 모든 HW 활성화 완료 후 move_group 기동
+        # tool_spawner 종료 = body HW 전체 준비 완료
+        #   → move_group + controller_mode_switcher 동시 기동
         RegisterEventHandler(OnProcessExit(
             target_action=tool_spawner,
-            on_exit=[move_group_node],
+            on_exit=[move_group_node, ctrl_mode_switcher_node],
         )),
     ]
 

@@ -11,10 +11,16 @@
       type: joint_state_broadcaster/JointStateBroadcaster
     lift_controller:
       type: joint_trajectory_controller/JointTrajectoryController
+    lift_forward_controller:
+      type: forward_command_controller/ForwardCommandController
     head_controller:
       type: joint_trajectory_controller/JointTrajectoryController
+    head_forward_controller:
+      type: forward_command_controller/ForwardCommandController
     tool_controller:
       type: position_controllers/GripperActionController
+    tool_forward_controller:
+      type: forward_command_controller/ForwardCommandController
 
 /body/lift_controller:
   ros__parameters:
@@ -34,6 +40,12 @@
         trajectory: 0.0
         goal: 0.005
 
+/body/lift_forward_controller:
+  ros__parameters:
+    joints:
+      - lift_joint
+    interface_name: position
+
 /body/head_controller:
   ros__parameters:
     joints:
@@ -48,6 +60,13 @@
       head_joint1: {trajectory: 0.0, goal: 0.07}
       head_joint2: {trajectory: 0.0, goal: 0.07}
 
+/body/head_forward_controller:
+  ros__parameters:
+    joints:
+      - head_joint1
+      - head_joint2
+    interface_name: position
+
 /body/tool_controller:
   ros__parameters:
     joint: virtual_gripper_joint
@@ -56,3 +75,9 @@
     allow_stalling: true
     stall_timeout: 0.8
     stall_velocity_threshold: 0.001
+
+/body/tool_forward_controller:
+  ros__parameters:
+    joints:
+      - virtual_gripper_joint
+    interface_name: position

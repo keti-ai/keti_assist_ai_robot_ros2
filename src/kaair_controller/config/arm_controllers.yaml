@@ -11,6 +11,8 @@
       type: joint_state_broadcaster/JointStateBroadcaster
     xarm7_traj_controller:
       type: joint_trajectory_controller/JointTrajectoryController
+    xarm7_forward_controller:
+      type: forward_command_controller/ForwardCommandController
 
 /arm/xarm7_traj_controller:
   ros__parameters:
@@ -42,3 +44,15 @@
     state_publish_rate: 25.0
     action_monitor_rate: 10.0
     open_loop_control: true
+
+/arm/xarm7_forward_controller:
+  ros__parameters:
+    joints:
+      - joint1
+      - joint2
+      - joint3
+      - joint4
+      - joint5
+      - joint6
+      - joint7
+    interface_name: position

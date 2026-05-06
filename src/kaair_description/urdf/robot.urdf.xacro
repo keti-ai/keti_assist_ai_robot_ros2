@@ -130,7 +130,6 @@
       attach_to="arm_base"
       effort_control="false"
       velocity_control="false"
-      limited="true"
       robot_ip="${hw_specs['arm']['robot_ip']}"
       ros2_control_plugin="${arm_hw_plugin}"
     />
