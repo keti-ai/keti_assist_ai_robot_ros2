@@ -45,11 +45,25 @@ class MasterController(Node):
         self.declare_parameter('arm_preset_time_sec', 3.0)
         self.declare_parameter('master_joint_states_topic', '/master/joint_states')
         self.declare_parameter('master_command_topic', '/master/joint_commands')
+        self.declare_parameter('arm_fwd_max_step_rad', 0.03)  # forward publish 1회당 joint 최대 변화량
+        self.declare_parameter('arm_fwd_deadband_rad', 0.001)  # 이 이하 오차는 무시
+        # master_joint8 -> tool(open/close) 매핑 (tool range: 0.0 ~ 0.1)
+        # master_joint8 range: [-0.47 .. 0.0] (close .. open)
+        self.declare_parameter('tool_open_pos', 0.1)
+        self.declare_parameter('tool_close_pos', 0.0)
+        self.declare_parameter('tool_toggle_threshold', -0.235)  # m8 < threshold => close, else open
+        self.declare_parameter('tool_cmd_epsilon', 1e-4)  # 동일 명령 반복 publish 방지
 
         self._lift_step    = self.get_parameter('lift_step').value
         self._head_step    = self.get_parameter('head_step').value
         self._control_hz   = self.get_parameter('control_hz').value
         self._arm_preset_time_sec = float(self.get_parameter('arm_preset_time_sec').value)
+        self._arm_fwd_max_step_rad = float(self.get_parameter('arm_fwd_max_step_rad').value)
+        self._arm_fwd_deadband_rad = float(self.get_parameter('arm_fwd_deadband_rad').value)
+        self._tool_open_pos = float(self.get_parameter('tool_open_pos').value)
+        self._tool_close_pos = float(self.get_parameter('tool_close_pos').value)
+        self._tool_toggle_threshold = float(self.get_parameter('tool_toggle_threshold').value)
+        self._tool_cmd_epsilon = float(self.get_parameter('tool_cmd_epsilon').value)
         joint_states_topic = self.get_parameter('joint_states_topic').value
         master_joint_states_topic = self.get_parameter('master_joint_states_topic').value
         master_command_topic = self.get_parameter('master_command_topic').value
@@ -77,6 +91,9 @@ class MasterController(Node):
         # URDF 파싱 완료 플래그 (모든 joint limit 수신 후 콜백 무시)
         self._limits_loaded = set()  # 파싱된 joint 이름 집합
         self._current_master_joint8 = None
+        self._last_arm_fwd_cmd = None  # rate-limit용 이전 명령(7축)
+        self._current_arm_pos7 = None  # 실제 arm 현재값(joint1~7)
+        self._last_tool_cmd = None
 
         self._cbg = ReentrantCallbackGroup()
 
@@ -113,6 +130,9 @@ class MasterController(Node):
         )
         self._head_pub = self.create_publisher(
             Float64MultiArray, '/body/head_forward_controller/commands', 10,
+        )
+        self._tool_fwd_pub = self.create_publisher(
+            Float64MultiArray, '/body/tool_forward_controller/commands', 10,
         )
         self._arm_traj_pub = self.create_publisher(
             JointTrajectory, '/arm/xarm7_traj_controller/joint_trajectory', 10,
@@ -185,6 +205,19 @@ class MasterController(Node):
             self._current_head1_pos = msg.position[names.index('head_joint1')]
         if 'head_joint2' in names:
             self._current_head2_pos = msg.position[names.index('head_joint2')]
+        # arm 현재값도 캐시 (forward 재진입 시 점프 방지 seed로 사용)
+        arm_pos = []
+        for jn in _ARM_JOINT_NAMES:
+            if jn not in names:
+                arm_pos = []
+                break
+            idx = names.index(jn)
+            if idx >= len(msg.position):
+                arm_pos = []
+                break
+            arm_pos.append(float(msg.position[idx]))
+        if arm_pos:
+            self._current_arm_pos7 = arm_pos
 
     def _mode_callback(self, msg: String):
         self._current_mode = msg.data
@@ -209,14 +242,55 @@ class MasterController(Node):
                 master_pose7.append(float(msg.position[idx]))
 
             if master_pose7:
+                cmd7 = self._rate_limit_arm_forward(master_pose7)
                 arm_cmd = Float64MultiArray()
-                arm_cmd.data = master_pose7
+                arm_cmd.data = cmd7
                 self._arm_fwd_pub.publish(arm_cmd)
 
         if 'master_joint_8' in msg.name:
             idx = msg.name.index('master_joint_8')
             if idx < len(msg.position):
                 self._current_master_joint8 = float(msg.position[idx])
+                self._maybe_publish_tool_from_master_joint8(self._current_master_joint8)
+
+    def _maybe_publish_tool_from_master_joint8(self, m8: float) -> None:
+        # axis3 forward일 때만 tool forward command 발행
+        if self._axis3_forward_state is not True:
+            return
+
+        # open/close 토글 (open/close만 되면 됨)
+        tool_pos = self._tool_close_pos if m8 < self._tool_toggle_threshold else self._tool_open_pos
+
+        if self._last_tool_cmd is not None and abs(tool_pos - self._last_tool_cmd) <= self._tool_cmd_epsilon:
+            return
+        self._last_tool_cmd = tool_pos
+
+        cmd = Float64MultiArray()
+        cmd.data = [tool_pos]
+        self._tool_fwd_pub.publish(cmd)
+
+    def _rate_limit_arm_forward(self, target7: list[float]) -> list[float]:
+        """forward(position) 명령을 주기당 최대 변화량으로 제한한다."""
+        if self._last_arm_fwd_cmd is None:
+            self._last_arm_fwd_cmd = list(target7)
+            return list(target7)
+
+        out = []
+        max_step = max(self._arm_fwd_max_step_rad, 1e-6)
+        deadband = max(self._arm_fwd_deadband_rad, 0.0)
+        for cur, tgt in zip(self._last_arm_fwd_cmd, target7):
+            err = tgt - cur
+            if abs(err) <= deadband:
+                out.append(cur)
+                continue
+            if err > max_step:
+                out.append(cur + max_step)
+            elif err < -max_step:
+                out.append(cur - max_step)
+            else:
+                out.append(tgt)
+        self._last_arm_fwd_cmd = list(out)
+        return out
 
     # ── 제어 타이머 콜백 ─────────────────────────────────────────────────────
 
@@ -378,6 +452,15 @@ class MasterController(Node):
         if self._axis3_forward_state is requested_forward:
             return
         self._axis3_forward_state = requested_forward
+        # forward 재진입 시 이전 세션 명령 잔상(front 등)으로 튀지 않게
+        # 실제 arm 현재값으로 rate-limit 기준을 재시드한다.
+        if requested_forward:
+            if self._current_arm_pos7 is not None:
+                self._last_arm_fwd_cmd = list(self._current_arm_pos7)
+            else:
+                self._last_arm_fwd_cmd = None
+        else:
+            self._last_arm_fwd_cmd = None
         self._call_switch_arm_mode(data=requested_forward)
 
     def on_button_pressed(self, index):
