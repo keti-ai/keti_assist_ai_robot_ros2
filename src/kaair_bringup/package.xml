@@ -14,7 +14,11 @@
   <depend>kaair_obstacle</depend>
   <depend>kaair_apps</depend>
   <depend>xarm_controller</depend>
-  
+
+  <exec_depend>dynamixel_sdk</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+
   <exec_depend>uf_ros_lib</exec_depend>
   <exec_depend>kaair_moveit_config</exec_depend>
 

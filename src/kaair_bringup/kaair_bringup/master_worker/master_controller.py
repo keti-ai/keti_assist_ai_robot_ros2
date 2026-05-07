@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import io
 import math
 import sys
@@ -9,6 +11,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from sensor_msgs.msg import Joy, JointState
 from std_msgs.msg import Bool, Float64MultiArray, String
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from urdf_parser_py.urdf import URDF
 
 
@@ -20,6 +23,14 @@ _LATCHED_QOS = QoSProfile(
 
 # URDF에서 읽어올 joint 이름 목록
 _JOINTS_TO_PARSE = ['lift_joint', 'head_joint1', 'head_joint2']
+_ARM_JOINT_NAMES = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6', 'joint7']
+_ARM_HOME_POSE = [0.0, 0.261799, 0.0, 0.261799, -3.14159, 0.0, 0.0]
+_ARM_LEFT_READY_POSE = [-1.5708, 0.2618, 0.0, 0.2618, -3.1416, 1.5708, 0.0]
+_ARM_RIGHT_READY_POSE = [1.5708, 0.2618, 0.0, 0.2618, -3.1416, 1.5708, 0.0]
+_MASTER_JOINT_NAMES = [
+    'master_joint_1', 'master_joint_2', 'master_joint_3', 'master_joint_4',
+    'master_joint_5', 'master_joint_6', 'master_joint_7', 'master_joint_8'
+]
 
 
 class MasterController(Node):
@@ -31,16 +42,23 @@ class MasterController(Node):
         self.declare_parameter('head_step',     0.02)   # 타이머 1회당 head 이동량 (rad)
         self.declare_parameter('control_hz',    50.0)   # 제어 명령 주기 (Hz)
         self.declare_parameter('joint_states_topic', '/joint_states')
+        self.declare_parameter('arm_preset_time_sec', 3.0)
+        self.declare_parameter('master_joint_states_topic', '/master/joint_states')
+        self.declare_parameter('master_command_topic', '/master/joint_commands')
 
         self._lift_step    = self.get_parameter('lift_step').value
         self._head_step    = self.get_parameter('head_step').value
         self._control_hz   = self.get_parameter('control_hz').value
+        self._arm_preset_time_sec = float(self.get_parameter('arm_preset_time_sec').value)
         joint_states_topic = self.get_parameter('joint_states_topic').value
+        master_joint_states_topic = self.get_parameter('master_joint_states_topic').value
+        master_command_topic = self.get_parameter('master_command_topic').value
 
         # ── 상태 ─────────────────────────────────────────────────────────────
         self.prev_buttons  = []
         self._current_axes = []           # Joy axes 전체 저장
         self._current_mode = 'normal'
+        self._axis3_forward_state = None  # axis[3] 기반 arm 모드 요청 상태 캐시
 
         # lift
         self._current_lift_pos = None
@@ -58,6 +76,7 @@ class MasterController(Node):
 
         # URDF 파싱 완료 플래그 (모든 joint limit 수신 후 콜백 무시)
         self._limits_loaded = set()  # 파싱된 joint 이름 집합
+        self._current_master_joint8 = None
 
         self._cbg = ReentrantCallbackGroup()
 
@@ -68,6 +87,10 @@ class MasterController(Node):
         self.create_subscription(
             JointState, joint_states_topic,
             self._joint_state_callback, 10, callback_group=self._cbg,
+        )
+        self.create_subscription(
+            JointState, master_joint_states_topic,
+            self._master_joint_state_callback, 10, callback_group=self._cbg,
         )
         self.create_subscription(
             String, '/robot_description',
@@ -82,11 +105,20 @@ class MasterController(Node):
         self._mode_switch_pub = self.create_publisher(
             Bool, '/controller_mode_switcher/switch_mode_cmd', 10,
         )
+        self._arm_mode_switch_pub = self.create_publisher(
+            Bool, '/controller_mode_switcher/switch_arm_mode_cmd', 10,
+        )
         self._lift_pub = self.create_publisher(
             Float64MultiArray, '/body/lift_forward_controller/commands', 10,
         )
         self._head_pub = self.create_publisher(
             Float64MultiArray, '/body/head_forward_controller/commands', 10,
+        )
+        self._arm_traj_pub = self.create_publisher(
+            JointTrajectory, '/arm/xarm7_traj_controller/joint_trajectory', 10,
+        )
+        self._master_cmd_pub = self.create_publisher(
+            JointState, master_command_topic, 10,
         )
 
         # ── 제어 타이머 ───────────────────────────────────────────────────────
@@ -153,6 +185,12 @@ class MasterController(Node):
 
     def _mode_callback(self, msg: String):
         self._current_mode = msg.data
+
+    def _master_joint_state_callback(self, msg: JointState):
+        if 'master_joint_8' in msg.name:
+            idx = msg.name.index('master_joint_8')
+            if idx < len(msg.position):
+                self._current_master_joint8 = float(msg.position[idx])
 
     # ── 제어 타이머 콜백 ─────────────────────────────────────────────────────
 
@@ -222,11 +260,66 @@ class MasterController(Node):
             f'Mode switch command published: {"forward" if data else "normal"}'
         )
 
+    def _call_switch_arm_mode(self, data: bool):
+        msg = Bool()
+        msg.data = data
+        self._arm_mode_switch_pub.publish(msg)
+        self.get_logger().info(
+            f'Arm mode switch command published: {"forward" if data else "normal"}'
+        )
+
+    def _publish_arm_preset_traj(self, pose: list[float], label: str):
+        if self._current_mode != 'normal':
+            self.get_logger().warn(
+                f'Arm {label} preset ignored: only allowed in normal mode.'
+            )
+            return
+
+        traj = JointTrajectory()
+        traj.header.stamp = self.get_clock().now().to_msg()
+        traj.joint_names = list(_ARM_JOINT_NAMES)
+
+        point = JointTrajectoryPoint()
+        point.positions = list(pose)
+        point.time_from_start.sec = int(self._arm_preset_time_sec)
+        point.time_from_start.nanosec = int(
+            (self._arm_preset_time_sec - int(self._arm_preset_time_sec)) * 1e9
+        )
+        traj.points = [point]
+
+        self._arm_traj_pub.publish(traj)
+        self.get_logger().info(
+            f'Arm {label} preset: published /arm/xarm7_traj_controller/joint_trajectory '
+            f'pose={pose}, t={self._arm_preset_time_sec:.2f}s'
+        )
+        self._publish_master_command_from_arm_pose(pose, label)
+
+    def _publish_master_command_from_arm_pose(self, pose7: list[float], label: str):
+        if len(pose7) != 7:
+            return
+
+        joint8 = self._current_master_joint8 if self._current_master_joint8 is not None else 0.0
+        if self._current_master_joint8 is None:
+            self.get_logger().warn(
+                'master_joint_8 current 값이 없어 0.0으로 /master/command 발행',
+                throttle_duration_sec=2.0,
+            )
+
+        cmd = JointState()
+        cmd.header.stamp = self.get_clock().now().to_msg()
+        cmd.name = list(_MASTER_JOINT_NAMES)
+        cmd.position = list(pose7) + [joint8]
+        self._master_cmd_pub.publish(cmd)
+        self.get_logger().info(
+            f'Master {label} command: published /master/command (j1..j7 preset, j8={joint8:.4f})'
+        )
+
     # ── 조이스틱 콜백 ────────────────────────────────────────────────────────
 
     def joy_callback(self, msg: Joy):
         # axes 전체를 매 메시지마다 갱신 (head 제어에 사용)
         self._current_axes = list(msg.axes)
+        self._update_mode_from_axis3(self._current_axes)
 
         if not self.prev_buttons:
             self.prev_buttons = [0] * len(msg.buttons)
@@ -244,11 +337,44 @@ class MasterController(Node):
 
         self.prev_buttons = list(msg.buttons)
 
+    def _update_mode_from_axis3(self, axes: list):
+        if len(axes) <= 3:
+            return
+        axis3 = axes[3]
+        # 요청 규칙: axis[3] < 0 -> arm normal 유지, axis[3] > 0 -> arm forward
+        if axis3 > 0.0:
+            requested_forward = True
+        elif axis3 < 0.0:
+            requested_forward = False
+        else:
+            return
+
+        if self._axis3_forward_state is requested_forward:
+            return
+        self._axis3_forward_state = requested_forward
+        self._call_switch_arm_mode(data=requested_forward)
+
     def on_button_pressed(self, index):
         self.get_logger().info(f'Button {index} Pressed!')
 
-        if index == 0:   # Button 1 누름 → FORWARD 모드 (데드맨 스위치 ON)
+        if index == 0:   # Button 1 누름 → FORWARD 모드 (body only)
             self._call_switch_mode(data=True)
+        elif index == 2:  # Button 3 누름 → arm preset trajectory 한 번 발행
+            self._publish_arm_preset_traj(_ARM_HOME_POSE, 'home')
+        elif index == 6:  # Button 7 누름 → arm left_ready
+            self._publish_arm_preset_traj(_ARM_LEFT_READY_POSE, 'left_ready')
+        elif index == 7:  # Button 8 누름 → arm right_ready
+            self._publish_arm_preset_traj(_ARM_RIGHT_READY_POSE, 'right_ready')
+        elif index == 4:  # buttons[4] (다섯 번째 버튼) → head home [0, 0] 한 번 발행
+            if self._current_mode != 'forward':
+                self.get_logger().warn(
+                    'Head home ignored: not in forward mode (hold button 1 for forward).'
+                )
+            else:
+                cmd = Float64MultiArray()
+                cmd.data = [0.0, 0.0]
+                self._head_pub.publish(cmd)
+                self.get_logger().info('Head home: published /body/head_forward_controller/commands [0.0, 0.0]')
         elif index == 5: # Button 6 누름 → 리프트 상승 시작
             self._lift_direction = +1
         elif index == 3: # Button 4 누름 → 리프트 하강 시작
@@ -257,7 +383,7 @@ class MasterController(Node):
     def on_button_released(self, index):
         self.get_logger().info(f'Button {index} Released!')
 
-        if index == 0:   # Button 1 뗌 → NORMAL 모드 (데드맨 스위치 OFF)
+        if index == 0:   # Button 1 뗌 → NORMAL 모드 (body only)
             self._call_switch_mode(data=False)
         elif index == 5: # Button 6 뗌 → 리프트 상승 정지
             self._lift_direction = 0

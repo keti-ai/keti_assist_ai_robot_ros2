@@ -59,7 +59,6 @@ arm / lift / head / tool 4 개 컨트롤러를 전환하는 노드.
 """
 
 import threading
-import concurrent.futures
 import rclpy
 from rclpy.node import Node
 from rclpy.executors import MultiThreadedExecutor
@@ -80,8 +79,10 @@ _LATCHED_QOS = QoSProfile(
 _ARM_NORMAL  = ['xarm7_traj_controller']
 _ARM_FWD     = ['xarm7_forward_controller']
 
-_BODY_NORMAL = ['lift_controller', 'head_controller', 'tool_controller']
-_BODY_FWD    = ['lift_forward_controller', 'head_forward_controller', 'tool_forward_controller']
+_BODY_NORMAL = ['lift_controller', 'head_controller']
+_BODY_FWD    = ['lift_forward_controller', 'head_forward_controller']
+_TOOL_NORMAL = ['tool_controller']
+_TOOL_FWD    = ['tool_forward_controller']
 
 
 class ControllerModeSwitcher(Node):
@@ -101,8 +102,10 @@ class ControllerModeSwitcher(Node):
 
         # ── 상태 (기본: NORMAL) ───────────────────────────────────────────
         self._mode        = 'normal'
+        self._arm_mode    = 'normal'
         self._lock        = threading.Lock()
         self._switch_lock = threading.Lock()  # 동시 전환 방지
+        self._arm_switch_lock = threading.Lock()
         self._cbg         = ReentrantCallbackGroup()
 
         # ── switch_controller 클라이언트 ─────────────────────────────────
@@ -122,6 +125,13 @@ class ControllerModeSwitcher(Node):
             Bool,
             '~/switch_mode_cmd',
             self._on_switch_cmd,
+            10,
+            callback_group=self._cbg,
+        )
+        self.create_subscription(
+            Bool,
+            '~/switch_arm_mode_cmd',
+            self._on_switch_arm_cmd,
             10,
             callback_group=self._cbg,
         )
@@ -212,32 +222,22 @@ class ControllerModeSwitcher(Node):
 
         try:
             if use_forward:
-                arm_activate,  arm_deactivate  = _ARM_FWD,     _ARM_NORMAL
                 body_activate, body_deactivate = _BODY_FWD,    _BODY_NORMAL
             else:
-                arm_activate,  arm_deactivate  = _ARM_NORMAL,  _ARM_FWD
                 body_activate, body_deactivate = _BODY_NORMAL, _BODY_FWD
 
             self.get_logger().info(
                 f'Switching to [{target_mode}] mode: '
-                f'arm {arm_deactivate} → {arm_activate} | '
-                f'body {body_deactivate} → {body_activate}'
+                f'body {body_deactivate} → {body_activate} '
+                f'(arm controller switching disabled)'
             )
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-                arm_future  = pool.submit(
-                    self._call_switch_sync,
-                    self._arm_switch_cli, arm_activate, arm_deactivate, 'arm',
-                )
-                body_future = pool.submit(
-                    self._call_switch_sync,
-                    self._body_switch_cli, body_activate, body_deactivate, 'body',
-                )
-                arm_ok,  arm_msg  = arm_future.result()
-                body_ok, body_msg = body_future.result()
+            body_ok, body_msg = self._call_switch_sync(
+                self._body_switch_cli, body_activate, body_deactivate, 'body'
+            )
 
-            all_ok       = arm_ok and body_ok
-            combined_msg = f'{arm_msg} | {body_msg}'
+            all_ok = body_ok
+            combined_msg = body_msg
 
             if all_ok:
                 with self._lock:
@@ -252,6 +252,48 @@ class ControllerModeSwitcher(Node):
         finally:
             self._switch_lock.release()
 
+    def _do_arm_switch(self, use_forward: bool) -> tuple[bool, str]:
+        target_mode = 'forward' if use_forward else 'normal'
+
+        with self._lock:
+            if self._arm_mode == target_mode:
+                return True, f'Arm already in {target_mode} mode.'
+
+        if not self._arm_switch_lock.acquire(blocking=False):
+            msg = f'Arm switch already in progress, ignoring [{target_mode}] request.'
+            self.get_logger().warn(msg)
+            return False, msg
+
+        try:
+            if use_forward:
+                arm_activate, arm_deactivate = _ARM_FWD, _ARM_NORMAL
+                tool_activate, tool_deactivate = _TOOL_FWD, _TOOL_NORMAL
+            else:
+                arm_activate, arm_deactivate = _ARM_NORMAL, _ARM_FWD
+                tool_activate, tool_deactivate = _TOOL_NORMAL, _TOOL_FWD
+
+            self.get_logger().info(
+                f'Switching ARM+TOOL to [{target_mode}] mode: '
+                f'arm {arm_deactivate} → {arm_activate} | '
+                f'tool {tool_deactivate} → {tool_activate}'
+            )
+
+            arm_ok, arm_msg = self._call_switch_sync(
+                self._arm_switch_cli, arm_activate, arm_deactivate, 'arm'
+            )
+            tool_ok, tool_msg = self._call_switch_sync(
+                self._body_switch_cli, tool_activate, tool_deactivate, 'tool(body)'
+            )
+
+            if arm_ok and tool_ok:
+                with self._lock:
+                    self._arm_mode = target_mode
+            else:
+                self.get_logger().error(f'Arm/tool switch failed: {arm_msg} | {tool_msg}')
+            return (arm_ok and tool_ok), f'{arm_msg} | {tool_msg}'
+        finally:
+            self._arm_switch_lock.release()
+
     # ── 토픽 핸들러 ───────────────────────────────────────────────────────
 
     def _on_switch_cmd(self, msg: Bool):
@@ -261,6 +303,13 @@ class ControllerModeSwitcher(Node):
         """
         threading.Thread(
             target=self._do_switch,
+            args=(msg.data,),
+            daemon=True,
+        ).start()
+
+    def _on_switch_arm_cmd(self, msg: Bool):
+        threading.Thread(
+            target=self._do_arm_switch,
             args=(msg.data,),
             daemon=True,
         ).start()
