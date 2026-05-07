@@ -117,6 +117,9 @@ class MasterController(Node):
         self._arm_traj_pub = self.create_publisher(
             JointTrajectory, '/arm/xarm7_traj_controller/joint_trajectory', 10,
         )
+        self._arm_fwd_pub = self.create_publisher(
+            Float64MultiArray, '/arm/xarm7_forward_controller/commands', 10,
+        )
         self._master_cmd_pub = self.create_publisher(
             JointState, master_command_topic, 10,
         )
@@ -187,6 +190,29 @@ class MasterController(Node):
         self._current_mode = msg.data
 
     def _master_joint_state_callback(self, msg: JointState):
+        names = msg.name
+        if self._axis3_forward_state is True:
+            master_pose7 = []
+            for i in range(1, 8):
+                jn = f'master_joint_{i}'
+                if jn not in names:
+                    self.get_logger().warn(
+                        f'{jn} not found in /master/joint_states; skip arm forward publish',
+                        throttle_duration_sec=1.0,
+                    )
+                    master_pose7 = []
+                    break
+                idx = names.index(jn)
+                if idx >= len(msg.position):
+                    master_pose7 = []
+                    break
+                master_pose7.append(float(msg.position[idx]))
+
+            if master_pose7:
+                arm_cmd = Float64MultiArray()
+                arm_cmd.data = master_pose7
+                self._arm_fwd_pub.publish(arm_cmd)
+
         if 'master_joint_8' in msg.name:
             idx = msg.name.index('master_joint_8')
             if idx < len(msg.position):
