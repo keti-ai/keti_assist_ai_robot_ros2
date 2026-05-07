@@ -27,9 +27,9 @@ class MasterController(Node):
         super().__init__('master_controller')
 
         # ── 파라미터 ─────────────────────────────────────────────────────────
-        self.declare_parameter('lift_step',     0.005)  # 타이머 1회당 lift 이동량 (m)
+        self.declare_parameter('lift_step',     0.02)  # 타이머 1회당 lift 이동량 (m)
         self.declare_parameter('head_step',     0.02)   # 타이머 1회당 head 이동량 (rad)
-        self.declare_parameter('control_hz',    20.0)   # 제어 명령 주기 (Hz)
+        self.declare_parameter('control_hz',    50.0)   # 제어 명령 주기 (Hz)
         self.declare_parameter('joint_states_topic', '/joint_states')
 
         self._lift_step    = self.get_parameter('lift_step').value

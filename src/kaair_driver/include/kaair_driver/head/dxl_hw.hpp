@@ -32,6 +32,9 @@ public:
     bool write_profile_velocity(const std::vector<uint8_t>& ids, uint32_t velocity);
     bool write_profile_velocity_radian(const std::vector<uint8_t>& ids, double rad_per_sec);
 
+    /** X 시리즈 Profile Acceleration (주소 108), 단위는 펌웨어 스펙(214.577 rev/min² / unit) */
+    bool write_profile_acceleration(const std::vector<uint8_t>& ids, uint32_t acceleration);
+
     
 private:
     dynamixel::PortHandler * portHandler_;
@@ -51,7 +54,9 @@ private:
     const uint16_t ADDR_PRESENT_POSITION = 132;
     const uint16_t LEN_PRESENT_POSITION = 4;
     const uint16_t ADDR_PROFILE_VELOCITY = 112;
-    const uint16_t LEN_PROFILE_VELOCIT = 4;
+    const uint16_t LEN_PROFILE_VELOCITY = 4;
+    const uint16_t ADDR_PROFILE_ACCELERATION = 108;
+    const uint16_t LEN_PROFILE_ACCELERATION = 4;
 
 
     // 편의를 위한 변환 헬퍼 함수

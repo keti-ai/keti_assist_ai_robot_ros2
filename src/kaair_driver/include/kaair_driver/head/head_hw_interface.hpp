@@ -35,11 +35,17 @@ namespace kaair_driver {
     // ros2_control과 데이터를 주고받을 내부 버퍼 (Radian 단위)
     std::vector<double> hw_commands_;
     std::vector<double> hw_states_;
-    
+
+    /** 조인트 공간 ↔ 모터(엔코더) 공간: q_joint = direction * q_motor (URDF 축과 설치 방향 불일치 보정) */
+    std::vector<double> joint_dir_;
+
     // 설정값
     std::vector<uint8_t> dxl_ids_;
     std::string device_name_;
     int baudrate_;
+    double profile_velocity_rad_s_{2.0};
+    bool use_profile_accel_{false};
+    uint32_t profile_accel_units_{0};
     int read_error_count_ = 0;
     const int MAX_READ_ERRORS = 5; // 5회 연속 실패 시에만 ERROR 리턴
     rclcpp::Clock::SharedPtr clock_;

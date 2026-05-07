@@ -11,6 +11,10 @@
           <plugin>kaair_driver/HeadHwInterface</plugin>
           <param name="usb_port">${spec['usb_port']}</param>
           <param name="baud_rate">${spec['baud_rate']}</param>
+          <!-- 다이나믹셀 Profile Velocity (rad/s). URDF velocity 한계(1.2)보다 크게 두면 체감이 빨라질 수 있음 -->
+          <param name="profile_velocity_rad_s">3.0</param>
+          <!-- 필요 시 펌웨어 단위로 가속도 제한 (미설정 시 기존 EEPROM 값 유지) -->
+          <!-- <param name="profile_acceleration">200</param> -->
         </xacro:unless>
       </hardware>
 
@@ -25,7 +29,9 @@
         <command_interface name="position"/>
         <state_interface name="position">
           <param name="initial_value">0.0</param> </state_interface>
-       <param name="id">2</param>
+        <param name="id">2</param>
+        <!-- 양(+) 방향만 안 움직이고 반대는 될 때: URDF axis 와 혼 조립 방향 불일치일 수 있음 → -1 시도 -->
+        <!-- <param name="direction">-1</param> -->
       </joint>
     </ros2_control>
   </xacro:macro>

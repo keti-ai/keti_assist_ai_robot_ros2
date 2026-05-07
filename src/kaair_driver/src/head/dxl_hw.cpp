@@ -148,9 +148,28 @@ bool DxlHw::sync_read_radian(const std::vector<uint8_t>& ids, std::vector<double
 }
 
 // --- Profile Velocity 설정 (Group Sync Write) ---
+bool DxlHw::write_profile_acceleration(const std::vector<uint8_t>& ids, uint32_t acceleration) {
+    dynamixel::GroupSyncWrite groupSyncWrite(
+        portHandler_, packetHandler_, ADDR_PROFILE_ACCELERATION, LEN_PROFILE_ACCELERATION);
+
+    uint8_t param[4];
+    param[0] = DXL_LOBYTE(DXL_LOWORD(acceleration));
+    param[1] = DXL_HIBYTE(DXL_LOWORD(acceleration));
+    param[2] = DXL_LOBYTE(DXL_HIWORD(acceleration));
+    param[3] = DXL_HIBYTE(DXL_HIWORD(acceleration));
+
+    for (uint8_t id : ids) {
+        if (!groupSyncWrite.addParam(id, param)) return false;
+    }
+
+    int result = groupSyncWrite.txPacket();
+    groupSyncWrite.clearParam();
+    return (result == COMM_SUCCESS);
+}
+
 bool DxlHw::write_profile_velocity(const std::vector<uint8_t>& ids, uint32_t velocity) {
-    // 모든 ID에 동일한 속도값을 적용하기 위해 positions 대신 단일 velocity 값을 사용하도록 구성
-    dynamixel::GroupSyncWrite groupSyncWrite(portHandler_, packetHandler_, 112, 4);
+    dynamixel::GroupSyncWrite groupSyncWrite(
+        portHandler_, packetHandler_, ADDR_PROFILE_VELOCITY, LEN_PROFILE_VELOCITY);
 
     uint8_t param[4];
     param[0] = DXL_LOBYTE(DXL_LOWORD(velocity));

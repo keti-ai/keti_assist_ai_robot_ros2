@@ -1,6 +1,7 @@
 #include "kaair_driver/head/head_hw_interface.hpp"
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include <pluginlib/class_list_macros.hpp>
+#include <sstream>
 
 namespace kaair_driver {
 
@@ -12,13 +13,31 @@ CallbackReturn HeadHwInterface::on_init(const hardware_interface::HardwareInfo &
   // 1. 파라미터 로드 (urdf/ros2_control.xacro에서 설정한 값들)
   device_name_ = info.hardware_parameters.at("usb_port");
   baudrate_ = std::stoi(info.hardware_parameters.at("baud_rate"));
-  
+
+  {
+    auto it = info.hardware_parameters.find("profile_velocity_rad_s");
+    profile_velocity_rad_s_ = (it != info.hardware_parameters.end()) ? std::stod(it->second) : 2.0;
+  }
+  {
+    auto it = info.hardware_parameters.find("profile_acceleration");
+    if (it != info.hardware_parameters.end()) {
+      profile_accel_units_ = static_cast<uint32_t>(std::stoul(it->second));
+      use_profile_accel_ = true;
+    }
+  }
+
   // 2. 조인트 개수만큼 버퍼 초기화
   hw_states_.resize(info.joints.size(), 0.0);
   hw_commands_.resize(info.joints.size(), 0.0);
-  
+
   for (const auto & joint : info.joints) {
     dxl_ids_.push_back(std::stoi(joint.parameters.at("id")));
+    double dir = 1.0;
+    auto dit = joint.parameters.find("direction");
+    if (dit != joint.parameters.end()) {
+      dir = std::stod(dit->second);
+    }
+    joint_dir_.push_back(dir);
   }
 
   // 3. 다이나믹셀 객체 생성
@@ -67,18 +86,45 @@ CallbackReturn HeadHwInterface::on_activate(const rclcpp_lifecycle::State & /*pr
   }
 
   // 4. 현재 위치 읽기 (상태 동기화)
-  if (!dxl_hw_->sync_read_radian(dxl_ids_, hw_states_)) {
-    RCLCPP_ERROR(rclcpp::get_logger("HeadHwInterface"), "초기 상태를 읽을 수 없습니다!");
-    return CallbackReturn::ERROR;
+  {
+    std::vector<double> motor_states;
+    if (!dxl_hw_->sync_read_radian(dxl_ids_, motor_states)) {
+      RCLCPP_ERROR(rclcpp::get_logger("HeadHwInterface"), "초기 상태를 읽을 수 없습니다!");
+      return CallbackReturn::ERROR;
+    }
+    for (size_t i = 0; i < motor_states.size(); ++i) {
+      hw_states_[i] = joint_dir_[i] * motor_states[i];
+    }
   }
 
-  // 5. 글로벌 속도 조절 (상태 동기화)
-  if (!dxl_hw_->write_profile_velocity_radian(dxl_ids_, 2.0)) {
+  // 5. 프로필 속도·가속도 (extended position / time-based profile 에서 목표 추종 체감 속도에 영향)
+  if (!dxl_hw_->write_profile_velocity_radian(dxl_ids_, profile_velocity_rad_s_)) {
     RCLCPP_ERROR(rclcpp::get_logger("HeadHwInterface"), "속도를 조절할수 없습니다!!");
     return CallbackReturn::ERROR;
   }
+  if (use_profile_accel_) {
+    if (!dxl_hw_->write_profile_acceleration(dxl_ids_, profile_accel_units_)) {
+      RCLCPP_WARN(
+        rclcpp::get_logger("HeadHwInterface"),
+        "Profile Acceleration 쓰기 실패 (무시하고 계속).");
+    }
+  }
 
-  // 🌟 5. 목표 위치를 0.0으로 설정 (동작 시작 시 0.0으로 이동하도록 명령)
+  {
+    std::ostringstream dirs;
+    for (size_t i = 0; i < joint_dir_.size(); ++i) {
+      if (i) dirs << ", ";
+      dirs << joint_dir_[i];
+    }
+    RCLCPP_INFO(
+      rclcpp::get_logger("HeadHwInterface"),
+      "Head profile: velocity=%.3f rad/s%s | joint direction: [%s]",
+      profile_velocity_rad_s_,
+      use_profile_accel_ ? (", accel_units=" + std::to_string(profile_accel_units_)).c_str() : "",
+      dirs.str().c_str());
+  }
+
+  // 6. 목표 위치를 0.0으로 설정 (동작 시작 시 0.0으로 이동하도록 명령)
   // 조인트가 2개인 경우 [0.0, 0.0]으로 초기화됩니다.
   std::fill(hw_commands_.begin(), hw_commands_.end(), 0.0);
 
@@ -94,8 +140,9 @@ CallbackReturn HeadHwInterface::on_deactivate(const rclcpp_lifecycle::State & /*
 
 hardware_interface::return_type HeadHwInterface::read(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
     
+    std::vector<double> motor_states;
     // 1. 다이나믹셀 읽기 시도
-    if (!dxl_hw_->sync_read_radian(dxl_ids_, hw_states_)) {
+    if (!dxl_hw_->sync_read_radian(dxl_ids_, motor_states)) {
         read_error_count_++;
 
         // 연속 에러가 허용 범위 내라면 OK를 리턴해서 루프를 살림
@@ -120,6 +167,10 @@ hardware_interface::return_type HeadHwInterface::read(const rclcpp::Time & /*tim
         }
     }
 
+    for (size_t i = 0; i < motor_states.size(); ++i) {
+      hw_states_[i] = joint_dir_[i] * motor_states[i];
+    }
+
     // 2. 읽기 성공 시 카운터 초기화
     if (read_error_count_ > 0) {
         RCLCPP_INFO(rclcpp::get_logger("HeadHwInterface"), "Communication recovered.");
@@ -139,8 +190,11 @@ hardware_interface::return_type HeadHwInterface::read(const rclcpp::Time & /*tim
 }
 
 hardware_interface::return_type HeadHwInterface::write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
-  // 컨트롤러에서 내려온 목표 라디안을 다이나믹셀로 전송
-  if (!dxl_hw_->sync_write_radian(dxl_ids_, hw_commands_)) {
+  std::vector<double> motor_cmds(hw_commands_.size());
+  for (size_t i = 0; i < hw_commands_.size(); ++i) {
+    motor_cmds[i] = joint_dir_[i] * hw_commands_[i];
+  }
+  if (!dxl_hw_->sync_write_radian(dxl_ids_, motor_cmds)) {
     return hardware_interface::return_type::ERROR;
   }
   return hardware_interface::return_type::OK;
