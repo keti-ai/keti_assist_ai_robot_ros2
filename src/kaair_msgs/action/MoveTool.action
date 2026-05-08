@@ -1,0 +1,13 @@
+float64 dx
+float64 dy
+float64 dz
+float64 rx
+float64 ry
+float64 rz
+bool plan_only
+---
+bool success
+string message
+geometry_msgs/Pose final_pose
+---
+string status

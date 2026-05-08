@@ -8,7 +8,6 @@ from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 from moveit_configs_utils import MoveItConfigsBuilder
-from uf_ros_lib.uf_robot_utils import generate_robot_api_params
 
 def generate_launch_description():
     # 1. Launch Arguments 선언
@@ -53,14 +52,7 @@ def generate_launch_description():
         .to_moveit_configs()
     )
 
-    # 4. xArm API 파라미터 로드
-    robot_params = generate_robot_api_params(
-        os.path.join(get_package_share_directory('xarm_api'), 'config', 'xarm_params.yaml'),
-        os.path.join(get_package_share_directory('xarm_api'), 'config', 'xarm_user_params.yaml'),
-        '', node_name='ufactory_driver'
-    )
-
-    # 5. 주요 노드 정의
+    # 주요 노드 정의
     # [A] MoveGroup
     move_group_node = Node(
         package="moveit_ros_move_group",
@@ -76,7 +68,6 @@ def generate_launch_description():
         parameters=[
             moveit_config.robot_description,
             os.path.join(get_package_share_directory("kaair_controller"), "config", "kaair_controllers.yaml"),
-            robot_params,
         ],
         output="both",
     )

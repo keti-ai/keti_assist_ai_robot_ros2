@@ -24,6 +24,7 @@ set(PYTHON_NODES
   "kaair_bringup/server_worker/location_server.py"               "location_server"
   "kaair_bringup/server_worker/xarm_bridge.py"                   "xarm_bridge"
   "kaair_bringup/motion_worker/lift_move_action_server.py"       "lift_move_action_server"
+  "kaair_bringup/motion_worker/arm_move_action_server.py"        "arm_move_action_server"
   "kaair_bringup/motion_worker/controller_mode_switcher.py"      "controller_mode_switcher"
   "kaair_bringup/master_worker/master_dxl_hw.py"                "master_dxl_hw"
   "kaair_bringup/master_worker/master_controller.py"                "master_controller"

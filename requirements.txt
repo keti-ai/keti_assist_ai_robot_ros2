@@ -1,3 +1,5 @@
 py-trees
 open3d
 numpy==1.26.4
+pyserial
+xarm_python_sdk

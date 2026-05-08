@@ -25,7 +25,6 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 from moveit_configs_utils import MoveItConfigsBuilder
-from uf_ros_lib.uf_robot_utils import generate_robot_api_params
 
 
 def launch_setup(context, *args, **kwargs):
@@ -86,17 +85,6 @@ def launch_setup(context, *args, **kwargs):
         .to_moveit_configs()
     )
 
-    servo_config_file = os.path.join(moveit_pkg, 'config', 'servo_config.yaml')
-
-    xarm_api_params = {}
-    if not use_fake:
-        xarm_api_params = generate_robot_api_params(
-            os.path.join(get_package_share_directory('xarm_api'), 'config', 'xarm_params.yaml'),
-            os.path.join(get_package_share_directory('xarm_api'), 'config', 'xarm_user_params.yaml'),
-            '',
-            node_name='ufactory_driver',
-        )
-
     move_group_node = Node(
         package='moveit_ros_move_group',
         executable='move_group',
@@ -142,8 +130,6 @@ def launch_setup(context, *args, **kwargs):
     )
 
     arm_cm_params = [arm_description, arm_ctrl_yaml]
-    if xarm_api_params:
-        arm_cm_params.append(xarm_api_params)
 
     arm_cm_node = Node(
         package='controller_manager',
@@ -242,13 +228,6 @@ def launch_setup(context, *args, **kwargs):
         ],
     )
 
-    ctrl_mode_switcher_node = Node(
-        package='kaair_bringup',
-        executable='controller_mode_switcher',
-        name='controller_mode_switcher',
-        output='screen',
-    )
-
     use_head_camera = LaunchConfiguration('use_head_camera')
     use_hand_camera = LaunchConfiguration('use_hand_camera')
 
@@ -264,12 +243,15 @@ def launch_setup(context, *args, **kwargs):
         }.items(),
     )
 
+    spec_cfg = LaunchConfiguration('spec')
+
     server_worker_loader_node = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             PathJoinSubstitution([
                 FindPackageShare('kaair_bringup'), 'launch', 'server_worker_loader.py',
             ])
-        ])
+        ]),
+        launch_arguments={'spec': spec_cfg}.items(),
     )
 
     return [
@@ -305,10 +287,6 @@ def launch_setup(context, *args, **kwargs):
             ],
         )),
 
-        RegisterEventHandler(OnProcessExit(
-            target_action=tool_spawner,
-            on_exit=[move_group_node, ctrl_mode_switcher_node],
-        )),
     ]
 
 

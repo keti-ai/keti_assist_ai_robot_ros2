@@ -36,7 +36,6 @@ from launch.event_handlers import OnProcessStart
 from launch.substitutions import Command, LaunchConfiguration
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
-from uf_ros_lib.uf_robot_utils import generate_robot_api_params
 
 
 # ── 모드 → 실행 대상 매핑 ───────────────────────────────────────────────────
@@ -114,18 +113,6 @@ def launch_setup(context, *args, **kwargs):
         ])
     }
 
-    # ── xArm API 파라미터 (실제 HW + arm CM 에서만 사용) ─────────────────
-    xarm_api_params = {}
-    if flags['arm_cm'] and not use_fake:
-        xarm_api_params = generate_robot_api_params(
-            os.path.join(get_package_share_directory('xarm_api'),
-                         'config', 'xarm_params.yaml'),
-            os.path.join(get_package_share_directory('xarm_api'),
-                         'config', 'xarm_user_params.yaml'),
-            '',
-            node_name='ufactory_driver',
-        )
-
     # ════════════════════════════════════════════════════════════════════════
     # 노드 정의
     # ════════════════════════════════════════════════════════════════════════
@@ -182,8 +169,6 @@ def launch_setup(context, *args, **kwargs):
 
     if flags['arm_cm']:
         arm_cm_params = [arm_description, arm_ctrl_yaml]
-        if xarm_api_params:
-            arm_cm_params.append(xarm_api_params)
 
         arm_cm_node = Node(
             package='controller_manager',

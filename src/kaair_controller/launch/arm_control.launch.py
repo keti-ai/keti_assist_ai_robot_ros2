@@ -1,5 +1,3 @@
-import os
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, RegisterEventHandler
 from launch.event_handlers import OnProcessStart
@@ -7,9 +5,6 @@ from launch.substitutions import Command, FindExecutable, PathJoinSubstitution, 
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
-
-# xArm의 파라미터 파싱 유틸리티 임포트
-from uf_ros_lib.uf_robot_utils import generate_robot_api_params
 
 def generate_launch_description():
     # 1. Launch Arguments 선언
@@ -55,14 +50,7 @@ def generate_launch_description():
         [FindPackageShare("kaair_controller"), "config", "kaair_controllers.yaml"]
     )
 
-    # 4. xArm API 구동을 위한 전용 파라미터 로드
-    robot_params = generate_robot_api_params(
-        os.path.join(get_package_share_directory('xarm_api'), 'config', 'xarm_params.yaml'),
-        os.path.join(get_package_share_directory('xarm_api'), 'config', 'xarm_user_params.yaml'),
-        '', node_name='ufactory_driver'
-    )
-
-    # 5. RViz 설정 파일 경로
+    # 4. RViz 설정 파일 경로
     rviz_config_file = PathJoinSubstitution(
         [FindPackageShare("kaair_description"), "rviz", "arm_config.rviz"]
     )
@@ -72,7 +60,7 @@ def generate_launch_description():
     control_node = Node(
         package="controller_manager",
         executable="ros2_control_node",
-        parameters=[robot_description, robot_controllers, robot_params],
+        parameters=[robot_description, robot_controllers],
         output="both",
     )
 

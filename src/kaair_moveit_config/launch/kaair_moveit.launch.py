@@ -63,7 +63,6 @@ from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from moveit_configs_utils import MoveItConfigsBuilder
-from uf_ros_lib.uf_robot_utils import generate_robot_api_params
 
 
 def launch_setup(context, *args, **kwargs):
@@ -141,21 +140,6 @@ def launch_setup(context, *args, **kwargs):
         .to_moveit_configs()
     )
 
-    # ── servo_config.yaml 경로 ────────────────────────────────────────────
-    servo_config_file = os.path.join(moveit_pkg, 'config', 'servo_config.yaml')
-
-    # ── xArm API 파라미터 (실제 HW + arm CM 에서만 사용) ─────────────────
-    xarm_api_params = {}
-    if not use_fake:
-        xarm_api_params = generate_robot_api_params(
-            os.path.join(get_package_share_directory('xarm_api'),
-                         'config', 'xarm_params.yaml'),
-            os.path.join(get_package_share_directory('xarm_api'),
-                         'config', 'xarm_user_params.yaml'),
-            '',
-            node_name='ufactory_driver',
-        )
-
     # ════════════════════════════════════════════════════════════════════════
     # 노드 정의
     # ════════════════════════════════════════════════════════════════════════
@@ -168,21 +152,6 @@ def launch_setup(context, *args, **kwargs):
         parameters=[moveit_config.to_dict()],
     )
 
-    # [F] MoveIt Servo ─ 실시간 관절 속도 명령 처리 (move_group 기동 후 시작)
-    # 입력 : /servo_node/delta_joint_cmds  (control_msgs/JointJog)
-    # 출력 : /arm/xarm7_traj_controller/joint_trajectory
-    servo_node = Node(
-        package='moveit_servo',
-        executable='servo_node_main',
-        name='servo_node',
-        output='screen',
-        parameters=[
-            servo_config_file,
-            moveit_config.robot_description,
-            moveit_config.robot_description_semantic,
-            moveit_config.robot_description_kinematics,
-        ],
-    )
 
     # [B] Robot State Publisher ─ kaair.urdf.xacro (kinematics only)
     rsp_node = Node(
@@ -236,8 +205,6 @@ def launch_setup(context, *args, **kwargs):
     # arm Controller Manager (namespace: /arm)
     # ════════════════════════════════════════════════════════════════════════
     arm_cm_params = [arm_description, arm_ctrl_yaml]
-    if xarm_api_params:
-        arm_cm_params.append(xarm_api_params)
 
     arm_cm_node = Node(
         package='controller_manager',
@@ -245,7 +212,6 @@ def launch_setup(context, *args, **kwargs):
         namespace='arm',
         parameters=arm_cm_params,
         # 실제 HW 에서 UFRobotSystemHardware 는 실시간성이 필요하므로 nice 레벨 높임
-        prefix=[] if use_fake else ['nice -n -20'],
         output='both',
     )
 

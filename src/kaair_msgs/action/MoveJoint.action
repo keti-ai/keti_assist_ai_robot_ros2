@@ -1,0 +1,12 @@
+# Goal
+float64[7] target_joints
+bool plan_only
+---
+# Result
+bool success
+string message
+float64[7] final_joints
+---
+# Feedback
+float64[7] current_joints
+string status

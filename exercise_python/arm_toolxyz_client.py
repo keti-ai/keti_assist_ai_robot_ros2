@@ -79,8 +79,8 @@ class xArmRelativeController(Node):
         req.link_name = ee_link
         req.group_name = 'arm'
         req.waypoints = [target_pose]
-        req.max_step = 0.005 # 5mm 간격으로 더 정밀하게 생성
-        req.jump_threshold = 0.0
+        req.max_step = 0.002
+        req.jump_threshold = 1.7
         req.avoid_collisions = True
 
         

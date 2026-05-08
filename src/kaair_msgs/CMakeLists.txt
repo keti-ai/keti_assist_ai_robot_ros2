@@ -9,13 +9,15 @@ find_package(ament_cmake REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(action_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/RobotStatus.msg"
-  "srv/SetLiftHeight.srv"
-  "action/MoveArm.action"
   "action/LiftMove.action"
-  DEPENDENCIES std_msgs action_msgs
+  "action/MoveJoint.action"
+  "action/MoveTool.action"
+  "action/MoveLinear.action"
+  DEPENDENCIES std_msgs action_msgs geometry_msgs
 )
 
 ament_export_dependencies(rosidl_default_runtime)
