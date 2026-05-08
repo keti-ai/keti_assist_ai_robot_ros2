@@ -104,18 +104,6 @@ def launch_setup(context, *args, **kwargs):
         parameters=[moveit_config.to_dict()],
     )
 
-    servo_node = Node(
-        package='moveit_servo',
-        executable='servo_node_main',
-        name='servo_node',
-        output='screen',
-        parameters=[
-            servo_config_file,
-            moveit_config.robot_description,
-            moveit_config.robot_description_semantic,
-            moveit_config.robot_description_kinematics,
-        ],
-    )
 
     rsp_node = Node(
         package='robot_state_publisher',
@@ -320,10 +308,6 @@ def launch_setup(context, *args, **kwargs):
         RegisterEventHandler(OnProcessExit(
             target_action=tool_spawner,
             on_exit=[move_group_node, ctrl_mode_switcher_node],
-        )),
-        RegisterEventHandler(OnProcessStart(
-            target_action=move_group_node,
-            on_start=[servo_node],
         )),
     ]
 
