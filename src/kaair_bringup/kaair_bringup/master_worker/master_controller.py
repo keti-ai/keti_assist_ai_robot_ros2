@@ -49,7 +49,7 @@ class MasterController(Node):
         self.declare_parameter('arm_fwd_deadband_rad', 0.001)  # 이 이하 오차는 무시
         # master_joint8 -> tool(open/close) 매핑 (tool range: 0.0 ~ 0.1)
         # master_joint8 range: [-0.47 .. 0.0] (close .. open)
-        self.declare_parameter('tool_open_pos', 0.1)
+        self.declare_parameter('tool_open_pos', 0.05)
         self.declare_parameter('tool_close_pos', 0.0)
         self.declare_parameter('tool_toggle_threshold', -0.235)  # m8 < threshold => close, else open
         self.declare_parameter('tool_cmd_epsilon', 1e-4)  # 동일 명령 반복 publish 방지

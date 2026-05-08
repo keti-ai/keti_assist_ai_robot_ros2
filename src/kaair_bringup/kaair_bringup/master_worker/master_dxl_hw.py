@@ -70,7 +70,7 @@ class MasterDxlHw(Node):
         self.declare_parameter('motor_position_offsets', [2048, 2048, 2048, 2048, 4096, 2048, 2048, 2048])
         self.declare_parameter('dxl_offset_default', DXL_OFFSET_DEFAULT)
         # XL330 current-based position control 모드에서 목표 전류를 축별로 지정
-        self.declare_parameter('motor_goal_currents', [120,30,30,30,30,30,30,1750])  # motor_ids 와 동일한 순서, int16(단위는 제어기/펌웨어 설정에 따름)
+        self.declare_parameter('motor_goal_currents', [90,10,10,10,10,10,10,1750])  # motor_ids 와 동일한 순서, int16(단위는 제어기/펌웨어 설정에 따름)
         # 초기화 시 1회만 적용할 초기 자세(rad)
         self.declare_parameter('initial_pose', [0.0, 0.261799, 0.0, 0.261799, -3.14159, 1.5708, 0.0, 0.0])
 
