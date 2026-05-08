@@ -1,0 +1,6 @@
+string object_label
+int32 u
+int32 v
+---
+bool success
+string message

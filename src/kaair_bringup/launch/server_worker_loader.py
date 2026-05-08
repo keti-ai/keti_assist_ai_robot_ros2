@@ -79,6 +79,12 @@ def launch_setup(context, *args, **kwargs):
                 name="controller_mode_switcher",
                 output="screen",
             ),
+            Node(
+                package="kaair_bringup",
+                executable="object_marker_server",
+                name="object_marker_server",
+                output="screen",
+            ),
         ]
     )
 

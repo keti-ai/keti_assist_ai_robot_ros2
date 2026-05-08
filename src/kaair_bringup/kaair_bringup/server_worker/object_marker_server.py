@@ -1,0 +1,401 @@
+#!/usr/bin/env python3
+
+import math
+import struct
+
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
+from rclpy.duration import Duration
+
+from sensor_msgs.msg import Image, CameraInfo
+from geometry_msgs.msg import Point
+from std_srvs.srv import Trigger
+from tf2_ros import Buffer, TransformListener
+from visualization_msgs.msg import Marker, MarkerArray
+
+from kaair_msgs.srv import CreateObjectMarker
+
+
+class ObjectMarkerServer(Node):
+    def __init__(self):
+        super().__init__('object_marker_server')
+        self.map_frame = 'slamware_map'
+
+        sensor_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE
+        )
+
+        self.latest_depth_msg = None
+        self.latest_camera_info = None
+        self.saved_objects = {}
+        self.pending_delete_markers = []
+        self.delete_republish_ticks = 0
+        self.log_flags = {}
+
+        # subscribers
+        self.depth_sub = self.create_subscription(
+            Image,
+            '/femto/depth/image_raw',
+            self.depth_callback,
+            sensor_qos
+        )
+
+        self.camera_info_sub = self.create_subscription(
+            CameraInfo,
+            '/femto/depth/camera_info',
+            self.camera_info_callback,
+            sensor_qos
+        )
+
+        # service server
+        self.srv = self.create_service(
+            CreateObjectMarker,
+            'create_object_marker',
+            self.handle_create_object_marker
+        )
+        self.clear_srv = self.create_service(
+            Trigger,
+            'clear_object_markers',
+            self.handle_clear_object_markers
+        )
+
+        # tf listener for map transform
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+
+        # marker publisher
+        self.marker_pub = self.create_publisher(
+            MarkerArray,
+            '/object_markers',
+            10
+        )
+
+        # keep publishing saved markers
+        self.publish_timer = self.create_timer(
+            0.1, self.publish_saved_markers
+        )
+
+        self.get_logger().info('Object marker server started.')
+
+    def log_once(self, key, message, level='info'):
+        if self.log_flags.get(key, False):
+            return
+
+        if level == 'warn':
+            self.get_logger().warn(message)
+        elif level == 'error':
+            self.get_logger().error(message)
+        else:
+            self.get_logger().info(message)
+
+        self.log_flags[key] = True
+
+    def depth_callback(self, msg):
+        self.latest_depth_msg = msg
+        self.log_once(
+            'depth_received',
+            f'First depth received: width={msg.width}, height={msg.height}, '
+            f'encoding={msg.encoding}, step={msg.step}, frame_id={msg.header.frame_id}'
+        )
+
+    def camera_info_callback(self, msg):
+        self.latest_camera_info = msg
+        fx = msg.k[0]
+        fy = msg.k[4]
+        cx = msg.k[2]
+        cy = msg.k[5]
+
+        self.log_once(
+            'camera_info_received',
+            f'First camera_info received: fx={fx:.3f}, fy={fy:.3f}, '
+            f'cx={cx:.3f}, cy={cy:.3f}, frame_id={msg.header.frame_id}'
+        )
+
+    def handle_create_object_marker(self, request, response):
+        object_label = request.object_label.strip()
+        if object_label == '':
+            object_label = 'object'
+        object_name = f'/object/{object_label}'
+
+        u = int(request.u)
+        v = int(request.v)
+
+        point = self.get_3d_point_from_depth_pixel(u, v)
+        if point is None:
+            response.success = False
+            response.message = 'failed_to_get_3d_point'
+            return response
+
+        x, y, z, _ = point
+        self.saved_objects[object_name] = (x, y, z)
+
+        self.get_logger().info(
+            f'SUCCESS: "{object_name}" detected at pixel ({u}, {v}), '
+            f'3D=({x:.3f}, {y:.3f}, {z:.3f})'
+        )
+
+        response.success = True
+        response.message = 'success'
+        return response
+
+    def get_3d_point_from_depth_pixel(self, u, v):
+        if self.latest_depth_msg is None:
+            self.log_once('no_depth', 'No depth image received yet.', level='warn')
+            return None
+
+        if self.latest_camera_info is None:
+            self.log_once('no_camera_info', 'No camera_info received yet.', level='warn')
+            return None
+
+        depth_msg = self.latest_depth_msg
+        cam_info = self.latest_camera_info
+
+        if not (0 <= u < depth_msg.width and 0 <= v < depth_msg.height):
+            self.get_logger().warn(
+                f'Pixel out of depth range: ({u}, {v}), '
+                f'size=({depth_msg.width}, {depth_msg.height})'
+            )
+            return None
+
+        z = self.read_depth_value(depth_msg, u, v)
+        if z is None or not math.isfinite(z) or z <= 0.0:
+            z = self.search_valid_depth(depth_msg, u, v, radius=3)
+
+        if z is None or not math.isfinite(z) or z <= 0.0:
+            self.get_logger().warn(f'No valid depth near pixel ({u}, {v})')
+            return None
+
+        fx = cam_info.k[0]
+        fy = cam_info.k[4]
+        cx = cam_info.k[2]
+        cy = cam_info.k[5]
+
+        x = (u - cx) * z / fx
+        y = (v - cy) * z / fy
+
+        source_frame = depth_msg.header.frame_id
+        map_point = self.transform_point_to_map(x, y, z, source_frame)
+        if map_point is None:
+            return None
+
+        map_x, map_y, map_z = map_point
+        return (map_x, map_y, map_z, self.map_frame)
+
+    def handle_clear_object_markers(self, _request, response):
+        object_names = [
+            object_name for object_name in self.saved_objects.keys()
+            if object_name.startswith('/object/')
+        ]
+
+        delete_array = MarkerArray()
+        for object_name in object_names:
+            delete_array.markers.append(self.build_delete_marker(object_name, marker_id=0))
+            delete_array.markers.append(self.build_delete_marker(object_name, marker_id=1))
+
+        if delete_array.markers:
+            self.marker_pub.publish(delete_array)
+            # Republish delete markers briefly for reliable RViz cleanup.
+            self.pending_delete_markers = list(delete_array.markers)
+            self.delete_republish_ticks = 10
+
+        for object_name in object_names:
+            del self.saved_objects[object_name]
+
+        self.get_logger().info(
+            f'Cleared {len(object_names)} markers under /object namespace.'
+        )
+        response.success = True
+        response.message = f'cleared_count={len(object_names)}'
+        return response
+
+    def transform_point_to_map(self, x, y, z, source_frame):
+        try:
+            tf_msg = self.tf_buffer.lookup_transform(
+                self.map_frame,
+                source_frame,
+                rclpy.time.Time(),
+                timeout=Duration(seconds=0.3)
+            )
+        except Exception as ex:
+            self.get_logger().warn(
+                f'Failed TF lookup {self.map_frame} <- {source_frame}: {ex}'
+            )
+            return None
+
+        tx = tf_msg.transform.translation.x
+        ty = tf_msg.transform.translation.y
+        tz = tf_msg.transform.translation.z
+        qx = tf_msg.transform.rotation.x
+        qy = tf_msg.transform.rotation.y
+        qz = tf_msg.transform.rotation.z
+        qw = tf_msg.transform.rotation.w
+
+        rx, ry, rz = self.rotate_vector_by_quaternion(x, y, z, qx, qy, qz, qw)
+        return (tx + rx, ty + ry, tz + rz)
+
+    def rotate_vector_by_quaternion(self, x, y, z, qx, qy, qz, qw):
+        vx, vy, vz = x, y, z
+
+        # t = 2 * (q_vec x v)
+        tx = 2.0 * (qy * vz - qz * vy)
+        ty = 2.0 * (qz * vx - qx * vz)
+        tz = 2.0 * (qx * vy - qy * vx)
+
+        # v' = v + w*t + (q_vec x t)
+        rx = vx + qw * tx + (qy * tz - qz * ty)
+        ry = vy + qw * ty + (qz * tx - qx * tz)
+        rz = vz + qw * tz + (qx * ty - qy * tx)
+        return (rx, ry, rz)
+
+    def read_depth_value(self, depth_msg, u, v):
+        try:
+            offset = v * depth_msg.step
+
+            if depth_msg.encoding == '16UC1':
+                byte_offset = offset + (u * 2)
+                depth_raw = struct.unpack_from('<H', depth_msg.data, byte_offset)[0]
+                if depth_raw == 0:
+                    return None
+                return depth_raw / 1000.0
+
+            if depth_msg.encoding == '32FC1':
+                byte_offset = offset + (u * 4)
+                depth = struct.unpack_from('<f', depth_msg.data, byte_offset)[0]
+                if not math.isfinite(depth) or depth <= 0.0:
+                    return None
+                return depth
+
+            self.get_logger().error(
+                f'Unsupported depth encoding: {depth_msg.encoding}'
+            )
+            return None
+
+        except Exception as e:
+            self.get_logger().error(f'Failed reading depth: {e}')
+            return None
+
+    def search_valid_depth(self, depth_msg, u, v, radius=3):
+        for r in range(1, radius + 1):
+            for dv in range(-r, r + 1):
+                for du in range(-r, r + 1):
+                    uu = u + du
+                    vv = v + dv
+
+                    if uu < 0 or uu >= depth_msg.width:
+                        continue
+                    if vv < 0 or vv >= depth_msg.height:
+                        continue
+
+                    z = self.read_depth_value(depth_msg, uu, vv)
+                    if z is not None and math.isfinite(z) and z > 0.0:
+                        self.log_once(
+                            'nearby_depth_used',
+                            'Used nearby valid depth near detected object.'
+                        )
+                        return z
+        return None
+
+    def build_arrow_marker(self, object_name, x, y, z):
+        marker = Marker()
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.header.frame_id = self.map_frame
+        marker.ns = object_name
+        marker.id = 0
+        marker.type = Marker.ARROW
+        marker.action = Marker.ADD
+
+        start = Point()
+        start.x = float(x)
+        start.y = float(y)
+        start.z = float(z)
+
+        end = Point()
+        end.x = float(x)
+        end.y = float(y)
+        end.z = float(z + 0.35)
+
+        marker.points = [start, end]
+        marker.scale.x = 0.03
+        marker.scale.y = 0.06
+        marker.scale.z = 0.1
+        marker.lifetime = Duration(seconds=0.6).to_msg()
+
+        marker.color.a = 1.0
+        marker.color.r = 0.7
+        marker.color.g = 0.2
+        marker.color.b = 0.9
+
+        return marker
+
+    def build_text_marker(self, object_name, x, y, z):
+        marker = Marker()
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.header.frame_id = self.map_frame
+        marker.ns = object_name
+        marker.id = 1
+        marker.type = Marker.TEXT_VIEW_FACING
+        marker.action = Marker.ADD
+
+        marker.pose.position.x = float(x)
+        marker.pose.position.y = float(y)
+        marker.pose.position.z = float(z + 0.45)
+        marker.pose.orientation.x = 0.0
+        marker.pose.orientation.y = 0.0
+        marker.pose.orientation.z = 0.0
+        marker.pose.orientation.w = 1.0
+
+        marker.scale.z = 0.15
+        marker.lifetime = Duration(seconds=0.6).to_msg()
+        marker.color.a = 1.0
+        marker.color.r = 1.0
+        marker.color.g = 1.0
+        marker.color.b = 1.0
+        marker.text = object_name
+
+        return marker
+
+    def build_delete_marker(self, object_name, marker_id):
+        marker = Marker()
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.header.frame_id = self.map_frame
+        marker.ns = object_name
+        marker.id = marker_id
+        marker.action = Marker.DELETE
+        return marker
+
+    def publish_saved_markers(self):
+        marker_array = MarkerArray()
+        if self.delete_republish_ticks > 0 and self.pending_delete_markers:
+            marker_array.markers.extend(self.pending_delete_markers)
+            self.delete_republish_ticks -= 1
+
+        for object_name, (x, y, z) in self.saved_objects.items():
+            marker_array.markers.append(
+                self.build_arrow_marker(object_name, x, y, z)
+            )
+            marker_array.markers.append(
+                self.build_text_marker(object_name, x, y, z)
+            )
+        self.marker_pub.publish(marker_array)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ObjectMarkerServer()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
