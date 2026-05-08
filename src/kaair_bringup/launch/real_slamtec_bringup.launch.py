@@ -287,6 +287,12 @@ def launch_setup(context, *args, **kwargs):
             ],
         )),
 
+        # body side controllers ready → start MoveIt move_group
+        RegisterEventHandler(OnProcessExit(
+            target_action=tool_spawner,
+            on_exit=[move_group_node],
+        )),
+
     ]
 
 
