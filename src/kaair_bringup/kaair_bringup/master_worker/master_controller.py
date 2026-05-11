@@ -11,6 +11,7 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from sensor_msgs.msg import Joy, JointState
 from std_msgs.msg import Bool, Float64MultiArray, String
+from std_srvs.srv import Trigger
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from urdf_parser_py.urdf import URDF
 
@@ -52,7 +53,6 @@ class MasterController(Node):
         self.declare_parameter('tool_open_pos', 0.05)
         self.declare_parameter('tool_close_pos', 0.0)
         self.declare_parameter('tool_toggle_threshold', -0.235)  # m8 < threshold => close, else open
-        self.declare_parameter('tool_cmd_epsilon', 1e-4)  # 동일 명령 반복 publish 방지
 
         self._lift_step    = self.get_parameter('lift_step').value
         self._head_step    = self.get_parameter('head_step').value
@@ -63,7 +63,6 @@ class MasterController(Node):
         self._tool_open_pos = float(self.get_parameter('tool_open_pos').value)
         self._tool_close_pos = float(self.get_parameter('tool_close_pos').value)
         self._tool_toggle_threshold = float(self.get_parameter('tool_toggle_threshold').value)
-        self._tool_cmd_epsilon = float(self.get_parameter('tool_cmd_epsilon').value)
         joint_states_topic = self.get_parameter('joint_states_topic').value
         master_joint_states_topic = self.get_parameter('master_joint_states_topic').value
         master_command_topic = self.get_parameter('master_command_topic').value
@@ -93,7 +92,6 @@ class MasterController(Node):
         self._current_master_joint8 = None
         self._last_arm_fwd_cmd = None  # rate-limit용 이전 명령(7축)
         self._current_arm_pos7 = None  # 실제 arm 현재값(joint1~7)
-        self._last_tool_cmd = None
 
         self._cbg = ReentrantCallbackGroup()
 
@@ -143,6 +141,7 @@ class MasterController(Node):
         self._master_cmd_pub = self.create_publisher(
             JointState, master_command_topic, 10,
         )
+        self._arm_init_set_client = self.create_client(Trigger, '/arm/init_set')
 
         # ── 제어 타이머 ───────────────────────────────────────────────────────
         self.create_timer(
@@ -258,12 +257,8 @@ class MasterController(Node):
         if self._axis3_forward_state is not True:
             return
 
-        # open/close 토글 (open/close만 되면 됨)
+        # open/close 토글; 데이터 취득 등을 위해 값이 같아도 매 콜백 publish 유지
         tool_pos = self._tool_close_pos if m8 < self._tool_toggle_threshold else self._tool_open_pos
-
-        if self._last_tool_cmd is not None and abs(tool_pos - self._last_tool_cmd) <= self._tool_cmd_epsilon:
-            return
-        self._last_tool_cmd = tool_pos
 
         cmd = Float64MultiArray()
         cmd.data = [tool_pos]
@@ -368,6 +363,27 @@ class MasterController(Node):
             f'Arm mode switch command published: {"forward" if data else "normal"}'
         )
 
+    def _call_arm_init_set(self):
+        """xarm_bridge 의 /arm/init_set(Trigger): SDK clean_error → motion_enable → …"""
+        if not self._arm_init_set_client.wait_for_service(timeout_sec=0.5):
+            self.get_logger().warn(
+                '/arm/init_set 서비스가 아직 없습니다 (xarm_bridge 기동 여부 확인).',
+                throttle_duration_sec=2.0,
+            )
+            return
+        fut = self._arm_init_set_client.call_async(Trigger.Request())
+        fut.add_done_callback(self._on_arm_init_set_done)
+
+    def _on_arm_init_set_done(self, fut):
+        try:
+            res = fut.result()
+            if res.success:
+                self.get_logger().info(f'/arm/init_set: {res.message}')
+            else:
+                self.get_logger().warn(f'/arm/init_set 실패: {res.message}')
+        except Exception as e:
+            self.get_logger().error(f'/arm/init_set 호출 오류: {e}')
+
     def _publish_arm_preset_traj(self, pose: list[float], label: str):
         if self._current_mode != 'normal':
             self.get_logger().warn(
@@ -468,6 +484,8 @@ class MasterController(Node):
 
         if index == 0:   # Button 1 누름 → FORWARD 모드 (body only)
             self._call_switch_mode(data=True)
+        elif index == 1:  # Button 2 (buttons[1]) → /arm/init_set (xarm_bridge SDK 초기화)
+            self._call_arm_init_set()
         elif index == 2:  # Button 3 누름 → arm preset trajectory 한 번 발행
             self._publish_arm_preset_traj(_ARM_HOME_POSE, 'home')
         elif index == 6:  # Button 7 누름 → arm left_ready

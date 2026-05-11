@@ -35,7 +35,7 @@ class XArmBridge(Node):
     def __init__(self):
         super().__init__('xarm_bridge')
 
-        self.declare_parameter('robot_ip', '')
+        self.declare_parameter('robot_ip', '192.168.5.240')
         self.declare_parameter(
             'is_radian',
             True,
