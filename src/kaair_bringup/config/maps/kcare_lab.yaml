@@ -1,0 +1,57 @@
+living_room:
+  default_loc: table
+
+  table:
+    default_mode: left
+    placepose:
+      dx: 0
+      dy: 0
+    height: 720   
+    loc:
+      x: 1000
+      y: -1500
+      theta: 0
+    dforward: 100
+    dshift: 0
+
+  drawer_table:
+    default_mode: left
+    label: "서랍"
+    placepose:
+      dx: 0
+      dy: -100
+    height: 720
+    loc:
+      x: 1374
+      y: -1891
+      theta: -90
+    dforward: 100
+    dshift: 0
+
+  drawer:
+    default_mode: left
+    handle: "white handle"
+    placepose:
+      dx: 0
+      dy: -100
+      dz: 30
+    height: 720
+    loc:
+      x: 1374
+      y: -1891
+      theta: -90
+    dforward: 50
+    dshift: 0
+
+  shelf:
+    default_mode: right
+    placepose:
+      dx: 100
+      dy: 0
+    height: 790
+    loc:
+      x: 861
+      y: -2015
+      theta: -90
+    dforward: 0
+    dshift: 0

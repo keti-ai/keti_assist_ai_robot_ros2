@@ -30,3 +30,4 @@ tool:
 mobile_bridge:
   domain: 35
   type: "slamtec"
+  POI: "kcare_lab.yaml"

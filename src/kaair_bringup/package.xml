@@ -14,6 +14,7 @@
   <depend>kaair_obstacle</depend>
   <depend>kaair_apps</depend>
   <depend>xarm_controller</depend>
+  <depend>kaair_msgs</depend>
 
   <exec_depend>dynamixel_sdk</exec_depend>
   <exec_depend>rclpy</exec_depend>
