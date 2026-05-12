@@ -1,11 +1,12 @@
-sensors:
-  - default_sensor
-default_sensor:
-  filtered_cloud_topic: /femto/filtered_cloud
-  max_range: 3.0
-  max_update_rate: 5.0
-  padding_offset: 0.05
-  padding_scale: 1.2
-  point_cloud_topic: /femto/depth/points
-  point_subsample: 2
-  sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
+# sensors:
+#   - default_sensor
+# default_sensor:
+#   filtered_cloud_topic: /femto/filtered_cloud
+#   max_range: 3.0
+#   max_update_rate: 5.0
+#   padding_offset: 0.05
+#   padding_scale: 1.2
+#   point_cloud_topic: /femto/depth/points
+#   point_subsample: 2
+#   sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
+sensors: []

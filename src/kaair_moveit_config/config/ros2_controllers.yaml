@@ -60,7 +60,7 @@ tool_controller:
   ros__parameters:
     joint: virtual_gripper_joint
     action_monitor_rate: 20.0
-    goal_tolerance: 0.005
+    goal_tolerance: 0.01
     allow_stalling: true
-    stall_timeout: 0.8
-    stall_velocity_threshold: 0.001
+    stall_timeout: 20.0
+    stall_velocity_threshold: 0.0005

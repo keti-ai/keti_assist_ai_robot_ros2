@@ -85,6 +85,8 @@ def launch_setup(context, *args, **kwargs):
         .to_moveit_configs()
     )
 
+
+
     move_group_node = Node(
         package='moveit_ros_move_group',
         executable='move_group',

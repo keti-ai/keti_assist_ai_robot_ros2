@@ -120,7 +120,8 @@
       <parent link="hand_base_link"/>
       <child link="virtual_gripper_link"/>
       <axis xyz="0 1 0"/>
-      <limit upper="0.1" lower="0" effort="50" velocity="0.01"/>
+      <!-- 0.01 m/s 이면 전개 0.1 m 에 ~10 s → GripperAction stall_timeout 과 맞물려 실패하기 쉬움 -->
+      <limit upper="0.1" lower="0" effort="50" velocity="0.05"/>
     </joint>
 
     <joint name="gripper_tcp_joint" type="fixed">

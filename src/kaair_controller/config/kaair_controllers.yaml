@@ -76,7 +76,7 @@ tool_controller:
       # 그리퍼는 보통 위치(position)를 목표로 주고, 
       # 물체에 닿았을 때의 힘(effort)을 피드백으로 받습니다.
       action_monitor_rate: 20.0
-      goal_tolerance: 0.005
+      goal_tolerance: 0.002
       allow_stalling: true # 물체를 잡고 멈춰있는(Stall) 상태를 허용
 
       stall_timeout: 0.8
