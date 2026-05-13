@@ -29,6 +29,7 @@ set(PYTHON_NODES
   "kaair_bringup/motion_worker/lift_move_action_server.py"       "lift_move_action_server"
   "kaair_bringup/motion_worker/arm_move_action_server.py"        "arm_move_action_server"
   "kaair_bringup/motion_worker/controller_mode_switcher.py"      "controller_mode_switcher"
+  "kaair_bringup/motion_worker/head_move_server.py"              "head_move_server"
   "kaair_bringup/master_worker/master_dxl_hw.py"                "master_dxl_hw"
   "kaair_bringup/master_worker/master_controller.py"                "master_controller"
   # "추가경로" "추가이름"

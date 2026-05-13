@@ -1,0 +1,15 @@
+# Goal
+float64 head_joint1
+float64 head_joint2
+bool plan_only
+---
+# Result
+bool success
+string message
+float64 final_head_joint1
+float64 final_head_joint2
+---
+# Feedback
+float64 current_head_joint1
+float64 current_head_joint2
+string status

@@ -127,6 +127,12 @@ def launch_setup(context, *args, **kwargs):
                 executable="robot_pose_publisher",
                 name="robot_pose_publisher",
                 output="screen",
+            ),
+            Node(
+                package="kaair_bringup",
+                executable="head_move_server",
+                name="head_move_server",
+                output="screen",
             )
         ]
     )
