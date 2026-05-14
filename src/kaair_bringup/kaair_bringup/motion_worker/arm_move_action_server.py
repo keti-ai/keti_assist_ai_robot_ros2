@@ -335,12 +335,12 @@ class UnifiedMotionActionServer(Node):
     def _make_target_pose_from_base_xyz(self, x, y, z, rx, ry, rz, base_frame):
         """
         MoveL: x,y,z는 base_frame 기준 절대좌표 [m],
-        rx,ry,rz는 현재 TCP 자세 기준 상대 회전 [deg].
+        rx,ry,rz는 현재 TCP 자세 기준 상대 회전 [rad] (고정 축 순서 'xyz', intrinsic이 아님).
         """
         cur_p, cur_q = self._get_current_tcp_pose(base_frame)
         cur_rot = R.from_quat(cur_q)
         target_p = np.array([x, y, z])
-        delta_rot = R.from_euler("xyz", [rx, ry, rz], degrees=True)
+        delta_rot = R.from_euler("xyz", [rx, ry, rz], degrees=False)
         target_rot = cur_rot * delta_rot
         target_q = target_rot.as_quat()
 
@@ -360,7 +360,7 @@ class UnifiedMotionActionServer(Node):
         delta_pos_tool = np.array([dx, dy, dz])
         delta_pos_base = cur_rot.apply(delta_pos_tool)
         target_p = cur_p + delta_pos_base
-        delta_rot = R.from_euler("xyz", [rx, ry, rz], degrees=True)
+        delta_rot = R.from_euler("xyz", [rx, ry, rz], degrees=False)
         target_rot = cur_rot * delta_rot
         target_q = target_rot.as_quat()
 
@@ -460,7 +460,7 @@ class UnifiedMotionActionServer(Node):
 
         self.get_logger().info(
             f"[MoveLinear] frame={base_frame} pos=[{x:.3f},{y:.3f},{z:.3f}] "
-            f"deg rx,ry,rz=[{rx:.1f},{ry:.1f},{rz:.1f}] plan_only={plan_only}"
+            f"rad rx,ry,rz=[{rx:.3f},{ry:.3f},{rz:.3f}] plan_only={plan_only}"
         )
 
         try:
@@ -532,7 +532,7 @@ class UnifiedMotionActionServer(Node):
 
         self.get_logger().info(
             f"[MoveTool] Tool delta pos=[{dx:.3f},{dy:.3f},{dz:.3f}] "
-            f"deg=[{rx:.1f},{ry:.1f},{rz:.1f}] plan_only={plan_only}"
+            f"rad=[{rx:.3f},{ry:.3f},{rz:.3f}] plan_only={plan_only}"
         )
 
         try:
