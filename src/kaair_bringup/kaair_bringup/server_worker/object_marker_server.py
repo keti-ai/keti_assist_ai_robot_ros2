@@ -128,18 +128,42 @@ class ObjectMarkerServer(Node):
         if point is None:
             response.success = False
             response.message = 'failed_to_get_3d_point'
+            response.x = 0.0
+            response.y = 0.0
+            response.z = 0.0
             return response
 
-        x, y, z, _ = point
-        self.saved_objects[object_name] = (x, y, z)
+        map_x, map_y, map_z = point
+
+        base_frame = request.base_frame.strip()
+        if base_frame == '':
+            base_frame = self.map_frame
+
+        base_xyz = self.transform_point(
+            map_x, map_y, map_z, self.map_frame, base_frame
+        )
+        if base_xyz is None:
+            response.success = False
+            response.message = 'failed_transform_to_base_frame'
+            response.x = 0.0
+            response.y = 0.0
+            response.z = 0.0
+            return response
+
+        bx, by, bz = base_xyz
+        self.saved_objects[object_name] = (map_x, map_y, map_z)
 
         self.get_logger().info(
             f'SUCCESS: "{object_name}" detected at pixel ({u}, {v}), '
-            f'3D=({x:.3f}, {y:.3f}, {z:.3f})'
+            f'map=({map_x:.3f}, {map_y:.3f}, {map_z:.3f}), '
+            f'{base_frame}=({bx:.3f}, {by:.3f}, {bz:.3f})'
         )
 
         response.success = True
         response.message = 'success'
+        response.x = float(bx)
+        response.y = float(by)
+        response.z = float(bz)
         return response
 
     def get_3d_point_from_depth_pixel(self, u, v):
@@ -178,12 +202,12 @@ class ObjectMarkerServer(Node):
         y = (v - cy) * z / fy
 
         source_frame = depth_msg.header.frame_id
-        map_point = self.transform_point_to_map(x, y, z, source_frame)
+        map_point = self.transform_point(x, y, z, source_frame, self.map_frame)
         if map_point is None:
             return None
 
         map_x, map_y, map_z = map_point
-        return (map_x, map_y, map_z, self.map_frame)
+        return (map_x, map_y, map_z)
 
     def handle_clear_object_markers(self, _request, response):
         object_names = [
@@ -212,17 +236,20 @@ class ObjectMarkerServer(Node):
         response.message = f'cleared_count={len(object_names)}'
         return response
 
-    def transform_point_to_map(self, x, y, z, source_frame):
+    def transform_point(self, x, y, z, source_frame, target_frame):
+        if source_frame == target_frame:
+            return (x, y, z)
+
         try:
             tf_msg = self.tf_buffer.lookup_transform(
-                self.map_frame,
+                target_frame,
                 source_frame,
                 rclpy.time.Time(),
                 timeout=Duration(seconds=0.3)
             )
         except Exception as ex:
             self.get_logger().warn(
-                f'Failed TF lookup {self.map_frame} <- {source_frame}: {ex}'
+                f'Failed TF lookup {target_frame} <- {source_frame}: {ex}'
             )
             return None
 
