@@ -15,6 +15,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/RobotStatus.msg"
   "msg/PlaceInfo.msg"
   "srv/CreateObjectMarker.srv"
+  "srv/MobileShift.srv"
+  "srv/MobileRotate.srv"
   "action/LiftMove.action"
   "action/MoveJoint.action"
   "action/MoveTool.action"
