@@ -1,9 +1,19 @@
+# 목표 위치 [m]
+# is_relative=false: base_frame 기준 절대 좌표
+# is_relative=true : 현재 TCP 위치 기준 상대 이동량
 float64 x
 float64 y
 float64 z
-float64 rx
-float64 ry
-float64 rz
+
+# 목표 자세 quaternion
+# is_relative=false: base_frame 기준 tool_tcp_link 절대 목표 자세
+# is_relative=true : 현재 TCP 자세 기준 상대 회전
+float64 qx
+float64 qy
+float64 qz
+float64 qw
+
+bool is_relative
 bool plan_only
 string base_frame
 ---
