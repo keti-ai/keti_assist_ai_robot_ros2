@@ -26,7 +26,7 @@ def generate_launch_description():
     hw_spec_file = PathJoinSubstitution([FindPackageShare('kaair_bringup'), 'config', 'robots', spec])
 
     # 2. URDF 설정 (이전과 동일)
-    xacro_path = PathJoinSubstitution([FindPackageShare(pkg_name), 'urdf', 'robot.urdf.xacro'])
+    xacro_path = PathJoinSubstitution([FindPackageShare(pkg_name), 'urdf', 'clober_robot.urdf.xacro'])
     robot_description_content = Command([
         'xacro ', xacro_path, 
         ' mode:=', mode,
@@ -46,7 +46,6 @@ def generate_launch_description():
         package='robot_state_publisher',
         executable='robot_state_publisher',
         parameters=[{
-            # xacro 출력은 YAML로 파싱되면 실패하므로 문자열로 명시
             'robot_description': ParameterValue(robot_description_content, value_type=str),
         }],
     )

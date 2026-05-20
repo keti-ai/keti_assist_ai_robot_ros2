@@ -1,0 +1,71 @@
+<?xml version="1.0" ?>
+<robot name="lift" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+
+
+  <xacro:property name="m_to_mm" value="0.001 0.001 0.001"/>
+  <xacro:property name="mesh_path" value="package://kaair_description/meshes/"/>
+
+
+  <xacro:macro name="lift_module" params="min_h max_h">
+
+    <link name="lift_base_link">
+      <!-- visual -->
+      <visual>
+        <geometry>
+          <mesh filename="${mesh_path}lift/visual/clober_lift_base.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <material name="gray"/>
+      </visual>
+
+      <!-- collision -->
+      <collision>
+        <geometry>
+          <mesh filename="${mesh_path}lift/collision/clober_lift_base.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </collision>
+    </link>
+
+    <link name="lift_link">
+      <!-- visual -->
+      <visual>
+        <geometry>
+          <mesh filename="${mesh_path}lift/visual/lift_link.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <material name="light_gray"/>
+      </visual>
+
+      <!-- collision -->
+      <collision>
+        <geometry>
+          <mesh filename="${mesh_path}lift/collision/lift_link.stl" scale="${m_to_mm}"/>
+        </geometry>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </collision>
+    </link>
+
+    <link name="arm_base">
+    </link>
+
+    <joint name="lift_joint" type="prismatic">
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <parent link="lift_base_link"/>
+      <child link="lift_link"/>
+      <axis xyz="0.0 0.0 1.0"/>
+      <limit 
+        upper="${max_h}"  lower="${min_h}"  effort="700" 
+        velocity="0.2"/>
+    </joint>
+
+    <joint name="lift_to_arm_fix_joint" type="fixed">
+      <origin xyz="0.2415 0.0 0.0" rpy="0 0 0"/>
+      <parent link="lift_link"/>
+      <child link="arm_base"/>
+    </joint>
+
+  </xacro:macro>
+
+</robot>
