@@ -1,9 +1,12 @@
 float64 dx
 float64 dy
 float64 dz
-float64 rx
-float64 ry
-float64 rz
+
+float64 qx
+float64 qy
+float64 qz
+float64 qw
+
 bool plan_only
 ---
 bool success

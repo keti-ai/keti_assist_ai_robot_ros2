@@ -105,11 +105,12 @@ class OneShotCreateObjectTFClient(Node):
         while not self.cli.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Service not available, waiting again...')
 
-    def send_request(self, object_label, u, v):
+    def send_request(self, object_label, u, v, base_frame=''):
         req = CreateObjectMarker.Request()
         req.object_label = object_label
         req.u = int(u)
         req.v = int(v)
+        req.base_frame = base_frame
         return self.cli.call_async(req)
 
 
@@ -119,6 +120,10 @@ def main(args=None):
     object_label = 'object'
     if len(sys.argv) > 1:
         object_label = sys.argv[1]
+
+    base_frame = ''
+    if len(sys.argv) > 2:
+        base_frame = sys.argv[2]
 
     node = OneShotCreateObjectTFClient(object_label)
 
@@ -142,13 +147,14 @@ def main(args=None):
         )
 
         node.wait_for_service_ready()
-        future = node.send_request(object_label, u, v)
+        future = node.send_request(object_label, u, v, base_frame=base_frame)
         rclpy.spin_until_future_complete(node, future)
 
         if future.result() is not None:
             response = future.result()
             node.get_logger().info(
-                f'Result: success={response.success}, message="{response.message}"'
+                f'Result: success={response.success}, message="{response.message}", '
+                f'xyz=({response.x:.3f}, {response.y:.3f}, {response.z:.3f})'
             )
         else:
             node.get_logger().error('Service call failed.')
