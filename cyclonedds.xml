@@ -8,6 +8,7 @@
                 <NetworkInterface autodetermine="false" name="lo" />
             </Interfaces>
             <AllowMulticast>false</AllowMulticast>
+            <MaxMessageSize>2147483647B</MaxMessageSize>
         </General>
         
         <Discovery>
@@ -19,7 +20,11 @@
         </Discovery>
 
         <Internal>
-            <SocketReceiveBufferSize min="10MB"/>
+            <SocketReceiveBufferSize min="30MB"/>
+            <Watermarks>
+                <WhcHigh>30MB</WhcHigh>
+            </Watermarks>
+
         </Internal>
     </Domain>
 </CycloneDDS>
