@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="kaair">
+    <!-- ── Arguments ──────────────────────────────────────────────────────────
+         use_fake_hardware      : true  → MoveIt fake mode
+                                  false → real hardware drivers
+         mode                   : robot | lift | arm | head | tool
+         hw_spec_file           : robot hardware spec YAML
+         initial_positions_file : (legacy) 하위 호환. 이 파일에서는 직접 사용하지 않음.
+                                  arm_hw / body_hw xacro 가 각자 사용한다.
+    ──────────────────────────────────────────────────────────────────────── -->
+    <xacro:arg name="use_fake_hardware"      default="true"/>
+    <xacro:arg name="mode"                   default="robot"/>
+    <xacro:arg name="hw_spec_file"           default="$(find kaair_bringup)/config/robots/kaair_specs_01.yaml"/>
+    <xacro:arg name="initial_positions_file" default="$(find kaair_moveit_config)/config/initial_positions.yaml"/>
+
+    <!-- ── include_ros2_control = false ──────────────────────────────────────
+         이 파일은 RSP / move_group 전용 URDF 이다.
+         ros2_control 블록은 2-CM 구조에서 각 CM 의 전용 xacro 가 담당한다.
+           arm CM  : arm_hw.urdf.xacro
+           body CM : body_hw.urdf.xacro
+         따라서 이 파일에서 ros2_control 을 포함하면 ResourceManager 충돌이 발생한다.
+         include_ros2_control:=false 를 강제하여 kinematics(링크/조인트)만 포함한다.
+    ──────────────────────────────────────────────────────────────────────── -->
+    <xacro:arg name="include_ros2_control" default="false"/>
+
+    <!-- Clober 모바일 베이스 (former_description/clober_500) 를 사용하는 전체 로봇 URDF -->
+    <xacro:include filename="$(find kaair_description)/urdf/clober_robot.urdf.xacro"/>
+
+</robot>
