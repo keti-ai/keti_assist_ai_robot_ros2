@@ -61,7 +61,7 @@ class XArmBridge(Node):
         self.V_MIN = 23.1  # 3.3V * 7
 
         # 2.5초 주기로 배터리 전압을 읽어오는 타이머 생성
-        self.battery_timer = self.create_timer(2.5, self._on_battery_monitor)
+        # self.battery_timer = self.create_timer(2.5, self._on_battery_monitor)
 
 
     def _resolve_robot_ip(self):
