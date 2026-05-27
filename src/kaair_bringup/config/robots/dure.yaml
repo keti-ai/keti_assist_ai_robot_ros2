@@ -1,0 +1,32 @@
+# 리프트 모듈 설정
+lift:
+  min_h: 0.113               # meter
+  max_h: 0.68                # meter
+  usb_port: "/dev/ttyLM"
+  baud_rate: 115200
+  offset_position: 0.108    # meter
+  global_velocity: 0.20        # meter / second [max : 0.339 m/s]
+  encoder_ppr: 16384          # encode resolution
+  lead_pitch: 0.010           # meter
+  reduction_ratio: 1.4736842  # 28/19
+  max_rpm: 3000               # RPM
+  limit_direction: False      # False->Start/stop, True->Dir 
+  motor_direction: True
+  motor_id: 1
+
+
+# 헤드 모듈 설정 (다이나믹셀)
+head:
+  usb_port: "/dev/ttyHead"
+  baud_rate: 115200
+
+arm:
+  robot_ip: "192.168.5.224"
+
+tool:
+  usb_port: "/dev/ttyGripper"
+  baud_rate: 115200
+
+mobile_bridge:
+  domain: 35
+  type: "clobot"

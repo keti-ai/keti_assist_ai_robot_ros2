@@ -4,10 +4,7 @@
 xarm_bridge.py
 `/arm/init_set`(std_srvs/Trigger) 수신 시 xarm Python SDK 로 컨트롤러와 직접 통신하여
 clean_error → motion_enable → set_mode → set_state 순 초기화를 수행한다.
-(기존 ufactory ROS 서비스 클라이언트 경로는 사용하지 않는다.)
-
-주의: `/arm` 이하 ufactory_driver(ros2_control) 가 동시에 같은 IP 로 TCP 연결하면
-컨트롤 포트 단일 접속 규격에 따라 SDK 연결이 거절될 수 있다. 필요 시 순서를 조정한다.
+또한 주기적인 타이머를 활용하여 7셀 리튬폴리머 배터리의 전압 및 잔량을 모니터링한다.
 """
 
 import os
@@ -59,6 +56,14 @@ class XArmBridge(Node):
 
         self._init_requested = False
 
+        # 7셀 리튬 폴리머 배터리 잔량 연산용 파라미터 (단위: V)
+        self.V_MAX = 29.4  # 4.2V * 7
+        self.V_MIN = 23.1  # 3.3V * 7
+
+        # 2.5초 주기로 배터리 전압을 읽어오는 타이머 생성
+        self.battery_timer = self.create_timer(2.5, self._on_battery_monitor)
+
+
     def _resolve_robot_ip(self):
         ip = (
             self.get_parameter('robot_ip')
@@ -69,6 +74,56 @@ class XArmBridge(Node):
         if ip:
             return ip
         return os.environ.get('XARM_BRIDGE_ROBOT_IP', '').strip()
+
+    # 타이머를 이용해 로봇 제어기 입력 전압 및 퍼센티지 로깅 수행
+    def _on_battery_monitor(self):
+        robot_ip = self._resolve_robot_ip()
+        if not robot_ip:
+            return
+
+        is_radian = self.get_parameter('is_radian').get_parameter_value().bool_value
+
+        # 백그라운드 소켓 블로킹을 최소화하기 위해 타임아웃을 짧게 주거나 짧은 커넥션 유지
+        arm = None
+        try:
+            # 상태 모니터링용 인스턴스 생성
+            arm = XArmAPI(robot_ip, is_radian=is_radian, do_not_open=True)
+            arm.connect()
+
+            if not arm.connected:
+                return
+
+            # SDK로부터 실시간 공급 전압(Volt) 획득
+            code, volt = arm.get_robot_volt()
+            
+            if _code_ok(code):
+                # 7S 리튬폴리머 기준 선형 퍼센티지(%) 연산
+                if volt >= self.V_MAX:
+                    percentage = 100.0
+                elif volt <= self.V_MIN:
+                    percentage = 0.0
+                else:
+                    percentage = ((volt - self.V_MIN) / (self.V_MAX - self.V_MIN)) * 100.0
+
+                # ANSI 이스케이프 코드: \033[92m (밝은 초록색) / \033[0m (색상 초기화)
+                GREEN_COLOR = "\033[92m"
+                RESET_COLOR = "\033[0m"
+
+                self.get_logger().info(
+                    f'{GREEN_COLOR}[xArm Battery] Voltage: {volt:.2f}V | '
+                    f'Remaining: {percentage:.1f}% (7S Li-Po Status){RESET_COLOR}'
+                )
+        except Exception:
+            # 주행이나 초기화 도중 소켓 간섭 등으로 인한 예외 메시지는 스트리밍 방해를 방지하기 위해 묵음 처리
+            pass
+        finally:
+            if arm is not None:
+                try:
+                    arm.disconnect()
+                except Exception:
+                    pass
+
+
 
     def _run_sdk_init(self):
         robot_ip = self._resolve_robot_ip()
