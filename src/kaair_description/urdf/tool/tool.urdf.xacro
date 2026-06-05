@@ -23,6 +23,17 @@
       </collision>
     </link>
 
+    <link name="tooltip_collision_link">
+
+      <collision>
+        <origin xyz="0.0 0.0 0.13" rpy="0 0 0"/>
+        <geometry>
+            <box size="0.028 0.170 0.13"/>
+        </geometry>
+      </collision>
+    </link>
+
+
     <link name="vision_frame_link">
       <!-- visual -->
       <visual>
@@ -107,6 +118,12 @@
       <origin xyz="0.0 0.0 0.0135" rpy="0 0 0"/>
       <parent link="hand_base_link"/>
       <child link="gripper_body_link"/>
+    </joint>
+
+    <joint name="tooltip_dummpy_fix_joint" type="fixed">
+      <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+      <parent link="hand_base_link"/>
+      <child link="tooltip_collision_link"/>
     </joint>
 
     <joint name="hand_to_vision_frame_fix_joint" type="fixed">
