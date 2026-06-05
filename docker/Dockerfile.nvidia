@@ -144,7 +144,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certifi
     && rm -rf /var/lib/apt/lists/*
 
 # ==========================================
-# 9. 사용자 계정 설정 및 터미널 환경 최적화
+# 9. Cyclone DDS Installation
+# ==========================================
+RUN apt-get update && apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp
+
+# ==========================================
+# 10. 사용자 계정 설정 및 터미널 환경 최적화
 # ==========================================
 ARG USERNAME=developer
 ARG USER_UID=1000
@@ -174,7 +179,7 @@ RUN echo 'export PS1="\[\e[01;36m\]\u@docker\[\e[00m\]:\[\e[01;33m\]\w\[\e[00m\]
     echo 'export PS1="\[\e[01;31m\]\u@container\[\e[00m\]:\[\e[01;37m\]\w\[\e[00m\]# "' >> /root/.bashrc
 
 # ==========================================
-# 10. 최종 작업 환경 설정
+# 11. 최종 작업 환경 설정
 # ==========================================
 WORKDIR /ros_ws
 COPY requirements.txt .
