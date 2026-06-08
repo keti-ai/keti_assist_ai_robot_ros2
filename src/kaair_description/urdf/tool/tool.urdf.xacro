@@ -76,16 +76,16 @@
       <!-- visual -->
       <visual>
         <geometry>
-          <mesh filename="${mesh_path}tool/visual/left_finger.stl" scale="${m_to_mm}"/>
+          <mesh filename="${mesh_path}tool/visual/left_finger_tip_50mm.stl" scale="${m_to_mm}"/>
         </geometry>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <material name="dark_gray"/>
+        <material name="orange"/>
       </visual>
 
       <!-- collision -->
       <collision>
         <geometry>
-          <mesh filename="${mesh_path}tool/visual/left_finger.stl" scale="${m_to_mm}"/>
+          <mesh filename="${mesh_path}tool/visual/left_finger_tip_50mm.stl" scale="${m_to_mm}"/>
         </geometry>
         <origin xyz="0 0 0" rpy="0 0 0"/>
       </collision>
@@ -95,16 +95,16 @@
       <!-- visual -->
       <visual>
         <geometry>
-          <mesh filename="${mesh_path}tool/visual/right_finger.stl" scale="${m_to_mm}"/>
+          <mesh filename="${mesh_path}tool/visual/right_finger_tip_50mm.stl" scale="${m_to_mm}"/>
         </geometry>
         <origin xyz="0 0 0" rpy="0 0 0"/>
-        <material name="dark_gray"/>
+        <material name="orange"/>
       </visual>
 
       <!-- collision -->
       <collision>
         <geometry>
-          <mesh filename="${mesh_path}tool/visual/right_finger.stl" scale="${m_to_mm}"/>
+          <mesh filename="${mesh_path}tool/visual/right_finger_tip_50mm.stl" scale="${m_to_mm}"/>
         </geometry>
         <origin xyz="0 0 0" rpy="0 0 0"/>
       </collision>
@@ -142,7 +142,7 @@
     </joint>
 
     <joint name="gripper_tcp_joint" type="fixed">
-      <origin xyz="0.0 0.0 0.241" rpy="0 0 0"/>
+      <origin xyz="0.0 0.0 0.191" rpy="0 0 0"/>
       <parent link="gripper_body_link"/>
       <child link="tool_tcp_link"/>
     </joint>

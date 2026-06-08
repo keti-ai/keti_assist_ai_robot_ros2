@@ -21,6 +21,10 @@
     <color rgba="0.8 0.8 0.8 1.0"/>
   </material>
 
+  <material name="orange">
+    <color rgba="1.0 0.5 0.0 1.0"/>
+  </material>
+
   <xacro:arg name="mode"                  default="robot"/>
   <xacro:arg name="hw_spec_file"          default="$(find kaair_bringup)/config/robots/kaair_specs_01.yaml"/>
   <xacro:arg name="use_fake_hardware"     default="false"/>
