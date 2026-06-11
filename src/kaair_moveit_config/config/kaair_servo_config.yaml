@@ -1,0 +1,77 @@
+###############################################
+# kaair MoveIt Servo 설정 (Humble)
+#
+# 아키텍처:
+#   servo_node_main  →  /arm/xarm7_traj_controller/joint_trajectory
+#                       (arm Controller Manager 의 네임스페이스에 맞춤)
+#
+# 제어 대상: arm 그룹 (joint1 ~ joint7, xArm7)
+# lift / head / tool 은 MoveIt planning 또는 kaair_controller 로 별도 제어.
+#
+# 주의 (Humble):
+#   - smoothing_filter_plugin_name 이 필수. 없으면 초기화 실패.
+#   - is_primary_planning_scene_monitor 는 반드시 false.
+#     (move_group 이 primary 이므로 servo 는 secondary 로 동작해야 함.)
+#   - collision_check_type 은 이 버전에서 지원하지 않음 → 제거.
+###############################################
+
+use_gazebo: false
+
+# ── 입력 ────────────────────────────────────────────────────────────────────
+command_in_type: speed_units    # delta_twist_cmds / delta_joint_cmds 가 m/s, rad/s 단위
+scale:
+  linear:     0.1    # m/s per unit
+  rotational: 0.1    # rad/s per unit
+  joint:      0.01   # rad/s per unit
+
+# ── 출력 ────────────────────────────────────────────────────────────────────
+command_out_type: trajectory_msgs/JointTrajectory
+publish_joint_positions: true
+publish_joint_velocities: true    # traj controller 가 속도 프로파일을 사용하므로 true
+publish_joint_accelerations: false
+
+publish_period: 0.034             # ~30 Hz
+low_latency_mode: false
+
+# ── 스무딩 플러그인 (Humble 필수) ────────────────────────────────────────────
+# 없으면 servo 가 "A smoothing plugin is required." 오류로 초기화 실패함.
+smoothing_filter_plugin_name: "online_signal_smoothing::ButterworthFilterPlugin"
+
+# ── Planning Scene 모니터 ────────────────────────────────────────────────────
+# move_group 과 함께 실행할 때 반드시 false 로 설정.
+# true 이면 servo 가 /get_planning_scene 을 advertise 해 move_group 과 충돌.
+is_primary_planning_scene_monitor: false
+
+# ── 그룹 / 프레임 ────────────────────────────────────────────────────────────
+# kaair SRDF group: "arm"  <chain base_link="arm_base" tip_link="link_eef"/>
+move_group_name: arm
+planning_frame: link_base         # arm 베이스 프레임 (xArm7 내부 기준 프레임)
+ee_frame_name: link_eef           # 엔드 이펙터
+robot_link_command_frame: link_base
+
+# ── 토픽 ────────────────────────────────────────────────────────────────────
+cartesian_command_in_topic: ~/delta_twist_cmds
+joint_command_in_topic:    ~/delta_joint_cmds
+joint_topic:               /joint_states
+status_topic:              ~/status
+
+# /arm 네임스페이스 아래 traj_controller 에 직접 publish
+# (kaair 는 2-CM 구조: /arm/controller_manager + /body/controller_manager)
+command_out_topic: /arm/xarm7_traj_controller/joint_trajectory
+
+# ── 타임아웃 / 정지 ─────────────────────────────────────────────────────────
+incoming_command_timeout: 0.2     # 이 시간 내에 새 명령이 없으면 자동 halting
+num_outgoing_halt_msgs_to_publish: 4
+
+# ── 특이점 / 조인트 한계 ───────────────────────────────────────────────────
+lower_singularity_threshold:              17.0
+hard_stop_singularity_threshold:          30.0
+leaving_singularity_threshold_multiplier: 2.0   # Humble 에서 필요 (없으면 deprecation warning)
+joint_limit_margin: 0.1
+
+# ── 충돌 검사 ───────────────────────────────────────────────────────────────
+# Humble 에서 collision_check_type 파라미터는 지원되지 않음 → 제거.
+check_collisions: true
+collision_check_rate: 10.0
+self_collision_proximity_threshold: 0.01
+scene_collision_proximity_threshold: 0.02
