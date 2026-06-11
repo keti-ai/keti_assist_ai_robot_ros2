@@ -67,7 +67,7 @@ class MasterDxlHw(Node):
         self.declare_parameter('publish_hz', 50.0)
         self.declare_parameter('torque_enable_on_start', True)
         # motor_ids 와 동일한 순서. 비어 있으면 dxl_offset_default 로 전 축 동일 적용
-        self.declare_parameter('motor_position_offsets', [2048, 2048, 2048, 2048, 4096, 2048, 2048, 2048])
+        self.declare_parameter('motor_position_offsets', [2048, 2048, 2048, 0, 4096, 1024, 2048, 2048])
         self.declare_parameter('dxl_offset_default', DXL_OFFSET_DEFAULT)
         # XL330 current-based position control 모드에서 목표 전류를 축별로 지정
         self.declare_parameter('motor_goal_currents', [90,10,10,10,10,10,10,1750])  # motor_ids 와 동일한 순서, int16(단위는 제어기/펌웨어 설정에 따름)
