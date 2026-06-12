@@ -37,6 +37,18 @@ low_latency_mode: false
 # 없으면 servo 가 "A smoothing plugin is required." 오류로 초기화 실패함.
 smoothing_filter_plugin_name: "online_signal_smoothing::ButterworthFilterPlugin"
 
+# Butterworth 필터 계수 — 사실상 가속도 응답을 제어하는 유일한 servo config 파라미터.
+# 1차 IIR 저역통과 필터:  y[n] = k*(y[n-1] + x[n] - x[n-1])
+#
+#   낮은 값 (0.5~1.0): 강한 스무딩 → 가속/감속이 완만, 지연 증가
+#   기본값    (~1.5) : 균형
+#   높은 값 (3.0~4.0): 약한 스무딩 → 입력에 빠르게 추종, 진동 가능
+#
+# 컨트롤러의 velocity ramp(linear_accel/angular_accel)와 함께 사용할 때:
+#   ramp  → 급격한 SpaceMouse 입력을 완만하게 (상위 단계)
+#   butter→ servo 출력 joint velocity 를 추가 스무딩 (하위 단계)
+butterworth_filter_coeff: 0.5
+
 # ── Planning Scene 모니터 ────────────────────────────────────────────────────
 # move_group 과 함께 실행할 때 반드시 false 로 설정.
 # true 이면 servo 가 /get_planning_scene 을 advertise 해 move_group 과 충돌.
@@ -46,7 +58,7 @@ is_primary_planning_scene_monitor: false
 # kaair SRDF group: "arm"  <chain base_link="arm_base" tip_link="link_eef"/>
 move_group_name: arm
 planning_frame: link_base         # arm 베이스 프레임 (xArm7 내부 기준 프레임)
-ee_frame_name: link_eef           # 엔드 이펙터
+ee_frame_name: tool_tcp_link           # 엔드 이펙터
 robot_link_command_frame: link_base
 
 # ── 토픽 ────────────────────────────────────────────────────────────────────

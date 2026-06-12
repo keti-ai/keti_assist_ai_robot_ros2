@@ -32,13 +32,18 @@ from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 
+from controller_manager_msgs.srv import SwitchController
 from geometry_msgs.msg import TwistStamped
 from sensor_msgs.msg import Joy, JointState
 from std_msgs.msg import Float64MultiArray
 from std_srvs.srv import Trigger
 
 _ARM_JOINT_NAMES = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6', 'joint7']
-_VEL_ZERO_THRESHOLD = 0.005   # rad/s — 이 이하면 정지로 간주
+_VEL_ZERO_THRESHOLD  = 0.005   # rad/s — 이 이하면 정지로 간주
+# stall 감지: 명령은 non-zero인데 로봇이 이 시간(초) 이상 정지해 있으면 stall로 판단
+_STALL_DETECT_SEC    = 0.4
+# stall 해제: SpaceMouse 모든 축이 deadband 이하로 돌아와야 재개
+# (사용자가 의도적으로 조이스틱을 놓아야 한다)
 
 # _state 값
 _STATE_INACTIVE = 'inactive'  # servo 미시작 — 아무것도 publish 안 함
@@ -54,7 +59,7 @@ class SpaceMouseServoController(Node):
 
         # ── 파라미터 ────────────────────────────────────────────────────────
         self.declare_parameter('servo_node_name',      'servo_server')
-        self.declare_parameter('command_frame_id',     'link_eef')
+        self.declare_parameter('command_frame_id',     'tool_tcp_link')
         self.declare_parameter('publish_hz',           50.0)
         self.declare_parameter('deadband',             0.05)
         self.declare_parameter('linear_scale',         1.0)
@@ -67,8 +72,14 @@ class SpaceMouseServoController(Node):
         self.declare_parameter('tool_topic',           '/body/tool_forward_controller/commands')
         self.declare_parameter('gripper_open',         0.05)
         self.declare_parameter('gripper_close',        0.0)
-        self.declare_parameter('btn_gripper_open',     0)
-        self.declare_parameter('btn_gripper_close',    1)
+        self.declare_parameter('btn_gripper_toggle',   0)  # gripper open/close 토글
+        self.declare_parameter('gripper_init_open',    True)
+        # servo on/off + controller 전환 토글 버튼
+        self.declare_parameter('btn_servo_toggle',     1)
+        # tool controller 전환 (노드 시작/종료 시 자동 switch)
+        self.declare_parameter('body_cm_ns',              '/body/controller_manager')
+        self.declare_parameter('tool_forward_controller', 'tool_forward_controller')
+        self.declare_parameter('tool_original_controller','tool_controller')
         # 6DOF 축 인덱스
         self.declare_parameter('axis_tx', 0)
         self.declare_parameter('axis_ty', 1)
@@ -92,11 +103,15 @@ class SpaceMouseServoController(Node):
         self._ang_sc            = float(self.get_parameter('angular_scale').value)
         self._stop_to_start_sec = float(self.get_parameter('stop_to_start_sec').value)
         self._hold_min_sec      = float(self.get_parameter('hold_after_start_sec').value)
-        self._tool_topic        = self.get_parameter('tool_topic').value
-        self._gripper_open_pos  = float(self.get_parameter('gripper_open').value)
-        self._gripper_close_pos = float(self.get_parameter('gripper_close').value)
-        self._btn_open          = int(self.get_parameter('btn_gripper_open').value)
-        self._btn_close         = int(self.get_parameter('btn_gripper_close').value)
+        self._tool_topic         = self.get_parameter('tool_topic').value
+        self._gripper_open_pos   = float(self.get_parameter('gripper_open').value)
+        self._gripper_close_pos  = float(self.get_parameter('gripper_close').value)
+        self._btn_gripper_toggle = int(self.get_parameter('btn_gripper_toggle').value)
+        gripper_init_open        = bool(self.get_parameter('gripper_init_open').value)
+        self._btn_servo_toggle   = int(self.get_parameter('btn_servo_toggle').value)
+        body_cm_ns              = self.get_parameter('body_cm_ns').value
+        self._tool_fwd_ctrl     = self.get_parameter('tool_forward_controller').value
+        self._tool_orig_ctrl    = self.get_parameter('tool_original_controller').value
 
         self._ax_idx = {k: int(self.get_parameter(f'axis_{k}').value)
                         for k in ('tx', 'ty', 'tz', 'rx', 'ry', 'rz')}
@@ -110,8 +125,15 @@ class SpaceMouseServoController(Node):
         self._state         = _STATE_INACTIVE
         self._hold_end_time = 0.0   # HOLD 종료 기준 시각 (monotonic)
         self._arm_vel_zero  = False  # joint_states 로 갱신; HOLD 탈출 조건에만 사용
+        # gripper 토글 상태 (True = open)
+        self._gripper_is_open: bool = gripper_init_open
         # 지연 start 타이머 핸들 (중복 실행 방지)
         self._delayed_start_timer = None
+        # stall 감지 상태
+        # — 명령 non-zero & 로봇 정지가 _STALL_DETECT_SEC 이상 지속되면 stall 진입
+        # — SpaceMouse 가 neutral(deadband 이하)로 돌아와야 stall 해제
+        self._stall_start_t: float | None = None
+        self._stalled: bool = False
 
         self._cbg = ReentrantCallbackGroup()
 
@@ -121,6 +143,12 @@ class SpaceMouseServoController(Node):
         )
         self._stop_srv = self.create_client(
             Trigger, f'/{servo_ns}/stop_servo', callback_group=self._cbg,
+        )
+        # /body/controller_manager/switch_controller
+        self._ctrl_switch_srv = self.create_client(
+            SwitchController,
+            f'{body_cm_ns}/switch_controller',
+            callback_group=self._cbg,
         )
 
         # ── 퍼블리셔 / 구독 ──────────────────────────────────────────────────
@@ -160,10 +188,21 @@ class SpaceMouseServoController(Node):
     # ═══════════════════════════════════════════════════════════════════════
 
     def _startup_begin(self):
-        """노드 기동 후 최초 1회: stop_servo → (delay) → start_servo."""
+        """노드 기동 후 최초 1회.
+        (A) tool_controller → tool_forward_controller 전환
+        (B) stop_servo → delay → start_servo
+        두 작업은 독립적으로 병행 실행된다.
+        """
         self._startup_timer.cancel()
 
-        # stop_servo 서비스 대기 (servo_server 가 아직 안 떴을 수 있음)
+        # (A) 컨트롤러 전환: tool_original → tool_forward
+        self._switch_controllers_async(
+            activate=[self._tool_fwd_ctrl],
+            deactivate=[self._tool_orig_ctrl],
+            label='startup: activate tool_forward_controller',
+        )
+
+        # (B) servo 초기화
         if not self._stop_srv.wait_for_service(timeout_sec=5.0):
             self.get_logger().warn('stop_servo 서비스 없음. start_servo 직접 시도.')
             self._do_start_servo()
@@ -214,6 +253,7 @@ class SpaceMouseServoController(Node):
             # INACTIVE / ACTIVE → HOLD: 안정화 대기 시작
             self._hold_end_time = time.monotonic() + self._hold_min_sec
             self._arm_vel_zero  = False   # HOLD 탈출 조건 초기화
+            self._stall_reset()           # stall 상태 초기화
             self._state         = _STATE_HOLD
             self.get_logger().info(
                 f'Servo started: {res.message}  '
@@ -240,9 +280,91 @@ class SpaceMouseServoController(Node):
         )
 
     def destroy_node(self):
-        """종료 시 stop_servo 호출 → 다음 시작 때 깨끗한 상태 보장."""
+        """종료 시:
+        1. stop_servo (servo 상태 초기화)
+        2. tool_forward_controller → tool_original_controller 복원 (동기 대기)
+        """
         self._do_stop_servo('shutdown stop_servo')
+        self._switch_controllers_sync(
+            activate=[self._tool_orig_ctrl],
+            deactivate=[self._tool_fwd_ctrl],
+            label='shutdown: restore tool_controller',
+            timeout_sec=3.0,
+        )
         super().destroy_node()
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # controller switch 헬퍼
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _make_switch_request(self, activate: list, deactivate: list) -> SwitchController.Request:
+        req = SwitchController.Request()
+        req.activate_controllers   = activate
+        req.deactivate_controllers = deactivate
+        # BEST_EFFORT: 이미 목표 상태인 컨트롤러가 있어도 오류로 처리하지 않음
+        req.strictness   = SwitchController.Request.BEST_EFFORT
+        req.activate_asap = True
+        return req
+
+    def _switch_controllers_async(self,
+                                   activate: list,
+                                   deactivate: list,
+                                   label: str) -> None:
+        """비동기 switch_controller 호출 (노드 시작 시 사용)."""
+        if not self._ctrl_switch_srv.service_is_ready():
+            self.get_logger().warn(
+                f'{label}: switch_controller 서비스 미준비, '
+                '잠시 후 재시도합니다.',
+            )
+            # 1초 후 재시도
+            timer = self.create_timer(1.0, lambda: (
+                timer.cancel() or
+                self._switch_controllers_async(activate, deactivate, label + ' [retry]')
+            ), callback_group=self._cbg)
+            return
+
+        fut = self._ctrl_switch_srv.call_async(
+            self._make_switch_request(activate, deactivate)
+        )
+        fut.add_done_callback(
+            lambda f: self._on_switch_done(f, label)
+        )
+
+    def _switch_controllers_sync(self,
+                                  activate: list,
+                                  deactivate: list,
+                                  label: str,
+                                  timeout_sec: float = 3.0) -> bool:
+        """동기 switch_controller 호출 (노드 종료 시 사용).
+        spin_until_future_complete 로 블로킹 대기하므로 destroy_node 내에서 안전하다.
+        """
+        if not self._ctrl_switch_srv.wait_for_service(timeout_sec=1.0):
+            self.get_logger().warn(f'{label}: switch_controller 서비스 없음, 건너뜀.')
+            return False
+
+        fut = self._ctrl_switch_srv.call_async(
+            self._make_switch_request(activate, deactivate)
+        )
+        rclpy.spin_until_future_complete(self, fut, timeout_sec=timeout_sec)
+
+        if fut.done():
+            return self._on_switch_done(fut, label)
+        else:
+            self.get_logger().warn(f'{label}: 타임아웃 ({timeout_sec}s).')
+            return False
+
+    def _on_switch_done(self, fut, label: str) -> bool:
+        try:
+            res = fut.result()
+            if res.ok:
+                self.get_logger().info(f'{label}: 성공.')
+                return True
+            else:
+                self.get_logger().warn(f'{label}: controller_manager 가 ok=false 반환.')
+                return False
+        except Exception as e:
+            self.get_logger().error(f'{label}: 오류 — {e}')
+            return False
 
     # ═══════════════════════════════════════════════════════════════════════
     # Joy / JointState 콜백
@@ -274,12 +396,56 @@ class SpaceMouseServoController(Node):
         self._prev_buttons = buttons
 
     def _on_button_pressed(self, index: int):
-        if index == self._btn_open:
-            self.get_logger().info(f'Button {index}: gripper open ({self._gripper_open_pos})')
-            self._publish_gripper(self._gripper_open_pos)
-        elif index == self._btn_close:
-            self.get_logger().info(f'Button {index}: gripper close ({self._gripper_close_pos})')
-            self._publish_gripper(self._gripper_close_pos)
+        if index == self._btn_gripper_toggle:
+            self._gripper_is_open = not self._gripper_is_open
+            state_str = 'open' if self._gripper_is_open else 'close'
+            pos = self._gripper_open_pos if self._gripper_is_open else self._gripper_close_pos
+            self.get_logger().info(
+                f'Button {index}: gripper toggle → {state_str} ({pos:.4f})'
+            )
+
+        elif index == self._btn_servo_toggle:
+            self._toggle_servo_mode()
+
+    def _toggle_servo_mode(self):
+        """
+        INACTIVE  → servo start + tool_original → tool_forward 전환
+        HOLD/ACTIVE → servo stop  + tool_forward → tool_original 복원
+        """
+        if self._state == _STATE_INACTIVE:
+            # ── SERVO ON ────────────────────────────────────────────────
+            self.get_logger().info(
+                'Button servo_toggle: SERVO ON '
+                f'({self._tool_orig_ctrl} → {self._tool_fwd_ctrl})'
+            )
+            self._switch_controllers_async(
+                activate=[self._tool_fwd_ctrl],
+                deactivate=[self._tool_orig_ctrl],
+                label='servo_toggle ON: activate tool_forward',
+            )
+            # stop → delay → start 시퀀스 (startup_begin 재사용)
+            self._do_stop_then_start()
+        else:
+            # ── SERVO OFF ───────────────────────────────────────────────
+            self.get_logger().info(
+                'Button servo_toggle: SERVO OFF '
+                f'({self._tool_fwd_ctrl} → {self._tool_orig_ctrl})'
+            )
+            self._do_stop_servo('servo_toggle OFF')
+            self._switch_controllers_async(
+                activate=[self._tool_orig_ctrl],
+                deactivate=[self._tool_fwd_ctrl],
+                label='servo_toggle OFF: restore tool_controller',
+            )
+
+    def _do_stop_then_start(self):
+        """stop_servo → delay → start_servo 시퀀스 (버튼 토글용)."""
+        if not self._stop_srv.wait_for_service(timeout_sec=3.0):
+            self.get_logger().warn('stop_servo 서비스 없음. start_servo 직접 시도.')
+            self._do_start_servo()
+            return
+        fut = self._stop_srv.call_async(Trigger.Request())
+        fut.add_done_callback(self._on_pre_stop_done)
 
     # ═══════════════════════════════════════════════════════════════════════
     # 주기 publish  (상태 머신)
@@ -295,12 +461,11 @@ class SpaceMouseServoController(Node):
             time_ok = time.monotonic() >= self._hold_end_time
             vel_ok  = self._arm_vel_zero
             if time_ok and vel_ok:
-                # HOLD → ACTIVE (단방향. 이후 velocity 변화로 되돌아오지 않음)
                 self._state = _STATE_ACTIVE
                 self.get_logger().info('Hold released → ACTIVE. SpaceMouse input enabled.')
             else:
-                # 탈출 조건 미충족: zero-twist 유지 (servo timeout 방지)
                 self._publish_zero_twist()
+                self._publish_gripper_cmd()   # HOLD 중에도 gripper 상태 유지
                 self.get_logger().debug(
                     f'[HOLD] time_ok={time_ok} vel_ok={vel_ok} '
                     f'remaining={max(0.0, self._hold_end_time - time.monotonic()):.2f}s',
@@ -308,10 +473,12 @@ class SpaceMouseServoController(Node):
                 )
                 return
 
-        # ── ACTIVE: SpaceMouse 입력을 그대로 publish ─────────────────────
+        # ── ACTIVE: SpaceMouse 입력 publish + gripper 상태 동시 publish ──
         # (velocity 체크 없음 — 움직임 중 재진입 차단)
         if not self._latest_axes:
+            self._stall_reset()
             self._publish_zero_twist()
+            self._publish_gripper_cmd()
             return
 
         def _get(key: str) -> float:
@@ -322,16 +489,70 @@ class SpaceMouseServoController(Node):
             raw = self._latest_axes[idx]
             return 0.0 if abs(raw) < self._deadband else sign * raw
 
+        lx = _get('tx') * self._lin_sc
+        ly = _get('ty') * self._lin_sc
+        lz = _get('tz') * self._lin_sc
+        rx = _get('rx') * self._ang_sc
+        ry = _get('ry') * self._ang_sc
+        rz = _get('rz') * self._ang_sc
+
+        # ── Stall 감지/해제 ────────────────────────────────────────────
+        commanding = (lx != 0.0 or ly != 0.0 or lz != 0.0 or
+                      rx != 0.0 or ry != 0.0 or rz != 0.0)
+        now = time.monotonic()
+
+        if self._stalled:
+            # stall 해제 조건: SpaceMouse 가 neutral 로 돌아온 경우
+            if not commanding:
+                self._stalled = False
+                self._stall_start_t = None
+                self.get_logger().info(
+                    'Stall cleared: SpaceMouse neutral → motion re-enabled.'
+                )
+            else:
+                self.get_logger().warn(
+                    'STALLED: SpaceMouse neutral 로 돌려놓으면 재개됩니다.',
+                    throttle_duration_sec=1.0,
+                )
+                self._publish_zero_twist()
+                self._publish_gripper_cmd()
+                return
+        else:
+            if commanding and self._arm_vel_zero:
+                # 명령은 있는데 로봇이 정지 → stall 카운트 시작/지속
+                if self._stall_start_t is None:
+                    self._stall_start_t = now
+                elif now - self._stall_start_t >= _STALL_DETECT_SEC:
+                    self._stalled = True
+                    self._stall_start_t = None
+                    self.get_logger().warn(
+                        f'Motion stall detected ({_STALL_DETECT_SEC}s): '
+                        'SpaceMouse 명령 차단. 조이스틱을 놓아 해제하세요.'
+                    )
+                    self._publish_zero_twist()
+                    self._publish_gripper_cmd()
+                    return
+            else:
+                # 정상 이동 중이거나 SpaceMouse neutral → stall 카운터 초기화
+                self._stall_start_t = None
+
+        # ── 정상 publish ───────────────────────────────────────────────
         msg = TwistStamped()
         msg.header.stamp    = self.get_clock().now().to_msg()
         msg.header.frame_id = self._frame_id
-        msg.twist.linear.x  = _get('tx') * self._lin_sc
-        msg.twist.linear.y  = _get('ty') * self._lin_sc
-        msg.twist.linear.z  = _get('tz') * self._lin_sc
-        msg.twist.angular.x = _get('rx') * self._ang_sc
-        msg.twist.angular.y = _get('ry') * self._ang_sc
-        msg.twist.angular.z = _get('rz') * self._ang_sc
+        msg.twist.linear.x  = lx
+        msg.twist.linear.y  = ly
+        msg.twist.linear.z  = lz
+        msg.twist.angular.x = rx
+        msg.twist.angular.y = ry
+        msg.twist.angular.z = rz
         self._twist_pub.publish(msg)
+        self._publish_gripper_cmd()
+
+    def _stall_reset(self):
+        """stall 상태 및 카운터를 초기화한다 (HOLD 진입·종료, axes 없음 등)."""
+        self._stalled       = False
+        self._stall_start_t = None
 
     def _publish_zero_twist(self):
         msg = TwistStamped()
@@ -343,9 +564,13 @@ class SpaceMouseServoController(Node):
     # gripper
     # ═══════════════════════════════════════════════════════════════════════
 
-    def _publish_gripper(self, position: float):
+    def _publish_gripper_cmd(self):
+        """현재 토글 상태(open/close)를 tool_forward_controller 에 publish.
+        _publish_twist 와 동일한 타이머에서 호출되어 같은 주기로 전송된다.
+        """
+        pos = self._gripper_open_pos if self._gripper_is_open else self._gripper_close_pos
         cmd = Float64MultiArray()
-        cmd.data = [position]
+        cmd.data = [pos]
         self._tool_pub.publish(cmd)
 
 

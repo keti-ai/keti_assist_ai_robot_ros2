@@ -93,13 +93,6 @@ def launch_setup(context, *args, **kwargs):
         [
             Node(
                 package="kaair_bringup",
-                executable="location_server",
-                name="location_server",
-                output="screen",
-                parameters=[location_server_params] if location_server_params else [],
-            ),
-            Node(
-                package="kaair_bringup",
                 executable="arm_move_action_server",
                 name="arm_move_action_server",
                 output="screen",
@@ -108,12 +101,6 @@ def launch_setup(context, *args, **kwargs):
                 package="kaair_bringup",
                 executable="lift_move_action_server",
                 name="lift_move_action_server",
-                output="screen",
-            ),
-            Node(
-                package="kaair_bringup",
-                executable="controller_mode_switcher",
-                name="controller_mode_switcher",
                 output="screen",
             ),
             Node(

@@ -53,7 +53,11 @@ import os
 import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler
+from launch.actions import (
+    DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler,
+    IncludeLaunchDescription,
+)
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.event_handlers import OnProcessExit, OnProcessStart
 from launch.substitutions import Command, LaunchConfiguration
 from launch.conditions import IfCondition
@@ -257,7 +261,13 @@ def launch_setup(context, *args, **kwargs):
         arguments=['tool_controller',
                    '--controller-manager', '/body/controller_manager'],
     )
-
+    tool_fwd_spawner = Node(
+        package='controller_manager',
+        executable='spawner',
+        arguments=['tool_forward_controller',
+                   '--controller-manager', '/body/controller_manager',
+                   '--inactive'],
+    )
 
 
     # ════════════════════════════════════════════════════════════════════════
@@ -334,7 +344,7 @@ def launch_setup(context, *args, **kwargs):
             on_start=[
                 lift_spawner,
                 head_spawner,
-                tool_spawner,
+                tool_spawner, tool_fwd_spawner,
             ],
         )),
 
@@ -350,7 +360,24 @@ def launch_setup(context, *args, **kwargs):
             on_start=[servo_node],
         )),
 
-
+        # ── 추가 서비스 / 비전 ──────────────────────────────────────────────
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(
+                    get_package_share_directory('kaair_bringup'),
+                    'launch', 'server_worker_loader.py',
+                )
+            ),
+            launch_arguments={'spec': LaunchConfiguration('spec')}.items(),
+        ),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(
+                    get_package_share_directory('kaair_bringup'),
+                    'launch', 'vision_runner.launch.py',
+                )
+            ),
+        ),
     ]
 
 
