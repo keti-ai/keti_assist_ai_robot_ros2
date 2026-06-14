@@ -121,49 +121,68 @@ class ObjectMarkerServer(Node):
             object_label = 'object'
         object_name = f'/object/{object_label}'
 
-        u = int(request.u)
-        v = int(request.v)
+        u_array = list(request.u_array)
+        v_array = list(request.v_array)
 
-        point = self.get_3d_point_from_depth_pixel(u, v)
-        if point is None:
+        if len(u_array) == 0:
             response.success = False
-            response.message = 'failed_to_get_3d_point'
-            response.x = 0.0
-            response.y = 0.0
-            response.z = 0.0
+            response.message = 'u_array and v_array must not be empty'
+            response.x_array = []
+            response.y_array = []
+            response.z_array = []
             return response
 
-        map_x, map_y, map_z = point
+        if len(u_array) != len(v_array):
+            response.success = False
+            response.message = 'u_array and v_array must have the same length'
+            response.x_array = []
+            response.y_array = []
+            response.z_array = []
+            return response
 
         base_frame = request.base_frame.strip()
         if base_frame == '':
             base_frame = self.map_frame
 
-        base_xyz = self.transform_point(
-            map_x, map_y, map_z, self.map_frame, base_frame
-        )
-        if base_xyz is None:
-            response.success = False
-            response.message = 'failed_transform_to_base_frame'
-            response.x = 0.0
-            response.y = 0.0
-            response.z = 0.0
-            return response
+        map_points = []
+        base_points = []
 
-        bx, by, bz = base_xyz
-        self.saved_objects[object_name] = (map_x, map_y, map_z)
+        for u, v in zip(u_array, v_array):
+            point = self.get_3d_point_from_depth_pixel(int(u), int(v))
+            if point is None:
+                response.success = False
+                response.message = f'failed_to_get_3d_point at ({u}, {v})'
+                response.x_array = []
+                response.y_array = []
+                response.z_array = []
+                return response
+
+            map_x, map_y, map_z = point
+            map_points.append((map_x, map_y, map_z))
+
+            base_xyz = self.transform_point(map_x, map_y, map_z, self.map_frame, base_frame)
+            if base_xyz is None:
+                response.success = False
+                response.message = 'failed_transform_to_base_frame'
+                response.x_array = []
+                response.y_array = []
+                response.z_array = []
+                return response
+
+            base_points.append(base_xyz)
+
+        self.saved_objects[object_name] = map_points
 
         self.get_logger().info(
-            f'SUCCESS: "{object_name}" detected at pixel ({u}, {v}), '
-            f'map=({map_x:.3f}, {map_y:.3f}, {map_z:.3f}), '
-            f'{base_frame}=({bx:.3f}, {by:.3f}, {bz:.3f})'
+            f'SUCCESS: "{object_name}" detected at {len(map_points)} pixel(s), '
+            f'first map=({map_points[0][0]:.3f}, {map_points[0][1]:.3f}, {map_points[0][2]:.3f})'
         )
 
         response.success = True
         response.message = 'success'
-        response.x = float(bx)
-        response.y = float(by)
-        response.z = float(bz)
+        response.x_array = [float(bx) for bx, _, __ in base_points]
+        response.y_array = [float(by) for _, by, __ in base_points]
+        response.z_array = [float(bz) for _, __, bz in base_points]
         return response
 
     def get_3d_point_from_depth_pixel(self, u, v):
@@ -217,8 +236,10 @@ class ObjectMarkerServer(Node):
 
         delete_array = MarkerArray()
         for object_name in object_names:
+            points = self.saved_objects.get(object_name, [])
             delete_array.markers.append(self.build_delete_marker(object_name, marker_id=0))
-            delete_array.markers.append(self.build_delete_marker(object_name, marker_id=1))
+            if len(points) == 1:
+                delete_array.markers.append(self.build_delete_marker(object_name, marker_id=1))
 
         if delete_array.markers:
             self.marker_pub.publish(delete_array)
@@ -385,6 +406,33 @@ class ObjectMarkerServer(Node):
 
         return marker
 
+    def build_points_marker(self, object_name, points):
+        marker = Marker()
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.header.frame_id = self.map_frame
+        marker.ns = object_name
+        marker.id = 0
+        marker.type = Marker.POINTS
+        marker.action = Marker.ADD
+
+        for x, y, z in points:
+            p = Point()
+            p.x = float(x)
+            p.y = float(y)
+            p.z = float(z)
+            marker.points.append(p)
+
+        marker.scale.x = 0.08
+        marker.scale.y = 0.08
+        marker.lifetime = Duration(seconds=0.6).to_msg()
+
+        marker.color.a = 1.0
+        marker.color.r = 0.5
+        marker.color.g = 0.0
+        marker.color.b = 0.5
+
+        return marker
+
     def build_delete_marker(self, object_name, marker_id):
         marker = Marker()
         marker.header.stamp = self.get_clock().now().to_msg()
@@ -400,13 +448,14 @@ class ObjectMarkerServer(Node):
             marker_array.markers.extend(self.pending_delete_markers)
             self.delete_republish_ticks -= 1
 
-        for object_name, (x, y, z) in self.saved_objects.items():
-            marker_array.markers.append(
-                self.build_arrow_marker(object_name, x, y, z)
-            )
-            marker_array.markers.append(
-                self.build_text_marker(object_name, x, y, z)
-            )
+        for object_name, points in self.saved_objects.items():
+            if len(points) == 1:
+                x, y, z = points[0]
+                marker_array.markers.append(self.build_arrow_marker(object_name, x, y, z))
+                marker_array.markers.append(self.build_text_marker(object_name, x, y, z))
+            elif len(points) >= 2:
+                marker_array.markers.append(self.build_points_marker(object_name, points))
+
         self.marker_pub.publish(marker_array)
 
 
