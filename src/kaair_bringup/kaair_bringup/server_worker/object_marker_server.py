@@ -79,7 +79,7 @@ class ObjectMarkerServer(Node):
             0.1, self.publish_saved_markers
         )
 
-        self.get_logger().info('Object marker server started.')
+        self.get_logger().info('Object marker server started. v260615')
 
     def log_once(self, key, message, level='info'):
         if self.log_flags.get(key, False):
@@ -116,6 +116,20 @@ class ObjectMarkerServer(Node):
         )
 
     def handle_create_object_marker(self, request, response):
+        try:
+            return self._handle_create_object_marker_impl(request, response)
+        except Exception as e:
+            self.get_logger().error(f'Unhandled exception in handle_create_object_marker: {e}')
+            import traceback
+            self.get_logger().error(traceback.format_exc())
+            response.success = False
+            response.message = f'internal_error: {e}'
+            response.x_array = []
+            response.y_array = []
+            response.z_array = []
+            return response
+
+    def _handle_create_object_marker_impl(self, request, response):
         object_label = request.object_label.strip()
         if object_label == '':
             object_label = 'object'
@@ -176,7 +190,6 @@ class ObjectMarkerServer(Node):
             y_out.append(float(by))
             z_out.append(float(bz))
 
-        skipped = no_depth_count + no_transform_count
         if map_points:
             self.saved_objects[object_name] = map_points
             self.get_logger().info(
@@ -186,17 +199,25 @@ class ObjectMarkerServer(Node):
             )
         else:
             self.get_logger().warn(
-                f'"{object_name}": all {len(u_array)} pixel(s) skipped '
-                f'(no_depth={no_depth_count}, no_transform={no_transform_count}), no marker created'
+                f'"{object_name}": all {len(u_array)} pixel(s) have no valid depth '
+                f'(no_depth={no_depth_count}, no_transform={no_transform_count}), returning false'
             )
+            response.success = False
+            response.message = f'all_no_depth (no_depth={no_depth_count}, no_transform={no_transform_count})'
+            response.x_array = x_out
+            response.y_array = y_out
+            response.z_array = z_out
+            return response
 
         response.success = True
-        response.message = (
-            f'success (valid={len(map_points)}, no_depth={no_depth_count}, no_transform={no_transform_count})'
-        )
+        response.message = 'success'
         response.x_array = x_out
         response.y_array = y_out
         response.z_array = z_out
+        self.get_logger().info(
+            f'Response built: success=True, array_len={len(x_out)}, '
+            f'no_depth={no_depth_count}, no_transform={no_transform_count}'
+        )
         return response
 
     def get_3d_point_from_depth_pixel(self, u, v):
