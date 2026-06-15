@@ -145,44 +145,58 @@ class ObjectMarkerServer(Node):
             base_frame = self.map_frame
 
         map_points = []
-        base_points = []
+        x_out = []
+        y_out = []
+        z_out = []
+        no_depth_count = 0
+        no_transform_count = 0
 
         for u, v in zip(u_array, v_array):
             point = self.get_3d_point_from_depth_pixel(int(u), int(v))
             if point is None:
-                response.success = False
-                response.message = f'failed_to_get_3d_point at ({u}, {v})'
-                response.x_array = []
-                response.y_array = []
-                response.z_array = []
-                return response
+                no_depth_count += 1
+                x_out.append(float('nan'))
+                y_out.append(float('nan'))
+                z_out.append(float('nan'))
+                continue
 
             map_x, map_y, map_z = point
-            map_points.append((map_x, map_y, map_z))
 
             base_xyz = self.transform_point(map_x, map_y, map_z, self.map_frame, base_frame)
             if base_xyz is None:
-                response.success = False
-                response.message = 'failed_transform_to_base_frame'
-                response.x_array = []
-                response.y_array = []
-                response.z_array = []
-                return response
+                no_transform_count += 1
+                x_out.append(float('nan'))
+                y_out.append(float('nan'))
+                z_out.append(float('nan'))
+                continue
 
-            base_points.append(base_xyz)
+            map_points.append((map_x, map_y, map_z))
+            bx, by, bz = base_xyz
+            x_out.append(float(bx))
+            y_out.append(float(by))
+            z_out.append(float(bz))
 
-        self.saved_objects[object_name] = map_points
-
-        self.get_logger().info(
-            f'SUCCESS: "{object_name}" detected at {len(map_points)} pixel(s), '
-            f'first map=({map_points[0][0]:.3f}, {map_points[0][1]:.3f}, {map_points[0][2]:.3f})'
-        )
+        skipped = no_depth_count + no_transform_count
+        if map_points:
+            self.saved_objects[object_name] = map_points
+            self.get_logger().info(
+                f'SUCCESS: "{object_name}" detected at {len(map_points)} pixel(s) '
+                f'(skipped: no_depth={no_depth_count}, no_transform={no_transform_count}), '
+                f'first map=({map_points[0][0]:.3f}, {map_points[0][1]:.3f}, {map_points[0][2]:.3f})'
+            )
+        else:
+            self.get_logger().warn(
+                f'"{object_name}": all {len(u_array)} pixel(s) skipped '
+                f'(no_depth={no_depth_count}, no_transform={no_transform_count}), no marker created'
+            )
 
         response.success = True
-        response.message = 'success'
-        response.x_array = [float(bx) for bx, _, __ in base_points]
-        response.y_array = [float(by) for _, by, __ in base_points]
-        response.z_array = [float(bz) for _, __, bz in base_points]
+        response.message = (
+            f'success (valid={len(map_points)}, no_depth={no_depth_count}, no_transform={no_transform_count})'
+        )
+        response.x_array = x_out
+        response.y_array = y_out
+        response.z_array = z_out
         return response
 
     def get_3d_point_from_depth_pixel(self, u, v):
