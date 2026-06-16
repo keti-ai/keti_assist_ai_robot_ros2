@@ -1,6 +1,7 @@
 string object_label
 int32[] u_array
 int32[] v_array
+float64[] d_array
 string base_frame
 ---
 bool success
@@ -8,3 +9,7 @@ string message
 float64[] x_array
 float64[] y_array
 float64[] z_array
+float64[] depth_raw_array
+uint8[] r_array
+uint8[] g_array
+uint8[] b_array

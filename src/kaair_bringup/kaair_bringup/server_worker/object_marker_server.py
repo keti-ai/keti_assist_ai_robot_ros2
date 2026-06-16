@@ -2,6 +2,7 @@
 
 import math
 import struct
+import traceback
 
 import rclpy
 from rclpy.node import Node
@@ -30,6 +31,7 @@ class ObjectMarkerServer(Node):
         )
 
         self.latest_depth_msg = None
+        self.latest_color_msg = None
         self.latest_camera_info = None
         self.saved_objects = {}
         self.pending_delete_markers = []
@@ -41,6 +43,13 @@ class ObjectMarkerServer(Node):
             Image,
             '/femto/depth/image_raw',
             self.depth_callback,
+            sensor_qos
+        )
+
+        self.color_sub = self.create_subscription(
+            Image,
+            '/femto/color/image_raw',
+            self.color_callback,
             sensor_qos
         )
 
@@ -79,7 +88,7 @@ class ObjectMarkerServer(Node):
             0.1, self.publish_saved_markers
         )
 
-        self.get_logger().info('Object marker server started. v260615')
+        self.get_logger().info('Object marker server started.')
 
     def log_once(self, key, message, level='info'):
         if self.log_flags.get(key, False):
@@ -102,6 +111,14 @@ class ObjectMarkerServer(Node):
             f'encoding={msg.encoding}, step={msg.step}, frame_id={msg.header.frame_id}'
         )
 
+    def color_callback(self, msg):
+        self.latest_color_msg = msg
+        self.log_once(
+            'color_received',
+            f'First color received: width={msg.width}, height={msg.height}, '
+            f'encoding={msg.encoding}, frame_id={msg.header.frame_id}'
+        )
+
     def camera_info_callback(self, msg):
         self.latest_camera_info = msg
         fx = msg.k[0]
@@ -115,18 +132,25 @@ class ObjectMarkerServer(Node):
             f'cx={cx:.3f}, cy={cy:.3f}, frame_id={msg.header.frame_id}'
         )
 
+    # ──────────────────────────────────────────────
+    # Service handler (exception wrapper)
+    # ──────────────────────────────────────────────
+
     def handle_create_object_marker(self, request, response):
         try:
             return self._handle_create_object_marker_impl(request, response)
         except Exception as e:
             self.get_logger().error(f'Unhandled exception in handle_create_object_marker: {e}')
-            import traceback
             self.get_logger().error(traceback.format_exc())
             response.success = False
             response.message = f'internal_error: {e}'
             response.x_array = []
             response.y_array = []
             response.z_array = []
+            response.depth_raw_array = []
+            response.r_array = []
+            response.g_array = []
+            response.b_array = []
             return response
 
     def _handle_create_object_marker_impl(self, request, response):
@@ -137,6 +161,7 @@ class ObjectMarkerServer(Node):
 
         u_array = list(request.u_array)
         v_array = list(request.v_array)
+        d_array = list(request.d_array)  # optional; empty = use depth image for all
 
         if len(u_array) == 0:
             response.success = False
@@ -144,6 +169,10 @@ class ObjectMarkerServer(Node):
             response.x_array = []
             response.y_array = []
             response.z_array = []
+            response.depth_raw_array = []
+            response.r_array = []
+            response.g_array = []
+            response.b_array = []
             return response
 
         if len(u_array) != len(v_array):
@@ -152,7 +181,18 @@ class ObjectMarkerServer(Node):
             response.x_array = []
             response.y_array = []
             response.z_array = []
+            response.depth_raw_array = []
+            response.r_array = []
+            response.g_array = []
+            response.b_array = []
             return response
+
+        # d_array: must be empty OR same length as u_array
+        if len(d_array) > 0 and len(d_array) != len(u_array):
+            self.get_logger().warn(
+                f'd_array length ({len(d_array)}) != u_array length ({len(u_array)}), ignoring d_array'
+            )
+            d_array = []
 
         base_frame = request.base_frame.strip()
         if base_frame == '':
@@ -162,20 +202,58 @@ class ObjectMarkerServer(Node):
         x_out = []
         y_out = []
         z_out = []
+        depth_raw_out = []
+        r_out = []
+        g_out = []
+        b_out = []
         no_depth_count = 0
         no_transform_count = 0
 
-        for u, v in zip(u_array, v_array):
-            point = self.get_3d_point_from_depth_pixel(int(u), int(v))
-            if point is None:
-                no_depth_count += 1
+        for i, (u, v) in enumerate(zip(u_array, v_array)):
+            u, v = int(u), int(v)
+
+            # ── depth_raw: always read actual sensor pixel value (no neighbor search) ──
+            depth_raw = self._read_depth_raw(u, v)
+            depth_raw_out.append(depth_raw if depth_raw is not None else 0.0)
+
+            # ── RGB at (u, v) ──
+            r, g, b = self._read_color_pixel(u, v)
+            r_out.append(r)
+            g_out.append(g)
+            b_out.append(b)
+
+            # ── Determine z for 3D projection ──
+            depth_override = None
+            if d_array:
+                d = d_array[i]
+                if math.isfinite(d) and d > 0.0:
+                    depth_override = d
+
+            if depth_override is not None:
+                # Use caller-provided depth directly
+                z = depth_override
+            else:
+                # Try depth image (with neighbour fallback)
+                z = self._get_depth_z(u, v)
+                if z is None:
+                    no_depth_count += 1
+                    x_out.append(float('nan'))
+                    y_out.append(float('nan'))
+                    z_out.append(float('nan'))
+                    continue
+
+            # ── Project pixel + z → map frame ──
+            map_point = self._project_to_map(u, v, z)
+            if map_point is None:
+                no_transform_count += 1
                 x_out.append(float('nan'))
                 y_out.append(float('nan'))
                 z_out.append(float('nan'))
                 continue
 
-            map_x, map_y, map_z = point
+            map_x, map_y, map_z = map_point
 
+            # ── Transform map → base_frame ──
             base_xyz = self.transform_point(map_x, map_y, map_z, self.map_frame, base_frame)
             if base_xyz is None:
                 no_transform_count += 1
@@ -207,6 +285,10 @@ class ObjectMarkerServer(Node):
             response.x_array = x_out
             response.y_array = y_out
             response.z_array = z_out
+            response.depth_raw_array = depth_raw_out
+            response.r_array = r_out
+            response.g_array = g_out
+            response.b_array = b_out
             return response
 
         response.success = True
@@ -214,54 +296,150 @@ class ObjectMarkerServer(Node):
         response.x_array = x_out
         response.y_array = y_out
         response.z_array = z_out
-        self.get_logger().info(
-            f'Response built: success=True, array_len={len(x_out)}, '
-            f'no_depth={no_depth_count}, no_transform={no_transform_count}'
-        )
+        response.depth_raw_array = depth_raw_out
+        response.r_array = r_out
+        response.g_array = g_out
+        response.b_array = b_out
         return response
 
-    def get_3d_point_from_depth_pixel(self, u, v):
+    # ──────────────────────────────────────────────
+    # Depth helpers
+    # ──────────────────────────────────────────────
+
+    def _read_depth_raw(self, u, v):
+        """Return raw depth (metres) at pixel (u,v) with NO neighbour search. None if unavailable."""
+        if self.latest_depth_msg is None:
+            return None
+        dm = self.latest_depth_msg
+        if not (0 <= u < dm.width and 0 <= v < dm.height):
+            return None
+        return self.read_depth_value(dm, u, v)
+
+    def _get_depth_z(self, u, v):
+        """Return depth z (metres) from depth image, with neighbour fallback. None if unavailable."""
         if self.latest_depth_msg is None:
             self.log_once('no_depth', 'No depth image received yet.', level='warn')
             return None
-
-        if self.latest_camera_info is None:
-            self.log_once('no_camera_info', 'No camera_info received yet.', level='warn')
-            return None
-
-        depth_msg = self.latest_depth_msg
-        cam_info = self.latest_camera_info
-
-        if not (0 <= u < depth_msg.width and 0 <= v < depth_msg.height):
+        dm = self.latest_depth_msg
+        if not (0 <= u < dm.width and 0 <= v < dm.height):
             self.get_logger().warn(
-                f'Pixel out of depth range: ({u}, {v}), '
-                f'size=({depth_msg.width}, {depth_msg.height})'
+                f'Pixel out of depth range: ({u}, {v}), size=({dm.width}, {dm.height})'
             )
             return None
 
-        z = self.read_depth_value(depth_msg, u, v)
+        z = self.read_depth_value(dm, u, v)
         if z is None or not math.isfinite(z) or z <= 0.0:
-            z = self.search_valid_depth(depth_msg, u, v, radius=3)
+            z = self.search_valid_depth(dm, u, v, radius=3)
 
         if z is None or not math.isfinite(z) or z <= 0.0:
             self.get_logger().warn(f'No valid depth near pixel ({u}, {v})')
             return None
 
-        fx = cam_info.k[0]
-        fy = cam_info.k[4]
-        cx = cam_info.k[2]
-        cy = cam_info.k[5]
+        return z
 
-        x = (u - cx) * z / fx
-        y = (v - cy) * z / fy
-
-        source_frame = depth_msg.header.frame_id
-        map_point = self.transform_point(x, y, z, source_frame, self.map_frame)
-        if map_point is None:
+    def _project_to_map(self, u, v, z):
+        """Project pixel (u,v) with depth z → map frame. Returns (x,y,z) or None."""
+        if self.latest_camera_info is None:
+            self.log_once('no_camera_info', 'No camera_info received yet.', level='warn')
             return None
 
-        map_x, map_y, map_z = map_point
-        return (map_x, map_y, map_z)
+        cam = self.latest_camera_info
+        fx, fy = cam.k[0], cam.k[4]
+        cx, cy = cam.k[2], cam.k[5]
+
+        px = (u - cx) * z / fx
+        py = (v - cy) * z / fy
+
+        if self.latest_depth_msg is not None:
+            source_frame = self.latest_depth_msg.header.frame_id
+        else:
+            source_frame = cam.header.frame_id
+
+        return self.transform_point(px, py, z, source_frame, self.map_frame)
+
+    # ──────────────────────────────────────────────
+    # Color helper
+    # ──────────────────────────────────────────────
+
+    def _read_color_pixel(self, u, v):
+        """Return (r, g, b) uint8 at pixel (u,v). Returns (0, 0, 0) if unavailable."""
+        if self.latest_color_msg is None:
+            return 0, 0, 0
+
+        msg = self.latest_color_msg
+
+        # Scale u,v if color image has different resolution than depth
+        if self.latest_depth_msg is not None and (
+            msg.width != self.latest_depth_msg.width or
+            msg.height != self.latest_depth_msg.height
+        ):
+            uc = int(u * msg.width / self.latest_depth_msg.width)
+            vc = int(v * msg.height / self.latest_depth_msg.height)
+        else:
+            uc, vc = u, v
+
+        if not (0 <= uc < msg.width and 0 <= vc < msg.height):
+            return 0, 0, 0
+
+        try:
+            enc = msg.encoding.lower()
+            offset = vc * msg.step
+
+            if enc in ('rgb8', 'rgb'):
+                base = offset + uc * 3
+                r = msg.data[base]
+                g = msg.data[base + 1]
+                b = msg.data[base + 2]
+
+            elif enc in ('bgr8', 'bgr'):
+                base = offset + uc * 3
+                b = msg.data[base]
+                g = msg.data[base + 1]
+                r = msg.data[base + 2]
+
+            elif enc in ('rgba8', 'rgba'):
+                base = offset + uc * 4
+                r = msg.data[base]
+                g = msg.data[base + 1]
+                b = msg.data[base + 2]
+
+            elif enc in ('bgra8', 'bgra'):
+                base = offset + uc * 4
+                b = msg.data[base]
+                g = msg.data[base + 1]
+                r = msg.data[base + 2]
+
+            elif enc in ('mono8', '8uc1'):
+                val = msg.data[offset + uc]
+                r, g, b = val, val, val
+
+            else:
+                self.log_once(
+                    f'unsupported_color_enc_{enc}',
+                    f'Unsupported color encoding: {msg.encoding}',
+                    level='warn'
+                )
+                return 0, 0, 0
+
+            return int(r), int(g), int(b)
+
+        except Exception as e:
+            self.get_logger().error(f'Failed reading color pixel ({u},{v}): {e}')
+            return 0, 0, 0
+
+    # ──────────────────────────────────────────────
+    # Legacy 3D point method (kept for compatibility)
+    # ──────────────────────────────────────────────
+
+    def get_3d_point_from_depth_pixel(self, u, v):
+        z = self._get_depth_z(u, v)
+        if z is None:
+            return None
+        return self._project_to_map(u, v, z)
+
+    # ──────────────────────────────────────────────
+    # Clear markers
+    # ──────────────────────────────────────────────
 
     def handle_clear_object_markers(self, _request, response):
         object_names = [
@@ -291,6 +469,10 @@ class ObjectMarkerServer(Node):
         response.success = True
         response.message = f'cleared_count={len(object_names)}'
         return response
+
+    # ──────────────────────────────────────────────
+    # TF helpers
+    # ──────────────────────────────────────────────
 
     def transform_point(self, x, y, z, source_frame, target_frame):
         if source_frame == target_frame:
@@ -333,6 +515,10 @@ class ObjectMarkerServer(Node):
         ry = vy + qw * ty + (qz * tx - qx * tz)
         rz = vz + qw * tz + (qx * ty - qy * tx)
         return (rx, ry, rz)
+
+    # ──────────────────────────────────────────────
+    # Depth image reading
+    # ──────────────────────────────────────────────
 
     def read_depth_value(self, depth_msg, u, v):
         try:
@@ -381,6 +567,10 @@ class ObjectMarkerServer(Node):
                         )
                         return z
         return None
+
+    # ──────────────────────────────────────────────
+    # Marker builders
+    # ──────────────────────────────────────────────
 
     def build_arrow_marker(self, object_name, x, y, z):
         marker = Marker()
