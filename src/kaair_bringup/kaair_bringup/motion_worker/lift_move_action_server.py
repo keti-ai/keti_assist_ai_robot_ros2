@@ -1,212 +1,211 @@
 #!/usr/bin/env python3
 
-import time
+"""
+LiftMove 액션 서버 – /body/lift_controller/follow_joint_trajectory 직접 제어
+
+MoveGroup 을 거치지 않으므로 arm MoveGroup 과 동시에 실행 가능.
+"""
+
+import io
 import math
+import sys
+import time
+
 import rclpy
-from rclpy.node import Node
-from rclpy.action import ActionServer, ActionClient, CancelResponse, GoalResponse
-from rclpy.executors import MultiThreadedExecutor
-from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from action_msgs.msg import GoalStatus
-from std_msgs.msg import String
+from builtin_interfaces.msg import Duration as RosDuration
+from control_msgs.action import FollowJointTrajectory
+from rclpy.action import ActionClient, ActionServer, CancelResponse
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import JointState
-from moveit_msgs.action import MoveGroup
-from moveit_msgs.msg import (
-    MotionPlanRequest, Constraints, JointConstraint, MoveItErrorCodes,
-)
+from std_msgs.msg import String
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from urdf_parser_py.urdf import URDF
+
 from kaair_msgs.action import LiftMove
 
-# robot_state_publisher가 /robot_description을 발행할 때 쓰는 QoS
-# (transient_local = 나중에 구독해도 마지막 메시지를 받을 수 있음)
 _LATCHED_QOS = QoSProfile(
     depth=1,
     durability=DurabilityPolicy.TRANSIENT_LOCAL,
     reliability=ReliabilityPolicy.RELIABLE,
 )
 
-MOVE_GROUP  = 'lift'
-LIFT_JOINT  = 'lift_joint'
-MOVE_ACTION = 'move_action'  # MoveIt MoveGroup 액션 서버 이름
-FEEDBACK_HZ = 10.0           # 실행 중 피드백 발행 주기 (Hz)
+LIFT_JOINT       = "lift_joint"
+CONTROLLER_NS    = "/body/lift_controller"
+FJT_ACTION       = f"{CONTROLLER_NS}/follow_joint_trajectory"
+FEEDBACK_HZ      = 10.0
+MIN_DURATION_SEC = 0.5   # 아주 짧은 이동도 최소 이 시간은 확보
+VELOCITY_SCALING = 0.8   # URDF max_vel 의 80%만 사용 (여유 확보)
 
-MOVEIT_ERROR_MAP = {
-    MoveItErrorCodes.PLANNING_FAILED:          "Planning 실패",
-    MoveItErrorCodes.INVALID_MOTION_PLAN:      "유효하지 않은 플랜",
-    MoveItErrorCodes.CONTROL_FAILED:           "실행 실패 (컨트롤러 오류)",
-    MoveItErrorCodes.NO_IK_SOLUTION:           "IK 해 없음",
-    MoveItErrorCodes.GOAL_IN_COLLISION:        "목표 위치 충돌",
-    MoveItErrorCodes.START_STATE_IN_COLLISION: "시작 상태 충돌",
-}
+
+def _ros_duration(seconds: float) -> RosDuration:
+    sec  = int(seconds)
+    nsec = int((seconds - sec) * 1e9)
+    return RosDuration(sec=sec, nanosec=nsec)
 
 
 class LiftMoveActionServer(Node):
     def __init__(self):
-        super().__init__('lift_move_action_server')
+        super().__init__("lift_move_action_server")
 
-        # ── lift_joint 리밋 (/robot_description 토픽에서 비동기 수신) ─────────
-        # robot_state_publisher가 transient_local QoS로 발행하므로
-        # 구독 시점이 늦어도 마지막 메시지를 즉시 받는다.
-        self._joint_lower = -math.inf
-        self._joint_upper =  math.inf
+        # URDF에서 joint limit 비동기 로드
+        self._joint_lower  = -math.inf
+        self._joint_upper  =  math.inf
+        self._max_velocity = 0.2          # URDF 파싱 전 기본값 (m/s)
         self.create_subscription(
-            String, '/robot_description',
+            String, "/robot_description",
             self._on_robot_description,
             _LATCHED_QOS,
         )
 
-        self._current_height   = 0.0
-        self._active_mg_handle = None   # 현재 실행 중인 MoveGroup goal handle
-        self.create_subscription(JointState, '/joint_states', self._on_joint_state, 10)
+        self._current_height  = 0.0
+        self._active_fjt_handle = None
+        self.create_subscription(JointState, "/joint_states", self._on_joint_state, 10)
 
-        self._move_client = ActionClient(self, MoveGroup, MOVE_ACTION)
+        self._fjt_client = ActionClient(self, FollowJointTrajectory, FJT_ACTION)
 
         ActionServer(
-            self, LiftMove, 'kaair_worker/lift_move',
+            self, LiftMove, "kaair_worker/lift_move",
             execute_callback=self._execute_cb,
             cancel_callback=self._cancel_cb,
         )
-        self.get_logger().info("LiftMoveActionServer 시작: /kaair_worker/lift_move (joint limit 대기 중)")
+        self.get_logger().info(
+            f"LiftMoveActionServer 시작: /kaair_worker/lift_move "
+            f"→ {FJT_ACTION} (직접 제어 모드)"
+        )
 
+    # ── URDF 파싱 ─────────────────────────────────────────────────────────────
     def _on_robot_description(self, msg: String):
-        """
-        /robot_description 토픽(robot_state_publisher 발행)에서
-        URDF를 파싱해 lift_joint position limit을 설정한다.
-        """
         try:
-            import io, sys
-            _stderr, sys.stderr = sys.stderr, io.StringIO()   # urdf_parser_py 경고 억제
+            _stderr, sys.stderr = sys.stderr, io.StringIO()
             robot = URDF.from_xml_string(msg.data)
             sys.stderr = _stderr
             joint = next((j for j in robot.joints if j.name == LIFT_JOINT), None)
             if joint and joint.limit:
-                self._joint_lower = joint.limit.lower
-                self._joint_upper = joint.limit.upper
+                self._joint_lower  = float(joint.limit.lower)
+                self._joint_upper  = float(joint.limit.upper)
+                self._max_velocity = float(joint.limit.velocity)
                 self.get_logger().info(
-                    f"{LIFT_JOINT} 리밋 로드 완료: "
-                    f"[{self._joint_lower:.3f}, {self._joint_upper:.3f}]m"
+                    f"{LIFT_JOINT} 리밋: [{self._joint_lower:.3f}, {self._joint_upper:.3f}] m, "
+                    f"max_vel={self._max_velocity:.3f} m/s"
                 )
             else:
-                self.get_logger().warn(f"URDF에서 {LIFT_JOINT} 리밋을 찾지 못함 — 검증 비활성화")
+                self.get_logger().warn(f"URDF에서 {LIFT_JOINT} 리밋을 찾지 못함")
         except Exception as e:
-            self.get_logger().warn(f"URDF 파싱 실패 — joint limit 검증 비활성화: {e}")
+            self.get_logger().warn(f"URDF 파싱 실패: {e}")
 
-    # ── Joint state 구독 ────────────────────────────────────────────────────
+    # ── joint state 구독 ──────────────────────────────────────────────────────
     def _on_joint_state(self, msg: JointState):
         if LIFT_JOINT in msg.name:
-            self._current_height = msg.position[msg.name.index(LIFT_JOINT)]
+            self._current_height = float(msg.position[msg.name.index(LIFT_JOINT)])
 
-    # ── MoveGroup goal 조립 ──────────────────────────────────────────────────
-    def _build_moveit_goal(self, target_height: float, plan_only: bool) -> MoveGroup.Goal:
-        jc = JointConstraint()
-        jc.joint_name            = LIFT_JOINT
-        jc.position              = float(target_height)
-        jc.tolerance_above       = 0.001
-        jc.tolerance_below       = 0.001
-        jc.weight                = 1.0
-
-        constraints = Constraints()
-        constraints.joint_constraints.append(jc)
-
-        req = MotionPlanRequest()
-        req.group_name                      = MOVE_GROUP
-        req.num_planning_attempts           = 3
-        req.allowed_planning_time           = 5.0
-        req.max_velocity_scaling_factor     = 1.0
-        req.max_acceleration_scaling_factor = 1.0
-        req.goal_constraints.append(constraints)
-
-        goal = MoveGroup.Goal()
-        goal.request                     = req
-        goal.planning_options.plan_only  = plan_only
-        return goal
-
-    # ── Cancel 콜백 ─────────────────────────────────────────────────────────
-    def _cancel_cb(self, goal_handle) -> CancelResponse:
-        """
-        클라이언트로부터 cancel 요청이 오면 즉시 수락한다.
-        실제 정지는 _execute_cb 내부의 is_cancel_requested 체크가 담당한다.
-        """
+    # ── Cancel 콜백 ───────────────────────────────────────────────────────────
+    def _cancel_cb(self, _goal_handle) -> CancelResponse:
         self.get_logger().info("Cancel 요청 수신")
         return CancelResponse.ACCEPT
 
-    # ── MoveGroup 동기 호출 헬퍼 ────────────────────────────────────────────
-    def _call_move_group(
+    # ── 궤적 조립 ─────────────────────────────────────────────────────────────
+    def _build_trajectory(self, target: float) -> tuple[JointTrajectory, float]:
+        """
+        현재위치 → target 의 2-point 직선 궤적을 생성한다.
+        duration = distance / (max_vel * scaling), 최소 MIN_DURATION_SEC 보장.
+        """
+        distance     = abs(target - self._current_height)
+        eff_vel      = self._max_velocity * VELOCITY_SCALING
+        duration_sec = max(distance / eff_vel, MIN_DURATION_SEC) if eff_vel > 0 else MIN_DURATION_SEC
+
+        traj = JointTrajectory()
+        traj.joint_names = [LIFT_JOINT]
+
+        # 시작점 (t=0): 현재 위치를 명시적으로 지정해 급격한 초기 이동 방지
+        p0 = JointTrajectoryPoint()
+        p0.positions       = [self._current_height]
+        p0.velocities      = [0.0]
+        p0.time_from_start = _ros_duration(0.0)
+
+        # 목표점
+        p1 = JointTrajectoryPoint()
+        p1.positions       = [target]
+        p1.velocities      = [0.0]
+        p1.time_from_start = _ros_duration(duration_sec)
+
+        traj.points = [p0, p1]
+        return traj, duration_sec
+
+    # ── FollowJointTrajectory 호출 헬퍼 ──────────────────────────────────────
+    def _call_fjt(
         self,
-        target_height: float,
-        plan_only: bool,
+        target: float,
         goal_handle,
         feedback: LiftMove.Feedback,
-        status: str,
     ) -> tuple[bool | None, str]:
         """
-        MoveGroup 액션을 동기적으로 호출한다.
-        반환값:
-            (True,  "성공")      → 성공
-            (False, "메시지")    → 실패
-            (None,  "Cancelled") → 클라이언트 cancel 수락
+        /body/lift_controller/follow_joint_trajectory 에 직접 goal 을 보낸다.
+        반환값: (True, "성공") | (False, "오류 메시지") | (None, "Cancelled")
         """
-        if not self._move_client.wait_for_server(timeout_sec=3.0):
-            return False, "MoveGroup 액션 서버에 연결할 수 없음"
+        if not self._fjt_client.wait_for_server(timeout_sec=3.0):
+            return False, "lift_controller FJT 서버에 연결할 수 없음"
 
-        moveit_goal = self._build_moveit_goal(target_height, plan_only)
-        send_future = self._move_client.send_goal_async(moveit_goal)
+        traj, duration_sec = self._build_trajectory(target)
 
-        feedback.status         = status
-        feedback.current_height = self._current_height
-        goal_handle.publish_feedback(feedback)
+        fjt_goal = FollowJointTrajectory.Goal()
+        fjt_goal.trajectory          = traj
+        fjt_goal.goal_time_tolerance = _ros_duration(2.0)
 
-        # goal 수락 대기 (cancel 감지 포함)
-        deadline = time.time() + 10.0
+        self.get_logger().info(
+            f"FJT goal 전송: {self._current_height:.3f} → {target:.3f} m "
+            f"(예상 {duration_sec:.2f}s)"
+        )
+
+        send_future = self._fjt_client.send_goal_async(fjt_goal)
+
+        # goal 수락 대기
+        deadline = time.time() + 5.0
         while not send_future.done():
             if goal_handle.is_cancel_requested:
-                self.get_logger().info("Cancel 감지 — goal 수락 대기 중 취소")
                 return None, "Cancelled"
             if time.time() > deadline:
-                return False, "MoveGroup goal 수락 대기 타임아웃"
+                return False, "FJT goal 수락 대기 타임아웃"
             time.sleep(0.02)
 
-        mg_handle = send_future.result()
-        if not mg_handle.accepted:
-            return False, "MoveGroup goal 거절됨"
+        fjt_handle = send_future.result()
+        if not fjt_handle.accepted:
+            return False, "lift_controller FJT goal 거절됨"
 
-        # 진행 중인 MoveGroup handle을 저장 → cancel 시 원격 취소에 사용
-        self._active_mg_handle = mg_handle
-        result_future  = mg_handle.get_result_async()
-        sleep_interval = 1.0 / FEEDBACK_HZ
+        self._active_fjt_handle = fjt_handle
+        result_future   = fjt_handle.get_result_async()
+        sleep_interval  = 1.0 / FEEDBACK_HZ
 
-        # 결과 대기 — 주기적 피드백 발행 + cancel 감지
+        # 결과 대기 – 피드백 발행 + cancel 감지
         while not result_future.done():
             if goal_handle.is_cancel_requested:
-                self.get_logger().info("Cancel 감지 — MoveGroup 실행 취소 요청")
-                cancel_future = mg_handle.cancel_goal_async()
-                deadline = time.time() + 5.0
-                while not cancel_future.done() and time.time() < deadline:
+                self.get_logger().info("Cancel 감지 — FJT 취소 요청")
+                cancel_future = fjt_handle.cancel_goal_async()
+                cdeadline = time.time() + 5.0
+                while not cancel_future.done() and time.time() < cdeadline:
                     time.sleep(0.02)
-                self._active_mg_handle = None
+                self._active_fjt_handle = None
                 return None, "Cancelled"
             feedback.current_height = self._current_height
             goal_handle.publish_feedback(feedback)
             time.sleep(sleep_interval)
 
-        self._active_mg_handle = None
-
+        self._active_fjt_handle = None
         wrapped = result_future.result()
+
         if wrapped.status != GoalStatus.STATUS_SUCCEEDED:
-            return False, f"MoveGroup 액션 비정상 종료 (status={wrapped.status})"
+            ec = wrapped.result.error_code if wrapped.result else -1
+            return False, f"FJT 비정상 종료 (status={wrapped.status}, error_code={ec})"
 
-        ec = wrapped.result.error_code.val
-        if ec == MoveItErrorCodes.SUCCESS:
-            return True, "성공"
+        return True, "성공"
 
-        label = MOVEIT_ERROR_MAP.get(ec, f"MoveIt 오류 코드 {ec}")
-        return False, label
-
-    # ── 액션 서버 실행 콜백 ─────────────────────────────────────────────────
+    # ── 액션 서버 실행 콜백 ───────────────────────────────────────────────────
     def _execute_cb(self, goal_handle) -> LiftMove.Result:
-        goal          = goal_handle.request
-        target_height = goal.target_height
-        plan_only     = goal.plan_only
+        g             = goal_handle.request
+        target_height = float(g.target_height)
+        plan_only     = bool(g.plan_only)
 
         self.get_logger().info(
             f"Goal 수신 — target_height={target_height:.3f}m, plan_only={plan_only}"
@@ -215,71 +214,45 @@ class LiftMoveActionServer(Node):
         result   = LiftMove.Result()
         feedback = LiftMove.Feedback()
 
-        # ── 0단계: Joint limit 사전 검증 ────────────────────────────────────
+        # 0단계: joint limit 검증
         if not (self._joint_lower <= target_height <= self._joint_upper):
             result.success      = False
             result.message      = (
-                f"목표 높이 {target_height:.3f}m가 허용 범위를 벗어남 "
+                f"목표 높이 {target_height:.3f}m가 허용 범위 밖 "
                 f"[{self._joint_lower:.3f}, {self._joint_upper:.3f}]m"
             )
             result.final_height = self._current_height
-            goal_handle.abort()                          # ← ABORTED
+            goal_handle.abort()
             self.get_logger().warn(result.message)
             return result
 
-        # ── 1단계: Planning 가능 여부 확인 ──────────────────────────────────
-        ok, msg = self._call_move_group(
-            target_height, plan_only=True,
-            goal_handle=goal_handle, feedback=feedback, status="Planning",
-        )
-
-        if ok is None:                                   # cancel
-            result.success      = False
-            result.message      = "Planning 중 취소됨"
-            result.final_height = self._current_height
-            goal_handle.canceled()                       # ← CANCELED
-            return result
-
-        if not ok:
-            result.success      = False
-            result.message      = f"Planning 실패: {msg}"
-            result.final_height = self._current_height
-            goal_handle.abort()                          # ← ABORTED
-            self.get_logger().warn(result.message)
-            return result
-
-        self.get_logger().info("Planning 성공")
-
-        # ── 2단계: plan_only=True 이면 여기서 종료 ──────────────────────────
+        # plan_only=True: 실제 이동 없이 가능 여부만 확인 (범위 검증 통과 = OK)
         if plan_only:
             result.success      = True
-            result.message      = "Planning 성공 (plan_only=True, 이동 생략)"
+            result.message      = "범위 검증 성공 (plan_only=True, 이동 생략)"
             result.final_height = self._current_height
-            goal_handle.succeed()                        # ← SUCCEEDED
+            goal_handle.succeed()
             return result
 
-        # ── 3단계: 실제 이동 실행 ────────────────────────────────────────────
-        ok, msg = self._call_move_group(
-            target_height, plan_only=False,
-            goal_handle=goal_handle, feedback=feedback, status="Moving",
-        )
-
+        # 1단계: 이동 실행
+        feedback.status = "Moving"
+        ok, msg = self._call_fjt(target_height, goal_handle, feedback)
         result.final_height = self._current_height
 
-        if ok is None:                                   # cancel
+        if ok is None:
             result.success  = False
             result.message  = "이동 중 취소됨"
-            goal_handle.canceled()                       # ← CANCELED
+            goal_handle.canceled()
             self.get_logger().info(result.message)
         elif ok:
             result.success  = True
             result.message  = f"이동 완료: {self._current_height:.3f}m"
-            goal_handle.succeed()                        # ← SUCCEEDED
+            goal_handle.succeed()
             self.get_logger().info(result.message)
         else:
             result.success  = False
             result.message  = f"이동 실패: {msg}"
-            goal_handle.abort()                          # ← ABORTED
+            goal_handle.abort()
             self.get_logger().error(result.message)
 
         return result
@@ -288,8 +261,6 @@ class LiftMoveActionServer(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = LiftMoveActionServer()
-    # 액션 콜백이 블로킹 대기 중에도 다른 스레드가 MoveGroup 응답을 처리하도록
-    # MultiThreadedExecutor 필수
     executor = MultiThreadedExecutor()
     try:
         executor.add_node(node)
@@ -301,5 +272,5 @@ def main(args=None):
         rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

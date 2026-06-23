@@ -2,7 +2,12 @@
 """
 LiftMove 액션 클라이언트 → /kaair_worker/lift_move
 
-Goal: target_height (m, lift_joint 목표), plan_only (기본 false = 실행)
+서버는 MoveGroup 을 거치지 않고 /body/lift_controller/follow_joint_trajectory 를
+직접 호출하므로 arm MoveGroup 과 동시 실행이 가능하다.
+
+Goal:
+  target_height  (m)   : lift_joint 목표 위치
+  plan_only      (bool): true = joint limit 범위 검증만 수행, 이동 없음
 
 실행 예:
   python3 lift_move.py --ros-args -p target_height:=0.4 -p plan_only:=false
@@ -13,6 +18,7 @@ Goal: target_height (m, lift_joint 목표), plan_only (기본 false = 실행)
 import sys
 
 import rclpy
+from action_msgs.msg import GoalStatus
 from rclpy.action import ActionClient
 from rclpy.node import Node
 
@@ -56,12 +62,12 @@ class LiftMoveClient(Node):
         rclpy.spin_until_future_complete(self, result_future, timeout_sec=timeout_sec)
         if not result_future.done():
             self.get_logger().error('결과 대기 시간 초과')
-            self._client.cancel_goal_async(gh)
+            gh.cancel_goal_async()
             return False
 
         wrapped = result_future.result()
         res = wrapped.result
-        ok = wrapped.status == 4 and res.success
+        ok = wrapped.status == GoalStatus.STATUS_SUCCEEDED and res.success
         self.get_logger().info(
             f'result: success={res.success} msg={res.message!r} final_height={res.final_height:.4f} m'
         )
