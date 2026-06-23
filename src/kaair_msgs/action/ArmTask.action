@@ -1,0 +1,26 @@
+# 태스크 타입: "pick" | "place" | "home" | "retreat"
+string task_type
+
+# 목표 위치 [m] (base_frame 기준 절대 좌표)
+float64 x
+float64 y
+float64 z
+
+# 목표 자세 quaternion (base_frame 기준)
+float64 qx
+float64 qy
+float64 qz
+float64 qw
+
+# 기준 좌표계 (빈 문자열이면 서버 기본값 사용)
+string base_frame
+
+# true이면 첫 번째 스텝 플래닝만 검증하고 실행하지 않음
+bool plan_only
+---
+bool success
+string message
+---
+string status
+int32 step
+int32 total_steps

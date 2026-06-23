@@ -37,7 +37,7 @@ from moveit_msgs.srv import GetCartesianPath
 from scipy.spatial.transform import Rotation as R
 from tf2_ros import Buffer, TransformListener
 
-from kaair_msgs.action import MoveJoint, MoveLinear, MoveTool
+from kaair_msgs.action import MoveJoint, MoveLinear, MoveTool, ArmTask
 
 
 MOVE_GROUP = "arm"
@@ -67,6 +67,13 @@ EXECUTE_ACTION = "execute_trajectory"
 ACTION_ARM_MOVE = "kaair_worker/arm_moveJ"
 ACTION_MOVEL = "kaair_worker/arm_moveL"
 ACTION_MOVET = "kaair_worker/arm_moveT"
+ACTION_ARM_TASK = "kaair_worker/arm_task"
+
+# pick/place 접근 시 목표 위치 위 Z 오프셋 [m]
+APPROACH_OFFSET_Z = 0.10
+
+# 홈(안전) 관절 각도 [rad] — 실제 로봇 설정에 맞게 수정
+HOME_JOINTS = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 MOVEIT_ERROR_MAP = {
     MoveItErrorCodes.PLANNING_FAILED: "Planning 실패",
@@ -145,9 +152,18 @@ class UnifiedMotionActionServer(Node):
             callback_group=self._cb_group,
         )
 
+        self._srv_arm_task = ActionServer(
+            self,
+            ArmTask,
+            ACTION_ARM_TASK,
+            execute_callback=self._execute_arm_task,
+            cancel_callback=self._cancel_cb,
+            callback_group=self._cb_group,
+        )
+
         self.get_logger().info(
             f"UnifiedMotionActionServer 시작: "
-            f"{ACTION_ARM_MOVE}, {ACTION_MOVEL}, {ACTION_MOVET}"
+            f"{ACTION_ARM_MOVE}, {ACTION_MOVEL}, {ACTION_MOVET}, {ACTION_ARM_TASK}"
         )
 
     def _cancel_cb(self, goal_handle):
@@ -221,16 +237,17 @@ class UnifiedMotionActionServer(Node):
 
         return goal
 
-    def _call_move_group(self, target_joints, plan_only, goal_handle, feedback, status):
+    def _call_move_group(self, target_joints, plan_only, goal_handle, feedback=None, status=""):
         if not self._move_group_client.wait_for_server(timeout_sec=3.0):
             return False, "MoveGroup 액션 서버에 연결할 수 없음"
 
         moveit_goal = self._build_moveit_goal(target_joints, plan_only)
         send_future = self._move_group_client.send_goal_async(moveit_goal)
 
-        feedback.status = status
-        feedback.current_joints = self._current_joints
-        goal_handle.publish_feedback(feedback)
+        if feedback is not None:
+            feedback.status = status
+            feedback.current_joints = self._current_joints
+            goal_handle.publish_feedback(feedback)
 
         deadline = time.time() + 10.0
 
@@ -261,8 +278,9 @@ class UnifiedMotionActionServer(Node):
 
                 return None, "Cancelled"
 
-            feedback.current_joints = self._current_joints
-            goal_handle.publish_feedback(feedback)
+            if feedback is not None:
+                feedback.current_joints = self._current_joints
+                goal_handle.publish_feedback(feedback)
             time.sleep(sleep_interval)
 
         wrapped = result_future.result()
@@ -759,6 +777,253 @@ class UnifiedMotionActionServer(Node):
             result.message = exec_msg
             goal_handle.abort()
 
+        return result
+
+
+    # -------------------------------------------------------------------------
+    # 내부 프리미티브 (ArmTask 시퀀스에서 재사용)
+    # -------------------------------------------------------------------------
+    def _do_movej(self, target_joints, goal_handle, plan_only=False):
+        """
+        MoveJoint 플래닝 + (선택적) 실행.
+
+        반환: (ok, message)
+            ok = True  → 성공
+            ok = False → 실패
+            ok = None  → 취소됨
+        """
+        ok, msg = self._call_move_group(
+            target_joints=target_joints,
+            plan_only=True,
+            goal_handle=goal_handle,
+        )
+        if ok is None:
+            return None, "Planning 중 취소됨"
+        if not ok:
+            return False, f"Planning 실패: {msg}"
+        if plan_only:
+            return True, "Planning 성공"
+
+        ok, msg = self._call_move_group(
+            target_joints=target_joints,
+            plan_only=False,
+            goal_handle=goal_handle,
+        )
+        if ok is None:
+            return None, "이동 중 취소됨"
+        return ok, msg
+
+    def _do_movel(
+        self,
+        x, y, z,
+        qx, qy, qz, qw,
+        base_frame,
+        is_relative,
+        goal_handle,
+        plan_only=False,
+    ):
+        """
+        MoveLinear Cartesian path 플래닝 + (선택적) 실행.
+
+        반환: (ok, message)
+        """
+        try:
+            target_pose = self._make_target_pose_from_base_xyz(
+                x, y, z, qx, qy, qz, qw, base_frame, is_relative
+            )
+        except Exception as e:
+            return False, f"target pose 생성 실패: {e}"
+
+        trajectory, msg, canceled = self._compute_cartesian_path(
+            target_pose, goal_handle, path_frame_id=base_frame
+        )
+        if canceled:
+            return None, "Planning 중 취소됨"
+        if trajectory is None:
+            return False, msg
+        if plan_only:
+            return True, msg
+
+        ok, canceled, exec_msg = self._execute_trajectory(trajectory, goal_handle)
+        if canceled:
+            return None, "이동 중 취소됨"
+        return ok, exec_msg
+
+    def _do_movet(
+        self,
+        dx, dy, dz,
+        qx, qy, qz, qw,
+        goal_handle,
+        plan_only=False,
+    ):
+        """
+        MoveTool Cartesian path 플래닝 + (선택적) 실행.
+
+        반환: (ok, message)
+        """
+        try:
+            target_pose = self._make_target_pose_from_tool_delta(
+                dx, dy, dz, qx, qy, qz, qw
+            )
+        except Exception as e:
+            return False, f"target pose 생성 실패: {e}"
+
+        trajectory, msg, canceled = self._compute_cartesian_path(
+            target_pose, goal_handle
+        )
+        if canceled:
+            return None, "Planning 중 취소됨"
+        if trajectory is None:
+            return False, msg
+        if plan_only:
+            return True, msg
+
+        ok, canceled, exec_msg = self._execute_trajectory(trajectory, goal_handle)
+        if canceled:
+            return None, "이동 중 취소됨"
+        return ok, exec_msg
+
+    # -------------------------------------------------------------------------
+    # ArmTask — 고수준 태스크 액션 서버
+    # -------------------------------------------------------------------------
+    def _build_task_steps(self, task_type, x, y, z, qx, qy, qz, qw, base_frame):
+        """
+        태스크 타입에 따라 실행할 스텝 목록을 반환한다.
+
+        반환: List[Tuple[str, Callable[[goal_handle, plan_only], Tuple[ok, msg]]]]
+
+        지원 task_type:
+            "pick"    - 홈 이동 → 접근 위치(z+offset) → 목표 위치
+            "place"   - 홈 이동 → 접근 위치(z+offset) → 목표 위치
+            "home"    - 홈 이동만
+            "retreat" - 목표 위치 위로 후퇴 → 홈 이동
+        """
+        # 클로저에서 값 캡처를 명확히 하기 위해 default 인자 사용
+        def step_home(gh, po, _j=HOME_JOINTS):
+            return self._do_movej(_j, gh, po)
+
+        def step_approach(gh, po, _x=x, _y=y, _z=z, _qx=qx, _qy=qy, _qz=qz, _qw=qw, _bf=base_frame):
+            return self._do_movel(
+                _x, _y, _z + APPROACH_OFFSET_Z,
+                _qx, _qy, _qz, _qw,
+                _bf, False, gh, po,
+            )
+
+        def step_target(gh, po, _x=x, _y=y, _z=z, _qx=qx, _qy=qy, _qz=qz, _qw=qw, _bf=base_frame):
+            return self._do_movel(
+                _x, _y, _z,
+                _qx, _qy, _qz, _qw,
+                _bf, False, gh, po,
+            )
+
+        def step_retreat(gh, po, _x=x, _y=y, _z=z, _qx=qx, _qy=qy, _qz=qz, _qw=qw, _bf=base_frame):
+            return self._do_movel(
+                _x, _y, _z + APPROACH_OFFSET_Z,
+                _qx, _qy, _qz, _qw,
+                _bf, False, gh, po,
+            )
+
+        TASK_MAP = {
+            "pick": [
+                ("홈 이동 (MoveJ)",       step_home),
+                ("접근 위치 이동 (MoveL)", step_approach),
+                ("Pick 위치 이동 (MoveL)", step_target),
+            ],
+            "place": [
+                ("홈 이동 (MoveJ)",        step_home),
+                ("접근 위치 이동 (MoveL)",  step_approach),
+                ("Place 위치 이동 (MoveL)", step_target),
+            ],
+            "home": [
+                ("홈 이동 (MoveJ)", step_home),
+            ],
+            "retreat": [
+                ("후퇴 위치 이동 (MoveL)", step_retreat),
+                ("홈 이동 (MoveJ)",        step_home),
+            ],
+        }
+
+        key = task_type.strip().lower()
+        if key not in TASK_MAP:
+            supported = ", ".join(TASK_MAP.keys())
+            raise ValueError(
+                f"알 수 없는 task_type: '{task_type}'. "
+                f"지원 task_type: {supported}"
+            )
+
+        return TASK_MAP[key]
+
+    def _execute_arm_task(self, goal_handle):
+        with self._motion_lock:
+            return self._execute_arm_task_body(goal_handle)
+
+    def _execute_arm_task_body(self, goal_handle):
+        goal = goal_handle.request
+
+        result = ArmTask.Result()
+        feedback = ArmTask.Feedback()
+
+        task_type = goal.task_type.strip()
+        x = float(goal.x)
+        y = float(goal.y)
+        z = float(goal.z)
+        qx = float(goal.qx)
+        qy = float(goal.qy)
+        qz = float(goal.qz)
+        qw = float(goal.qw)
+        base_frame = goal.base_frame.strip() or DEFAULT_BASE_FRAME
+        plan_only = bool(goal.plan_only)
+
+        self.get_logger().info(
+            f"[ArmTask] task_type={task_type} "
+            f"pos=[{x:.3f},{y:.3f},{z:.3f}] "
+            f"quat=[{qx:.4f},{qy:.4f},{qz:.4f},{qw:.4f}] "
+            f"base_frame={base_frame} plan_only={plan_only}"
+        )
+
+        try:
+            steps = self._build_task_steps(task_type, x, y, z, qx, qy, qz, qw, base_frame)
+        except ValueError as e:
+            result.success = False
+            result.message = str(e)
+            goal_handle.abort()
+            return result
+
+        total = len(steps)
+
+        for i, (step_name, step_fn) in enumerate(steps):
+            feedback.status = f"Step {i + 1}/{total}: {step_name}"
+            feedback.step = i + 1
+            feedback.total_steps = total
+            goal_handle.publish_feedback(feedback)
+
+            self.get_logger().info(f"[ArmTask] {feedback.status}")
+
+            # plan_only=True일 때 첫 스텝 플래닝 검증 후 종료
+            current_plan_only = plan_only if i == 0 else False
+            ok, msg = step_fn(goal_handle, current_plan_only)
+
+            if ok is None:
+                result.success = False
+                result.message = f"Step {i + 1} ({step_name}) 취소됨"
+                goal_handle.canceled()
+                return result
+
+            if not ok:
+                result.success = False
+                result.message = f"Step {i + 1} ({step_name}) 실패: {msg}"
+                goal_handle.abort()
+                return result
+
+            if plan_only:
+                result.success = True
+                result.message = f"plan_only=True — {step_name} 플래닝 성공"
+                goal_handle.succeed()
+                return result
+
+        result.success = True
+        result.message = f"{task_type} 완료 ({total}스텝)"
+        goal_handle.succeed()
         return result
 
 

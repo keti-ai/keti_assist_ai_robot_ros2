@@ -22,6 +22,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/MoveTool.action"
   "action/MoveLinear.action"
   "action/HeadMove.action"
+  "action/ArmTask.action"
   DEPENDENCIES std_msgs action_msgs geometry_msgs
 )
 
