@@ -33,6 +33,8 @@ class ObjectMarkerServer(Node):
         self.latest_depth_msg = None
         self.latest_color_msg = None
         self.latest_camera_info = None
+        self.latest_tool_depth_msg = None
+        self.latest_tool_camera_info = None
         self.saved_objects = {}
         self.pending_delete_markers = []
         self.delete_republish_ticks = 0
@@ -60,6 +62,19 @@ class ObjectMarkerServer(Node):
             sensor_qos
         )
 
+        self.tool_depth_sub = self.create_subscription(
+            Image,
+            '/hand/d405/depth/image_rect_raw',
+            self.tool_depth_callback,
+            sensor_qos
+        )
+        self.tool_camera_info_sub = self.create_subscription(
+            CameraInfo,
+            '/hand/d405/depth/camera_info',
+            self.tool_camera_info_callback,
+            sensor_qos
+        )
+
         # service server
         self.srv = self.create_service(
             CreateObjectMarker,
@@ -70,6 +85,16 @@ class ObjectMarkerServer(Node):
             Trigger,
             'clear_object_markers',
             self.handle_clear_object_markers
+        )
+        self.tool_srv = self.create_service(
+            CreateObjectMarker,
+            'create_tool_marker',
+            self.handle_create_tool_marker
+        )
+        self.clear_tool_srv = self.create_service(
+            Trigger,
+            'clear_tool_markers',
+            self.handle_clear_tool_markers
         )
 
         # tf listener for map transform
@@ -88,7 +113,7 @@ class ObjectMarkerServer(Node):
             0.1, self.publish_saved_markers
         )
 
-        self.get_logger().info('Object marker server started.')
+        self.get_logger().info('Object marker server started (femto + d405 tool).')
 
     def log_once(self, key, message, level='info'):
         if self.log_flags.get(key, False):
@@ -132,6 +157,26 @@ class ObjectMarkerServer(Node):
             f'cx={cx:.3f}, cy={cy:.3f}, frame_id={msg.header.frame_id}'
         )
 
+    def tool_depth_callback(self, msg):
+        self.latest_tool_depth_msg = msg
+        self.log_once(
+            'tool_depth_received',
+            f'First tool depth received: width={msg.width}, height={msg.height}, '
+            f'encoding={msg.encoding}, step={msg.step}, frame_id={msg.header.frame_id}'
+        )
+
+    def tool_camera_info_callback(self, msg):
+        self.latest_tool_camera_info = msg
+        fx = msg.k[0]
+        fy = msg.k[4]
+        cx = msg.k[2]
+        cy = msg.k[5]
+        self.log_once(
+            'tool_camera_info_received',
+            f'First tool camera_info received: fx={fx:.3f}, fy={fy:.3f}, '
+            f'cx={cx:.3f}, cy={cy:.3f}, frame_id={msg.header.frame_id}'
+        )
+
     # ──────────────────────────────────────────────
     # Service handler (exception wrapper)
     # ──────────────────────────────────────────────
@@ -158,7 +203,12 @@ class ObjectMarkerServer(Node):
         if object_label == '':
             object_label = 'object'
         object_name = f'/object/{object_label}'
+        return self._process_marker_request(
+            request, response, object_name,
+            self.latest_depth_msg, self.latest_camera_info
+        )
 
+    def _process_marker_request(self, request, response, object_name, depth_msg, camera_info):
         u_array = list(request.u_array)
         v_array = list(request.v_array)
         d_array = list(request.d_array)  # optional; empty = use depth image for all
@@ -213,7 +263,7 @@ class ObjectMarkerServer(Node):
             u, v = int(u), int(v)
 
             # ── depth_raw: always read actual sensor pixel value (no neighbor search) ──
-            depth_raw = self._read_depth_raw(u, v)
+            depth_raw = self._read_depth_raw(u, v, depth_msg=depth_msg)
             depth_raw_out.append(depth_raw if depth_raw is not None else 0.0)
 
             # ── RGB at (u, v) ──
@@ -230,11 +280,9 @@ class ObjectMarkerServer(Node):
                     depth_override = d
 
             if depth_override is not None:
-                # Use caller-provided depth directly
                 z = depth_override
             else:
-                # Try depth image (with neighbour fallback)
-                z = self._get_depth_z(u, v)
+                z = self._get_depth_z(u, v, depth_msg=depth_msg)
                 if z is None:
                     no_depth_count += 1
                     x_out.append(float('nan'))
@@ -243,7 +291,7 @@ class ObjectMarkerServer(Node):
                     continue
 
             # ── Project pixel + z → map frame ──
-            map_point = self._project_to_map(u, v, z)
+            map_point = self._project_to_map(u, v, z, depth_msg=depth_msg, camera_info=camera_info)
             if map_point is None:
                 no_transform_count += 1
                 x_out.append(float('nan'))
@@ -306,21 +354,21 @@ class ObjectMarkerServer(Node):
     # Depth helpers
     # ──────────────────────────────────────────────
 
-    def _read_depth_raw(self, u, v):
+    def _read_depth_raw(self, u, v, depth_msg=None):
         """Return raw depth (metres) at pixel (u,v) with NO neighbour search. None if unavailable."""
-        if self.latest_depth_msg is None:
+        dm = depth_msg if depth_msg is not None else self.latest_depth_msg
+        if dm is None:
             return None
-        dm = self.latest_depth_msg
         if not (0 <= u < dm.width and 0 <= v < dm.height):
             return None
         return self.read_depth_value(dm, u, v)
 
-    def _get_depth_z(self, u, v):
+    def _get_depth_z(self, u, v, depth_msg=None):
         """Return depth z (metres) from depth image, with neighbour fallback. None if unavailable."""
-        if self.latest_depth_msg is None:
+        dm = depth_msg if depth_msg is not None else self.latest_depth_msg
+        if dm is None:
             self.log_once('no_depth', 'No depth image received yet.', level='warn')
             return None
-        dm = self.latest_depth_msg
         if not (0 <= u < dm.width and 0 <= v < dm.height):
             self.get_logger().warn(
                 f'Pixel out of depth range: ({u}, {v}), size=({dm.width}, {dm.height})'
@@ -337,21 +385,23 @@ class ObjectMarkerServer(Node):
 
         return z
 
-    def _project_to_map(self, u, v, z):
+    def _project_to_map(self, u, v, z, depth_msg=None, camera_info=None):
         """Project pixel (u,v) with depth z → map frame. Returns (x,y,z) or None."""
-        if self.latest_camera_info is None:
+        cam = camera_info if camera_info is not None else self.latest_camera_info
+        dm = depth_msg if depth_msg is not None else self.latest_depth_msg
+
+        if cam is None:
             self.log_once('no_camera_info', 'No camera_info received yet.', level='warn')
             return None
 
-        cam = self.latest_camera_info
         fx, fy = cam.k[0], cam.k[4]
         cx, cy = cam.k[2], cam.k[5]
 
         px = (u - cx) * z / fx
         py = (v - cy) * z / fy
 
-        if self.latest_depth_msg is not None:
-            source_frame = self.latest_depth_msg.header.frame_id
+        if dm is not None:
+            source_frame = dm.header.frame_id
         else:
             source_frame = cam.header.frame_id
 
@@ -438,6 +488,37 @@ class ObjectMarkerServer(Node):
         return self._project_to_map(u, v, z)
 
     # ──────────────────────────────────────────────
+    # Tool marker service handlers
+    # ──────────────────────────────────────────────
+
+    def handle_create_tool_marker(self, request, response):
+        try:
+            return self._handle_create_tool_marker_impl(request, response)
+        except Exception as e:
+            self.get_logger().error(f'Unhandled exception in handle_create_tool_marker: {e}')
+            self.get_logger().error(traceback.format_exc())
+            response.success = False
+            response.message = f'internal_error: {e}'
+            response.x_array = []
+            response.y_array = []
+            response.z_array = []
+            response.depth_raw_array = []
+            response.r_array = []
+            response.g_array = []
+            response.b_array = []
+            return response
+
+    def _handle_create_tool_marker_impl(self, request, response):
+        object_label = request.object_label.strip()
+        if object_label == '':
+            object_label = 'tool'
+        object_name = f'/tool/{object_label}'
+        return self._process_marker_request(
+            request, response, object_name,
+            self.latest_tool_depth_msg, self.latest_tool_camera_info
+        )
+
+    # ──────────────────────────────────────────────
     # Clear markers
     # ──────────────────────────────────────────────
 
@@ -468,6 +549,34 @@ class ObjectMarkerServer(Node):
         )
         response.success = True
         response.message = f'cleared_count={len(object_names)}'
+        return response
+
+    def handle_clear_tool_markers(self, _request, response):
+        tool_names = [
+            object_name for object_name in self.saved_objects.keys()
+            if object_name.startswith('/tool/')
+        ]
+
+        delete_array = MarkerArray()
+        for object_name in tool_names:
+            points = self.saved_objects.get(object_name, [])
+            delete_array.markers.append(self.build_delete_marker(object_name, marker_id=0))
+            if len(points) == 1:
+                delete_array.markers.append(self.build_delete_marker(object_name, marker_id=1))
+
+        if delete_array.markers:
+            self.marker_pub.publish(delete_array)
+            self.pending_delete_markers = list(delete_array.markers)
+            self.delete_republish_ticks = 10
+
+        for object_name in tool_names:
+            del self.saved_objects[object_name]
+
+        self.get_logger().info(
+            f'Cleared {len(tool_names)} markers under /tool namespace.'
+        )
+        response.success = True
+        response.message = f'cleared_count={len(tool_names)}'
         return response
 
     # ──────────────────────────────────────────────
@@ -572,7 +681,7 @@ class ObjectMarkerServer(Node):
     # Marker builders
     # ──────────────────────────────────────────────
 
-    def build_arrow_marker(self, object_name, x, y, z):
+    def build_arrow_marker(self, object_name, x, y, z, is_tool=False):
         marker = Marker()
         marker.header.stamp = self.get_clock().now().to_msg()
         marker.header.frame_id = self.map_frame
@@ -598,9 +707,14 @@ class ObjectMarkerServer(Node):
         marker.lifetime = Duration(seconds=0.6).to_msg()
 
         marker.color.a = 1.0
-        marker.color.r = 0.7
-        marker.color.g = 0.2
-        marker.color.b = 0.9
+        if is_tool:
+            marker.color.r = 0.0
+            marker.color.g = 0.4
+            marker.color.b = 1.0
+        else:
+            marker.color.r = 0.7
+            marker.color.g = 0.2
+            marker.color.b = 0.9
 
         return marker
 
@@ -631,7 +745,7 @@ class ObjectMarkerServer(Node):
 
         return marker
 
-    def build_points_marker(self, object_name, points):
+    def build_points_marker(self, object_name, points, is_tool=False):
         marker = Marker()
         marker.header.stamp = self.get_clock().now().to_msg()
         marker.header.frame_id = self.map_frame
@@ -652,9 +766,14 @@ class ObjectMarkerServer(Node):
         marker.lifetime = Duration(seconds=0.6).to_msg()
 
         marker.color.a = 1.0
-        marker.color.r = 0.5
-        marker.color.g = 0.0
-        marker.color.b = 0.5
+        if is_tool:
+            marker.color.r = 0.0
+            marker.color.g = 0.4
+            marker.color.b = 1.0
+        else:
+            marker.color.r = 0.5
+            marker.color.g = 0.0
+            marker.color.b = 0.5
 
         return marker
 
@@ -674,12 +793,13 @@ class ObjectMarkerServer(Node):
             self.delete_republish_ticks -= 1
 
         for object_name, points in self.saved_objects.items():
+            is_tool = object_name.startswith('/tool/')
             if len(points) == 1:
                 x, y, z = points[0]
-                marker_array.markers.append(self.build_arrow_marker(object_name, x, y, z))
+                marker_array.markers.append(self.build_arrow_marker(object_name, x, y, z, is_tool=is_tool))
                 marker_array.markers.append(self.build_text_marker(object_name, x, y, z))
             elif len(points) >= 2:
-                marker_array.markers.append(self.build_points_marker(object_name, points))
+                marker_array.markers.append(self.build_points_marker(object_name, points, is_tool=is_tool))
 
         self.marker_pub.publish(marker_array)
 
