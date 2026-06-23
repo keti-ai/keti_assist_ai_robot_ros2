@@ -120,6 +120,12 @@ def launch_setup(context, *args, **kwargs):
                 executable="head_move_server",
                 name="head_move_server",
                 output="screen",
+            ),
+            Node(
+                package="kaair_bringup",
+                executable="controller_mode_switcher",
+                name="controller_mode_switcher",
+                output="screen",
             )
         ]
     )
