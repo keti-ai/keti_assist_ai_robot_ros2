@@ -12,7 +12,7 @@
           <param name="usb_port">${spec['usb_port']}</param>
           <param name="baud_rate">${spec['baud_rate']}</param>
           <!-- 다이나믹셀 Profile Velocity (rad/s). URDF velocity 한계(1.2)보다 크게 두면 체감이 빨라질 수 있음 -->
-          <param name="profile_velocity_rad_s">3.0</param>
+          <param name="profile_velocity_rad_s">2.0</param>
           <!-- 필요 시 펌웨어 단위로 가속도 제한 (미설정 시 기존 EEPROM 값 유지) -->
           <!-- <param name="profile_acceleration">200</param> -->
         </xacro:unless>

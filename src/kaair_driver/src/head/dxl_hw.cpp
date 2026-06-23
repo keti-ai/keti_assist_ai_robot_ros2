@@ -213,6 +213,23 @@ uint32_t DxlHw::rad_to_dxl_vel(double rad_per_sec) {
     return dxl_vel;
 }
 
+uint32_t DxlHw::rad_s2_to_dxl_accel(double rad_per_sec2) {
+    // X 시리즈 펌웨어 스펙: 1 unit = 214.577 rev/min²
+    // 1 rev/min² = 2*pi / 3600 rad/s²
+    // 1 unit = 214.577 * (2*pi / 3600) rad/s² ≈ 0.3746 rad/s²
+    const double DXL_ACCEL_UNIT = 214.577 * (2.0 * M_PI / 3600.0);
+
+    uint32_t dxl_accel = static_cast<uint32_t>(std::round(std::abs(rad_per_sec2) / DXL_ACCEL_UNIT));
+    if (dxl_accel == 0 && std::abs(rad_per_sec2) > 0) dxl_accel = 1;
+
+    return dxl_accel;
+}
+
+bool DxlHw::write_profile_acceleration_rad_s2(const std::vector<uint8_t>& ids, double rad_per_sec2) {
+    uint32_t dxl_accel = rad_s2_to_dxl_accel(rad_per_sec2);
+    return write_profile_acceleration(ids, dxl_accel);
+}
+
 
 
 

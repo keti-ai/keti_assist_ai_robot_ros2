@@ -100,7 +100,7 @@
       lower="-1.58"
       upper="1.58"
       effort="30"
-      velocity="1.2" />
+      velocity="3.0" />
   </joint>
 
   <joint name="head_joint2" type="revolute">
@@ -112,7 +112,7 @@
       lower="-1.58"
       upper="1.58"
       effort="30"
-      velocity="1.2" />
+      velocity="3.0" />
   </joint>
 
   <joint name="pantilt_femto_frame_joint" type="fixed">

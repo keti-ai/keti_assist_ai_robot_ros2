@@ -197,13 +197,14 @@ class HeadMoveActionServer(Node):
         self._active_mg_handle = None
 
         wrapped = result_future.result()
+        ec = wrapped.result.error_code.val if wrapped.result else -999
+        ec_desc = MOVEIT_ERROR_MAP.get(ec, f"코드 {ec}")
         if wrapped.status != GoalStatus.STATUS_SUCCEEDED:
-            return False, f"MoveGroup 액션 비정상 종료 (status={wrapped.status})"
+            return False, f"MoveGroup 액션 비정상 종료 (status={wrapped.status}, error={ec_desc})"
 
-        ec = wrapped.result.error_code.val
         if ec == MoveItErrorCodes.SUCCESS:
             return True, "성공"
-        return False, MOVEIT_ERROR_MAP.get(ec, f"MoveIt 오류 코드 {ec}")
+        return False, ec_desc
 
     def _execute_cb(self, goal_handle) -> HeadMove.Result:
         g = goal_handle.request

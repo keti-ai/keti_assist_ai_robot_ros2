@@ -55,10 +55,12 @@
       - position
     state_interfaces:
       - position
+    action_monitor_rate: 20.0
     constraints:
+      stopped_velocity_tolerance: 0.0  # velocity state 없으므로 속도 정지 검사 비활성화
       goal_time: 10.0
-      head_joint1: {trajectory: 0.0, goal: 0.07}
-      head_joint2: {trajectory: 0.0, goal: 0.07}
+      head_joint1: {trajectory: 0.0, goal: 0.15}
+      head_joint2: {trajectory: 0.0, goal: 0.15}
 
 /body/head_forward_controller:
   ros__parameters:

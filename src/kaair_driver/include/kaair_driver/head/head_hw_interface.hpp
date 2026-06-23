@@ -44,8 +44,7 @@ namespace kaair_driver {
     std::string device_name_;
     int baudrate_;
     double profile_velocity_rad_s_{2.0};
-    bool use_profile_accel_{false};
-    uint32_t profile_accel_units_{0};
+    double profile_accel_rad_s2_{20.0};  // 기본값: velocity(2.0) * 10
     int read_error_count_ = 0;
     const int MAX_READ_ERRORS = 5; // 5회 연속 실패 시에만 ERROR 리턴
     rclcpp::Clock::SharedPtr clock_;

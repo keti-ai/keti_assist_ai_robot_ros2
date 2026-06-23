@@ -13,8 +13,8 @@
 #   /body/tool_controller/gripper_cmd
 
 trajectory_execution:
-  allowed_execution_duration_scaling: 2.0
-  allowed_goal_duration_margin: 1.0
+  allowed_execution_duration_scaling: 3.0
+  allowed_goal_duration_margin: 2.0
   execution_duration_monitoring: true
 
 moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager

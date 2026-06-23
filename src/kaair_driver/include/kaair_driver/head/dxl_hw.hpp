@@ -35,6 +35,9 @@ public:
     /** X 시리즈 Profile Acceleration (주소 108), 단위는 펌웨어 스펙(214.577 rev/min² / unit) */
     bool write_profile_acceleration(const std::vector<uint8_t>& ids, uint32_t acceleration);
 
+    /** rad/s² 단위로 Profile Acceleration을 설정 (내부에서 DXL unit으로 변환) */
+    bool write_profile_acceleration_rad_s2(const std::vector<uint8_t>& ids, double rad_per_sec2);
+
     
 private:
     dynamixel::PortHandler * portHandler_;
@@ -67,6 +70,7 @@ private:
         return static_cast<double>(dxl - DXL_OFFSET) * (2.0 * M_PI / DXL_RESOLUTION);
     }
     uint32_t rad_to_dxl_vel(double rad_per_sec);
+    uint32_t rad_s2_to_dxl_accel(double rad_per_sec2);
 };
 
 } // namespace kaair_driver

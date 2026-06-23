@@ -16,15 +16,9 @@ CallbackReturn HeadHwInterface::on_init(const hardware_interface::HardwareInfo &
 
   {
     auto it = info.hardware_parameters.find("profile_velocity_rad_s");
-    profile_velocity_rad_s_ = (it != info.hardware_parameters.end()) ? std::stod(it->second) : 2.0;
+    profile_velocity_rad_s_ = (it != info.hardware_parameters.end()) ? std::stod(it->second) : 3.0;
   }
-  {
-    auto it = info.hardware_parameters.find("profile_acceleration");
-    if (it != info.hardware_parameters.end()) {
-      profile_accel_units_ = static_cast<uint32_t>(std::stoul(it->second));
-      use_profile_accel_ = true;
-    }
-  }
+  profile_accel_rad_s2_ = profile_velocity_rad_s_ * 10.0;
 
   // 2. 조인트 개수만큼 버퍼 초기화
   hw_states_.resize(info.joints.size(), 0.0);
@@ -102,12 +96,10 @@ CallbackReturn HeadHwInterface::on_activate(const rclcpp_lifecycle::State & /*pr
     RCLCPP_ERROR(rclcpp::get_logger("HeadHwInterface"), "속도를 조절할수 없습니다!!");
     return CallbackReturn::ERROR;
   }
-  if (use_profile_accel_) {
-    if (!dxl_hw_->write_profile_acceleration(dxl_ids_, profile_accel_units_)) {
-      RCLCPP_WARN(
-        rclcpp::get_logger("HeadHwInterface"),
-        "Profile Acceleration 쓰기 실패 (무시하고 계속).");
-    }
+  if (!dxl_hw_->write_profile_acceleration_rad_s2(dxl_ids_, profile_accel_rad_s2_)) {
+    RCLCPP_WARN(
+      rclcpp::get_logger("HeadHwInterface"),
+      "Profile Acceleration 쓰기 실패 (무시하고 계속).");
   }
 
   {
@@ -118,9 +110,9 @@ CallbackReturn HeadHwInterface::on_activate(const rclcpp_lifecycle::State & /*pr
     }
     RCLCPP_INFO(
       rclcpp::get_logger("HeadHwInterface"),
-      "Head profile: velocity=%.3f rad/s%s | joint direction: [%s]",
+      "Head profile: velocity=%.3f rad/s, accel=%.3f rad/s² (velocity×10) | joint direction: [%s]",
       profile_velocity_rad_s_,
-      use_profile_accel_ ? (", accel_units=" + std::to_string(profile_accel_units_)).c_str() : "",
+      profile_accel_rad_s2_,
       dirs.str().c_str());
   }
 
