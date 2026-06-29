@@ -64,13 +64,13 @@ class ObjectMarkerServer(Node):
 
         self.tool_depth_sub = self.create_subscription(
             Image,
-            '/hand/d405/depth/image_rect_raw',
+            '/hand/camera/depth/image_rect_raw',
             self.tool_depth_callback,
             sensor_qos
         )
         self.tool_camera_info_sub = self.create_subscription(
             CameraInfo,
-            '/hand/d405/depth/camera_info',
+            '/hand/camera/depth/camera_info',
             self.tool_camera_info_callback,
             sensor_qos
         )

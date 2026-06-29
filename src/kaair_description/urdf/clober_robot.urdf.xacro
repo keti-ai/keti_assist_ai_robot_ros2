@@ -163,7 +163,7 @@
       </xacro:unless>
     </xacro:if>
 
-    <xacro:arg name="use_nominal_extrinsics" default="false"/>
+    <xacro:arg name="use_nominal_extrinsics" default="true"/>
     <xacro:arg name="add_plug"               default="true"/>
     <xacro:include filename="$(find realsense2_description)/urdf/_d405.urdf.xacro"/>
     <xacro:sensor_d405 parent="vision_frame_link" use_nominal_extrinsics="$(arg use_nominal_extrinsics)">

@@ -51,7 +51,6 @@ def generate_launch_description():
             os.path.join(hand_launch_dir, 'rs_launch.py')
         ),
         launch_arguments={
-            'camera_name': 'd405',
             'camera_namespace': '/hand',
             'pointcloud.enable': 'true',
             'publish_tf': 'false',
