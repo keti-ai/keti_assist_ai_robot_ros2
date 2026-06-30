@@ -550,7 +550,7 @@ class UnifiedMotionActionServer(Node):
         if res is None:
             return None, "Cartesian path 결과 없음", False
 
-        if res.fraction < 0.8:
+        if res.fraction < 0.7:
             return None, f"Cartesian path 실패 fraction={res.fraction:.3f}", False
 
         return res.solution, f"Cartesian path 성공 fraction={res.fraction:.3f}", False
