@@ -217,7 +217,7 @@ class ControllerModeSwitcher(Node):
 
         if not self._switch_lock.acquire(blocking=False):
             msg = f'Switch already in progress, ignoring [{target_mode}] request.'
-            self.get_logger().warn(msg)
+            self.get_logger().warning(msg)
             return False, msg
 
         try:
@@ -261,7 +261,7 @@ class ControllerModeSwitcher(Node):
 
         if not self._arm_switch_lock.acquire(blocking=False):
             msg = f'Arm switch already in progress, ignoring [{target_mode}] request.'
-            self.get_logger().warn(msg)
+            self.get_logger().warning(msg)
             return False, msg
 
         try:

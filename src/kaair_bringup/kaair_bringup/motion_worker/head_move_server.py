@@ -1,25 +1,35 @@
 #!/usr/bin/env python3
 
-"""MoveIt MoveGroup(head) 기반 헤드 관절 액션 서버."""
+"""FollowJointTrajectory 컨트롤러 기반 헤드 관절 액션 서버."""
 
 import io
 import math
 import sys
+import threading
 import time
 
 import rclpy
 from action_msgs.msg import GoalStatus
-from moveit_msgs.action import MoveGroup
-from moveit_msgs.msg import Constraints, JointConstraint, MotionPlanRequest, MoveItErrorCodes
+from builtin_interfaces.msg import Duration
+from control_msgs.action import FollowJointTrajectory
 from rclpy.action import ActionClient, ActionServer, CancelResponse
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import JointState
 from std_msgs.msg import String
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from urdf_parser_py.urdf import URDF
 
 from kaair_msgs.action import HeadMove
+
+# ── ANSI 색상 유틸 ─────────────────────────────────────────────────────────
+_BLUE = "\033[94m"
+_RED  = "\033[91m"
+_RST  = "\033[0m"
+
+def _blue(s: str) -> str: return f"{_BLUE}{s}{_RST}"
+def _red(s: str)  -> str: return f"{_RED}{s}{_RST}"
 
 _LATCHED_QOS = QoSProfile(
     depth=1,
@@ -27,22 +37,17 @@ _LATCHED_QOS = QoSProfile(
     reliability=ReliabilityPolicy.RELIABLE,
 )
 
-MOVE_GROUP = "head"
 HEAD_JOINT1 = "head_joint1"
 HEAD_JOINT2 = "head_joint2"
 HEAD_JOINTS = (HEAD_JOINT1, HEAD_JOINT2)
-MOVE_ACTION = "move_action"
+
+HEAD_CONTROLLER_ACTION = "/body/head_controller/follow_joint_trajectory"
 ACTION_HEAD = "kaair_worker/head_move"
 FEEDBACK_HZ = 10.0
 
-MOVEIT_ERROR_MAP = {
-    MoveItErrorCodes.PLANNING_FAILED: "Planning 실패",
-    MoveItErrorCodes.INVALID_MOTION_PLAN: "유효하지 않은 플랜",
-    MoveItErrorCodes.CONTROL_FAILED: "실행 실패 (컨트롤러 오류)",
-    MoveItErrorCodes.NO_IK_SOLUTION: "IK 해 없음",
-    MoveItErrorCodes.GOAL_IN_COLLISION: "목표 위치 충돌",
-    MoveItErrorCodes.START_STATE_IN_COLLISION: "시작 상태 충돌",
-}
+# 최대 관절 속도 (rad/s) — URDF 정의값 3.0 rad/s 기준, 이동 시간 자동 계산에 사용
+MAX_JOINT_VEL = 2.0
+MIN_MOVE_DURATION = 0.3  # 최소 이동 시간 (초)
 
 
 class HeadMoveActionServer(Node):
@@ -58,13 +63,14 @@ class HeadMoveActionServer(Node):
             _LATCHED_QOS,
         )
 
+        self._motion_lock = threading.Lock()
         self._j1 = 0.0
         self._j2 = 0.0
-        self._active_mg_handle = None
+        self._active_ctrl_handle = None
 
         self.create_subscription(JointState, "/joint_states", self._on_joint_state, 10)
 
-        self._move_client = ActionClient(self, MoveGroup, MOVE_ACTION)
+        self._ctrl_client = ActionClient(self, FollowJointTrajectory, HEAD_CONTROLLER_ACTION)
 
         ActionServer(
             self,
@@ -86,7 +92,7 @@ class HeadMoveActionServer(Node):
                     self._joint_lower[jname] = float(joint.limit.lower)
                     self._joint_upper[jname] = float(joint.limit.upper)
                 else:
-                    self.get_logger().warn(f"URDF에서 {jname} 리밋을 찾지 못함 — 해당 축 검증 비활성화")
+                    self.get_logger().warning(f"URDF에서 {jname} 리밋을 찾지 못함 — 해당 축 검증 비활성화")
             self.get_logger().info(
                 f"{HEAD_JOINT1}: [{self._joint_lower[HEAD_JOINT1]:.3f}, "
                 f"{self._joint_upper[HEAD_JOINT1]:.3f}] rad, "
@@ -94,7 +100,7 @@ class HeadMoveActionServer(Node):
                 f"{self._joint_upper[HEAD_JOINT2]:.3f}] rad"
             )
         except Exception as e:
-            self.get_logger().warn(f"URDF 파싱 실패 — joint limit 검증 비활성화: {e}")
+            self.get_logger().warning(f"URDF 파싱 실패 — joint limit 검증 비활성화: {e}")
 
     def _on_joint_state(self, msg: JointState):
         if HEAD_JOINT1 in msg.name:
@@ -111,28 +117,27 @@ class HeadMoveActionServer(Node):
         res.final_head_joint1 = self._j1
         res.final_head_joint2 = self._j2
 
-    def _build_moveit_goal(self, j1: float, j2: float, plan_only: bool) -> MoveGroup.Goal:
-        constraints = Constraints()
-        for jname, pos in ((HEAD_JOINT1, j1), (HEAD_JOINT2, j2)):
-            jc = JointConstraint()
-            jc.joint_name = jname
-            jc.position = float(pos)
-            jc.tolerance_above = 0.002
-            jc.tolerance_below = 0.002
-            jc.weight = 1.0
-            constraints.joint_constraints.append(jc)
+    def _compute_duration(self, j1_target: float, j2_target: float) -> float:
+        """현재 위치와 목표 위치의 최대 이동량으로 이동 시간을 산출한다."""
+        delta = max(abs(j1_target - self._j1), abs(j2_target - self._j2))
+        return max(delta / MAX_JOINT_VEL, MIN_MOVE_DURATION)
 
-        req = MotionPlanRequest()
-        req.group_name = MOVE_GROUP
-        req.num_planning_attempts = 3
-        req.allowed_planning_time = 5.0
-        req.max_velocity_scaling_factor = 1.0
-        req.max_acceleration_scaling_factor = 1.0
-        req.goal_constraints.append(constraints)
+    def _build_trajectory_goal(self, j1: float, j2: float) -> FollowJointTrajectory.Goal:
+        duration_sec = self._compute_duration(j1, j2)
+        sec_int = int(duration_sec)
+        nanosec = int((duration_sec - sec_int) * 1e9)
 
-        goal = MoveGroup.Goal()
-        goal.request = req
-        goal.planning_options.plan_only = plan_only
+        point = JointTrajectoryPoint()
+        point.positions = [j1, j2]
+        point.velocities = [0.0, 0.0]
+        point.time_from_start = Duration(sec=sec_int, nanosec=nanosec)
+
+        traj = JointTrajectory()
+        traj.joint_names = [HEAD_JOINT1, HEAD_JOINT2]
+        traj.points = [point]
+
+        goal = FollowJointTrajectory.Goal()
+        goal.trajectory = traj
         return goal
 
     def _cancel_cb(self, goal_handle) -> CancelResponse:
@@ -148,22 +153,20 @@ class HeadMoveActionServer(Node):
                 )
         return True, ""
 
-    def _call_move_group(
+    def _call_controller(
         self,
         j1: float,
         j2: float,
-        plan_only: bool,
         goal_handle,
         feedback: HeadMove.Feedback,
-        status: str,
     ) -> tuple[bool | None, str]:
-        if not self._move_client.wait_for_server(timeout_sec=3.0):
-            return False, "MoveGroup 액션 서버에 연결할 수 없음"
+        if not self._ctrl_client.wait_for_server(timeout_sec=3.0):
+            return False, f"컨트롤러 액션 서버({HEAD_CONTROLLER_ACTION})에 연결할 수 없음"
 
-        moveit_goal = self._build_moveit_goal(j1, j2, plan_only)
-        send_future = self._move_client.send_goal_async(moveit_goal)
+        ctrl_goal = self._build_trajectory_goal(j1, j2)
+        send_future = self._ctrl_client.send_goal_async(ctrl_goal)
 
-        self._fill_feedback(feedback, status)
+        self._fill_feedback(feedback, "Moving")
         goal_handle.publish_feedback(feedback)
 
         deadline = time.time() + 10.0
@@ -171,42 +174,46 @@ class HeadMoveActionServer(Node):
             if goal_handle.is_cancel_requested:
                 return None, "Cancelled"
             if time.time() > deadline:
-                return False, "MoveGroup goal 수락 대기 타임아웃"
+                return False, "컨트롤러 goal 수락 대기 타임아웃"
             time.sleep(0.02)
 
-        mg_handle = send_future.result()
-        if not mg_handle.accepted:
-            return False, "MoveGroup goal 거절됨"
+        ctrl_handle = send_future.result()
+        if not ctrl_handle.accepted:
+            return False, "컨트롤러 goal 거절됨"
 
-        self._active_mg_handle = mg_handle
-        result_future = mg_handle.get_result_async()
+        self._active_ctrl_handle = ctrl_handle
+        result_future = ctrl_handle.get_result_async()
         sleep_interval = 1.0 / FEEDBACK_HZ
 
         while not result_future.done():
             if goal_handle.is_cancel_requested:
-                cancel_future = mg_handle.cancel_goal_async()
+                cancel_future = ctrl_handle.cancel_goal_async()
                 cdeadline = time.time() + 5.0
                 while not cancel_future.done() and time.time() < cdeadline:
                     time.sleep(0.02)
-                self._active_mg_handle = None
+                self._active_ctrl_handle = None
                 return None, "Cancelled"
-            self._fill_feedback(feedback, status)
+            self._fill_feedback(feedback, "Moving")
             goal_handle.publish_feedback(feedback)
             time.sleep(sleep_interval)
 
-        self._active_mg_handle = None
+        self._active_ctrl_handle = None
 
         wrapped = result_future.result()
-        ec = wrapped.result.error_code.val if wrapped.result else -999
-        ec_desc = MOVEIT_ERROR_MAP.get(ec, f"코드 {ec}")
         if wrapped.status != GoalStatus.STATUS_SUCCEEDED:
-            return False, f"MoveGroup 액션 비정상 종료 (status={wrapped.status}, error={ec_desc})"
+            err_str = wrapped.result.error_string if wrapped.result else ""
+            return False, f"컨트롤러 액션 비정상 종료 (status={wrapped.status}, error='{err_str}')"
 
-        if ec == MoveItErrorCodes.SUCCESS:
+        ec = wrapped.result.error_code if wrapped.result else -1
+        if ec == FollowJointTrajectory.Result.SUCCESSFUL:
             return True, "성공"
-        return False, ec_desc
+        return False, f"컨트롤러 오류 코드 {ec}: {wrapped.result.error_string}"
 
     def _execute_cb(self, goal_handle) -> HeadMove.Result:
+        with self._motion_lock:
+            return self._execute_cb_body(goal_handle)
+
+    def _execute_cb_body(self, goal_handle) -> HeadMove.Result:
         g = goal_handle.request
         j1 = float(g.head_joint1)
         j2 = float(g.head_joint2)
@@ -225,40 +232,20 @@ class HeadMoveActionServer(Node):
             result.message = lim_msg
             self._fill_result_positions(result)
             goal_handle.abort()
-            self.get_logger().warn(lim_msg)
+            self.get_logger().error(_red(lim_msg))
             return result
-
-        ok, msg = self._call_move_group(
-            j1, j2, True, goal_handle, feedback, "Planning"
-        )
-
-        if ok is None:
-            result.success = False
-            result.message = "Planning 중 취소됨"
-            self._fill_result_positions(result)
-            goal_handle.canceled()
-            return result
-
-        if not ok:
-            result.success = False
-            result.message = f"Planning 실패: {msg}"
-            self._fill_result_positions(result)
-            goal_handle.abort()
-            self.get_logger().warn(result.message)
-            return result
-
-        self.get_logger().info("Planning 성공")
 
         if plan_only:
             result.success = True
-            result.message = "Planning 성공 (plan_only=True, 이동 생략)"
+            result.message = "Joint limit 검사 통과 (plan_only=True, 이동 생략)"
             self._fill_result_positions(result)
             goal_handle.succeed()
+            self.get_logger().info(_blue(result.message))
             return result
 
-        ok, msg = self._call_move_group(
-            j1, j2, False, goal_handle, feedback, "Moving"
-        )
+        self.get_logger().info(_blue(f"헤드 이동 시작: j1={j1:.4f} rad, j2={j2:.4f} rad"))
+
+        ok, msg = self._call_controller(j1, j2, goal_handle, feedback)
         self._fill_result_positions(result)
 
         if ok is None:
@@ -270,12 +257,12 @@ class HeadMoveActionServer(Node):
             result.success = True
             result.message = f"이동 완료: j1={self._j1:.4f}, j2={self._j2:.4f}"
             goal_handle.succeed()
-            self.get_logger().info(result.message)
+            self.get_logger().info(_blue(result.message))
         else:
             result.success = False
             result.message = f"이동 실패: {msg}"
             goal_handle.abort()
-            self.get_logger().error(result.message)
+            self.get_logger().error(_red(result.message))
 
         return result
 

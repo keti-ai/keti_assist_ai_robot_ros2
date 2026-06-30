@@ -39,6 +39,13 @@ from tf2_ros import Buffer, TransformListener
 
 from kaair_msgs.action import MoveJoint, MoveLinear, MoveTool, ArmTask
 
+# ── ANSI 색상 유틸 ─────────────────────────────────────────────────────────
+_BLUE = "\033[94m"
+_RED  = "\033[91m"
+_RST  = "\033[0m"
+
+def _blue(s: str) -> str: return f"{_BLUE}{s}{_RST}"
+def _red(s: str)  -> str: return f"{_RED}{s}{_RST}"
 
 MOVE_GROUP = "arm"
 MOVE_ACTION = "move_action"
@@ -313,6 +320,7 @@ class UnifiedMotionActionServer(Node):
             result.message = f"target_joints 길이가 7이 아님: {len(target_joints)}"
             result.final_joints = self._current_joints
             goal_handle.abort()
+            self.get_logger().error(_red(f"[MoveJoint] {result.message}"))
             return result
 
         self.get_logger().info(
@@ -332,6 +340,7 @@ class UnifiedMotionActionServer(Node):
             result.message = "Planning 중 취소됨"
             result.final_joints = self._current_joints
             goal_handle.canceled()
+            self.get_logger().info(f"[MoveJoint] {result.message}")
             return result
 
         if not ok:
@@ -339,14 +348,18 @@ class UnifiedMotionActionServer(Node):
             result.message = f"Planning 실패: {msg}"
             result.final_joints = self._current_joints
             goal_handle.abort()
+            self.get_logger().error(_red(f"[MoveJoint] {result.message}"))
             return result
 
         if plan_only:
             result.success = True
-            result.message = "Planning 성공"
+            result.message = "Planning 성공 (plan_only=True, 이동 생략)"
             result.final_joints = self._current_joints
             goal_handle.succeed()
+            self.get_logger().info(_blue(f"[MoveJoint] {result.message}"))
             return result
+
+        self.get_logger().info(_blue(f"[MoveJoint] 이동 시작: {target_joints}"))
 
         ok, msg = self._call_move_group(
             target_joints=target_joints,
@@ -362,14 +375,17 @@ class UnifiedMotionActionServer(Node):
             result.success = False
             result.message = "이동 중 취소됨"
             goal_handle.canceled()
+            self.get_logger().info(f"[MoveJoint] {result.message}")
         elif ok:
             result.success = True
             result.message = "이동 완료"
             goal_handle.succeed()
+            self.get_logger().info(_blue(f"[MoveJoint] {result.message}"))
         else:
             result.success = False
             result.message = f"이동 실패: {msg}"
             goal_handle.abort()
+            self.get_logger().error(_red(f"[MoveJoint] {result.message}"))
 
         return result
 
@@ -634,6 +650,7 @@ class UnifiedMotionActionServer(Node):
             result.success = False
             result.message = f"현재 TCP pose 읽기 또는 target pose 생성 실패: {e}"
             goal_handle.abort()
+            self.get_logger().error(_red(f"[MoveLinear] {result.message}"))
             return result
 
         result.final_pose = target_pose
@@ -651,19 +668,27 @@ class UnifiedMotionActionServer(Node):
             result.success = False
             result.message = "Planning 중 취소됨"
             goal_handle.canceled()
+            self.get_logger().info(f"[MoveLinear] {result.message}")
             return result
 
         if trajectory is None:
             result.success = False
             result.message = msg
             goal_handle.abort()
+            self.get_logger().error(_red(f"[MoveLinear] Cartesian path 실패: {msg}"))
             return result
 
         if plan_only:
             result.success = True
             result.message = msg + " / plan_only=True"
             goal_handle.succeed()
+            self.get_logger().info(_blue(f"[MoveLinear] {result.message}"))
             return result
+
+        self.get_logger().info(_blue(
+            f"[MoveLinear] 이동 시작: frame={base_frame} "
+            f"pos=[{x:.3f},{y:.3f},{z:.3f}]"
+        ))
 
         feedback.status = "Moving"
         goal_handle.publish_feedback(feedback)
@@ -674,14 +699,17 @@ class UnifiedMotionActionServer(Node):
             result.success = False
             result.message = "이동 중 취소됨"
             goal_handle.canceled()
+            self.get_logger().info(f"[MoveLinear] {result.message}")
         elif ok:
             result.success = True
             result.message = exec_msg
             goal_handle.succeed()
+            self.get_logger().info(_blue(f"[MoveLinear] 이동 완료"))
         else:
             result.success = False
             result.message = exec_msg
             goal_handle.abort()
+            self.get_logger().error(_red(f"[MoveLinear] 이동 실패: {exec_msg}"))
 
         return result
 
@@ -729,6 +757,7 @@ class UnifiedMotionActionServer(Node):
             result.success = False
             result.message = f"현재 TCP pose 읽기 또는 변환 실패: {e}"
             goal_handle.abort()
+            self.get_logger().error(_red(f"[MoveTool] {result.message}"))
             return result
 
         result.final_pose = target_pose
@@ -745,19 +774,26 @@ class UnifiedMotionActionServer(Node):
             result.success = False
             result.message = "Planning 중 취소됨"
             goal_handle.canceled()
+            self.get_logger().info(f"[MoveTool] {result.message}")
             return result
 
         if trajectory is None:
             result.success = False
             result.message = msg
             goal_handle.abort()
+            self.get_logger().error(_red(f"[MoveTool] Cartesian path 실패: {msg}"))
             return result
 
         if plan_only:
             result.success = True
             result.message = msg + " / plan_only=True"
             goal_handle.succeed()
+            self.get_logger().info(_blue(f"[MoveTool] {result.message}"))
             return result
+
+        self.get_logger().info(_blue(
+            f"[MoveTool] 이동 시작: delta=[{dx:.3f},{dy:.3f},{dz:.3f}]"
+        ))
 
         feedback.status = "Moving"
         goal_handle.publish_feedback(feedback)
@@ -768,14 +804,17 @@ class UnifiedMotionActionServer(Node):
             result.success = False
             result.message = "이동 중 취소됨"
             goal_handle.canceled()
+            self.get_logger().info(f"[MoveTool] {result.message}")
         elif ok:
             result.success = True
             result.message = exec_msg
             goal_handle.succeed()
+            self.get_logger().info(_blue(f"[MoveTool] 이동 완료"))
         else:
             result.success = False
             result.message = exec_msg
             goal_handle.abort()
+            self.get_logger().error(_red(f"[MoveTool] 이동 실패: {exec_msg}"))
 
         return result
 
@@ -991,13 +1030,17 @@ class UnifiedMotionActionServer(Node):
 
         total = len(steps)
 
+        self.get_logger().info(_blue(
+            f"[ArmTask] 태스크 시작: {task_type} ({total}스텝)"
+        ))
+
         for i, (step_name, step_fn) in enumerate(steps):
             feedback.status = f"Step {i + 1}/{total}: {step_name}"
             feedback.step = i + 1
             feedback.total_steps = total
             goal_handle.publish_feedback(feedback)
 
-            self.get_logger().info(f"[ArmTask] {feedback.status}")
+            self.get_logger().info(_blue(f"[ArmTask] {feedback.status}"))
 
             # plan_only=True일 때 첫 스텝 플래닝 검증 후 종료
             current_plan_only = plan_only if i == 0 else False
@@ -1007,23 +1050,27 @@ class UnifiedMotionActionServer(Node):
                 result.success = False
                 result.message = f"Step {i + 1} ({step_name}) 취소됨"
                 goal_handle.canceled()
+                self.get_logger().info(f"[ArmTask] {result.message}")
                 return result
 
             if not ok:
                 result.success = False
                 result.message = f"Step {i + 1} ({step_name}) 실패: {msg}"
                 goal_handle.abort()
+                self.get_logger().error(_red(f"[ArmTask] {result.message}"))
                 return result
 
             if plan_only:
                 result.success = True
                 result.message = f"plan_only=True — {step_name} 플래닝 성공"
                 goal_handle.succeed()
+                self.get_logger().info(_blue(f"[ArmTask] {result.message}"))
                 return result
 
         result.success = True
         result.message = f"{task_type} 완료 ({total}스텝)"
         goal_handle.succeed()
+        self.get_logger().info(_blue(f"[ArmTask] {result.message}"))
         return result
 
 

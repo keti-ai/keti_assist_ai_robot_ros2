@@ -9,6 +9,7 @@ MoveGroup 을 거치지 않으므로 arm MoveGroup 과 동시에 실행 가능.
 import io
 import math
 import sys
+import threading
 import time
 
 import rclpy
@@ -25,6 +26,14 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from urdf_parser_py.urdf import URDF
 
 from kaair_msgs.action import LiftMove
+
+# ── ANSI 색상 유틸 ─────────────────────────────────────────────────────────
+_BLUE = "\033[94m"
+_RED  = "\033[91m"
+_RST  = "\033[0m"
+
+def _blue(s: str) -> str: return f"{_BLUE}{s}{_RST}"
+def _red(s: str)  -> str: return f"{_RED}{s}{_RST}"
 
 _LATCHED_QOS = QoSProfile(
     depth=1,
@@ -60,6 +69,7 @@ class LiftMoveActionServer(Node):
             _LATCHED_QOS,
         )
 
+        self._motion_lock = threading.Lock()
         self._current_height  = 0.0
         self._active_fjt_handle = None
         self.create_subscription(JointState, "/joint_states", self._on_joint_state, 10)
@@ -92,9 +102,9 @@ class LiftMoveActionServer(Node):
                     f"max_vel={self._max_velocity:.3f} m/s"
                 )
             else:
-                self.get_logger().warn(f"URDF에서 {LIFT_JOINT} 리밋을 찾지 못함")
+                self.get_logger().warning(f"URDF에서 {LIFT_JOINT} 리밋을 찾지 못함")
         except Exception as e:
-            self.get_logger().warn(f"URDF 파싱 실패: {e}")
+            self.get_logger().warning(f"URDF 파싱 실패: {e}")
 
     # ── joint state 구독 ──────────────────────────────────────────────────────
     def _on_joint_state(self, msg: JointState):
@@ -154,10 +164,10 @@ class LiftMoveActionServer(Node):
         fjt_goal.trajectory          = traj
         fjt_goal.goal_time_tolerance = _ros_duration(2.0)
 
-        self.get_logger().info(
-            f"FJT goal 전송: {self._current_height:.3f} → {target:.3f} m "
+        self.get_logger().info(_blue(
+            f"리프트 이동 시작: {self._current_height:.3f} → {target:.3f} m "
             f"(예상 {duration_sec:.2f}s)"
-        )
+        ))
 
         send_future = self._fjt_client.send_goal_async(fjt_goal)
 
@@ -203,6 +213,10 @@ class LiftMoveActionServer(Node):
 
     # ── 액션 서버 실행 콜백 ───────────────────────────────────────────────────
     def _execute_cb(self, goal_handle) -> LiftMove.Result:
+        with self._motion_lock:
+            return self._execute_cb_body(goal_handle)
+
+    def _execute_cb_body(self, goal_handle) -> LiftMove.Result:
         g             = goal_handle.request
         target_height = float(g.target_height)
         plan_only     = bool(g.plan_only)
@@ -223,7 +237,7 @@ class LiftMoveActionServer(Node):
             )
             result.final_height = self._current_height
             goal_handle.abort()
-            self.get_logger().warn(result.message)
+            self.get_logger().error(_red(result.message))
             return result
 
         # plan_only=True: 실제 이동 없이 가능 여부만 확인 (범위 검증 통과 = OK)
@@ -232,6 +246,7 @@ class LiftMoveActionServer(Node):
             result.message      = "범위 검증 성공 (plan_only=True, 이동 생략)"
             result.final_height = self._current_height
             goal_handle.succeed()
+            self.get_logger().info(_blue(result.message))
             return result
 
         # 1단계: 이동 실행
@@ -248,12 +263,12 @@ class LiftMoveActionServer(Node):
             result.success  = True
             result.message  = f"이동 완료: {self._current_height:.3f}m"
             goal_handle.succeed()
-            self.get_logger().info(result.message)
+            self.get_logger().info(_blue(result.message))
         else:
             result.success  = False
             result.message  = f"이동 실패: {msg}"
             goal_handle.abort()
-            self.get_logger().error(result.message)
+            self.get_logger().error(_red(result.message))
 
         return result
 
