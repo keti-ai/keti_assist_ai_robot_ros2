@@ -33,8 +33,8 @@ def generate_launch_description():
         launch_arguments={
             'camera_name': 'femto',
             'depth_registration': 'true',
-            'enable_point_cloud': 'true',
-            'enable_colored_point_cloud': 'true',
+            'enable_point_cloud': 'false',
+            'enable_colored_point_cloud': 'false',
             'color_qos': 'default',
             'depth_qos': 'default',
             'point_cloud_qos': 'default',
