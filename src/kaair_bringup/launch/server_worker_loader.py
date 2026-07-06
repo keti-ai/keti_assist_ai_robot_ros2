@@ -1,4 +1,5 @@
 import os
+import sys
 
 import yaml
 from ament_index_python.packages import get_package_share_directory
@@ -7,21 +8,10 @@ from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
-
-def _load_spec(spec_filename: str):
-    """kaair_bringup/config/robots/<spec> YAML을 로드한다."""
-    bringup_pkg = get_package_share_directory("kaair_bringup")
-    spec_path = os.path.join(bringup_pkg, "config", "robots", spec_filename)
-    if not os.path.isfile(spec_path):
-        return {}, spec_path
-    try:
-        with open(spec_path, "r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-    except Exception:
-        return {}, spec_path
-    if not isinstance(data, dict):
-        return {}, spec_path
-    return data, spec_path
+_bringup_launch_dir = os.path.dirname(os.path.abspath(__file__))
+if _bringup_launch_dir not in sys.path:
+    sys.path.insert(0, _bringup_launch_dir)
+from robot_spec_utils import load_robot_spec  # noqa: E402
 
 
 def _load_arm_robot_ip_from_spec(spec_data):
@@ -50,7 +40,7 @@ def _load_place_config_from_spec(spec_data):
 def launch_setup(context, *args, **kwargs):
     spec_str = LaunchConfiguration("spec").perform(context)
 
-    spec_data, spec_path = _load_spec(spec_str)
+    spec_data, spec_path = load_robot_spec(spec_str)
     robot_ip = _load_arm_robot_ip_from_spec(spec_data)
     place_config_file = _load_place_config_from_spec(spec_data)
 
@@ -137,7 +127,7 @@ def generate_launch_description():
     spec_arg = DeclareLaunchArgument(
         "spec",
         default_value="kaair_specs_01.yaml",
-        description="kaair_bringup/config/robots/ 하위 스펙 YAML (arm.robot_ip, mobile_bridge.POI/PIO 사용)",
+        description="kaair_bringup/config/robots/ 하위 스펙 YAML (arm.robot_ip, mobile_bridge.type/POI/PIO 사용)",
     )
     return LaunchDescription(
         [

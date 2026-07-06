@@ -1,4 +1,5 @@
 import os
+import sys
 import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -14,6 +15,15 @@ from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from moveit_configs_utils import MoveItConfigsBuilder
 
+_bringup_launch_dir = os.path.dirname(os.path.abspath(__file__))
+if _bringup_launch_dir not in sys.path:
+    sys.path.insert(0, _bringup_launch_dir)
+from robot_spec_utils import (  # noqa: E402
+    get_mobile_bridge_type,
+    load_robot_spec,
+    resolve_moveit_urdf_paths,
+)
+
 def _load_yaml(package_name: str, relative_path: str) -> dict:
     pkg = get_package_share_directory(package_name)
     with open(os.path.join(pkg, relative_path), 'r') as f:
@@ -25,9 +35,6 @@ def launch_setup(context, *args, **kwargs):
     use_fake_str    = LaunchConfiguration('use_fake_hardware').perform(context)
     spec_str        = LaunchConfiguration('spec').perform(context)
     use_gui         = LaunchConfiguration('use_gui')
-    robot_variant   = LaunchConfiguration('robot_variant').perform(context)
-
-    use_clober = (robot_variant == 'clober')
 
     # ── 패키지 경로 ────────────────────────────────────────────────────────
     moveit_pkg  = get_package_share_directory('kaair_moveit_config')
@@ -37,6 +44,13 @@ def launch_setup(context, *args, **kwargs):
     hw_spec_file           = os.path.join(bringup_pkg, 'config', 'robots', spec_str)
     initial_positions_file = os.path.join(moveit_pkg, 'config', 'initial_positions.yaml')
 
+    spec_data, spec_path = load_robot_spec(spec_str)
+    kaair_xacro, srdf_file = resolve_moveit_urdf_paths(moveit_pkg, spec_data)
+    print(
+        f'[vla_moveit_bringup] mobile_bridge.type={get_mobile_bridge_type(spec_data)!r} '
+        f'→ {os.path.basename(kaair_xacro)} ← {spec_path}'
+    )
+
     # ── Controller YAML ────────────────────────────────────────────────────
     arm_ctrl_yaml  = os.path.join(ctrl_pkg, 'config', 'arm_controllers.yaml')
     body_ctrl_yaml = os.path.join(ctrl_pkg, 'config', 'body_controllers.yaml')
@@ -44,13 +58,6 @@ def launch_setup(context, *args, **kwargs):
     # ── xacro 경로 (robot_variant 로 선택) ────────────────────────────────
     arm_hw_xacro  = os.path.join(moveit_pkg, 'config', 'arm_hw.urdf.xacro')
     body_hw_xacro = os.path.join(moveit_pkg, 'config', 'body_hw.urdf.xacro')
-
-    if use_clober:
-        kaair_xacro = os.path.join(moveit_pkg, 'config', 'kaair_clober.urdf.xacro')
-        srdf_file   = 'config/kaair_clober.srdf'
-    else:
-        kaair_xacro = os.path.join(moveit_pkg, 'config', 'kaair.urdf.xacro')
-        srdf_file   = 'config/kaair.srdf'
 
     # ── robot_description 생성 헬퍼 ────────────────────────────────────────
     def make_description(xacro_path, extra=''):
@@ -299,13 +306,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'spec',
             default_value='kaair_specs_01.yaml',
-            description='로봇 스펙 파일 이름 (kaair_bringup/config/robots/ 하위)',
-        ),
-        DeclareLaunchArgument(
-            'robot_variant',
-            default_value='clober',
-            description='slamtec: kaair.urdf.xacro (기본) | clober: kaair_clober.urdf.xacro',
-            choices=['slamtec', 'clober'],
+            description='로봇 스펙 파일 이름 (kaair_bringup/config/robots/ 하위, mobile_bridge.type 으로 URDF 선택)',
         ),
         OpaqueFunction(function=launch_setup),
     ])

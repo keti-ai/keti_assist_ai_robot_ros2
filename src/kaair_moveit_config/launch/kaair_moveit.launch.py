@@ -50,9 +50,13 @@ Launch 인자
   use_fake_hardware  true | false  (default: false)
   use_gui            true | false  (default: true)
   spec               kaair_specs_*.yaml  (default: kaair_specs_02.yaml)
+    → config/robots/<spec> 의 mobile_bridge.type 으로 URDF/SRDF 선택
+      clobot/clober → kaair_clober.urdf.xacro + kaair_clober.srdf
+      slamtec         → kaair.urdf.xacro + kaair.srdf
 """
 
 import os
+import sys
 import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -63,6 +67,16 @@ from launch.conditions import IfCondition
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from moveit_configs_utils import MoveItConfigsBuilder
+
+_bringup_launch_dir = os.path.join(
+    get_package_share_directory('kaair_bringup'), 'launch')
+if _bringup_launch_dir not in sys.path:
+    sys.path.insert(0, _bringup_launch_dir)
+from robot_spec_utils import (  # noqa: E402
+    get_mobile_bridge_type,
+    load_robot_spec,
+    resolve_moveit_urdf_paths,
+)
 
 
 def launch_setup(context, *args, **kwargs):
@@ -80,6 +94,13 @@ def launch_setup(context, *args, **kwargs):
     hw_spec_file = os.path.join(bringup_pkg, 'config', 'robots', spec_str)
     initial_positions_file = os.path.join(moveit_pkg, 'config', 'initial_positions.yaml')
 
+    spec_data, spec_path = load_robot_spec(spec_str)
+    kaair_xacro, srdf_file = resolve_moveit_urdf_paths(moveit_pkg, spec_data)
+    print(
+        f'[kaair_moveit] mobile_bridge.type={get_mobile_bridge_type(spec_data)!r} '
+        f'→ {os.path.basename(kaair_xacro)} ← {spec_path}'
+    )
+
     # ── Controller YAML ────────────────────────────────────────────────────
     # fake/real 공통. HW 구분은 URDF xacro 플러그인으로만 처리.
     # 컨트롤러 이름(xarm7_traj_controller)은 fake/real 동일하다.
@@ -89,7 +110,6 @@ def launch_setup(context, *args, **kwargs):
     # ── xacro 경로 ─────────────────────────────────────────────────────────
     arm_hw_xacro  = os.path.join(moveit_pkg, 'config', 'arm_hw.urdf.xacro')
     body_hw_xacro = os.path.join(moveit_pkg, 'config', 'body_hw.urdf.xacro')
-    kaair_xacro   = os.path.join(moveit_pkg, 'config', 'kaair.urdf.xacro')
 
     # ── robot_description 생성 ─────────────────────────────────────────────
 
@@ -131,7 +151,7 @@ def launch_setup(context, *args, **kwargs):
                 'include_ros2_control':   'false',
             }
         )
-        .robot_description_semantic(file_path='config/kaair.srdf')
+        .robot_description_semantic(file_path=srdf_file)
         # fake/real 모두 동일한 moveit_controllers.yaml 사용
         # (xarm7_traj_controller 이름으로 통일)
         .trajectory_execution(file_path='config/moveit_controllers.yaml')
