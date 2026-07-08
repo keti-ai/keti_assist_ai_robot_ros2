@@ -155,7 +155,11 @@ def launch_setup(context, *args, **kwargs):
         # fake/real 모두 동일한 moveit_controllers.yaml 사용
         # (xarm7_traj_controller 이름으로 통일)
         .trajectory_execution(file_path='config/moveit_controllers.yaml')
-        .planning_pipelines(pipelines=['ompl', 'chomp'], default_planning_pipeline='ompl')
+        .planning_pipelines(
+            pipelines=['pilz_industrial_motion_planner'],
+            default_planning_pipeline='pilz_industrial_motion_planner',
+        )
+        .pilz_cartesian_limits(file_path='config/pilz_cartesian_limits.yaml')
         .sensors_3d(file_path='config/sensors_3d.yaml')
         .to_moveit_configs()
     )

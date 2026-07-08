@@ -8,6 +8,9 @@ float64 qz
 float64 qw
 
 bool plan_only
+# 속도/가속도 스케일 (0.0~1.0). 0.0이면 서버 기본값 사용
+float64 velocity_scale
+float64 acceleration_scale
 ---
 bool success
 string message
