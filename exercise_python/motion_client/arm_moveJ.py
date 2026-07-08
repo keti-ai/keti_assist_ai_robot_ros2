@@ -3,11 +3,19 @@
 MoveJoint 액션 클라이언트 → /kaair_worker/arm_moveJ
 
 Goal: target_joints[7] (rad), plan_only (기본 false = 실행)
+      velocity_scale, acceleration_scale (0.0~1.0, 0.0이면 서버 기본값)
 
 실행 예:
   python3 arm_moveJ.py --ros-args \
     -p j1:=0.0 -p j2:=0.261799 -p j3:=0.0 -p j4:=0.261799 \
     -p j5:=-3.14159 -p j6:=0.0 -p j7:=0.0 \
+    -p plan_only:=false
+
+실행 예 (속도/가속도 지정):
+  python3 arm_moveJ.py --ros-args \
+    -p j1:=0.0 -p j2:=0.261799 -p j3:=0.0 -p j4:=0.261799 \
+    -p j5:=-3.14159 -p j6:=0.0 -p j7:=0.0 \
+    -p velocity_scale:=0.3 -p acceleration_scale:=0.5 \
     -p plan_only:=false
 
 의존: rclpy, kaair_msgs
@@ -30,6 +38,9 @@ class ArmMoveJClient(Node):
         for i in range(1, 8):
             self.declare_parameter(f'j{i}', 0.0)
         self.declare_parameter('plan_only', False)
+        # 속도/가속도 스케일 (0.0~1.0). 0.0이면 서버 기본값 사용
+        self.declare_parameter('velocity_scale', 0.0)
+        self.declare_parameter('acceleration_scale', 0.0)
 
         action_name = self.get_parameter('action_name').value
         self._client = ActionClient(self, MoveJoint, action_name)
@@ -40,6 +51,8 @@ class ArmMoveJClient(Node):
             float(self.get_parameter(f'j{i}').value) for i in range(1, 8)
         ]
         g.plan_only = bool(self.get_parameter('plan_only').value)
+        g.velocity_scale = float(self.get_parameter('velocity_scale').value)
+        g.acceleration_scale = float(self.get_parameter('acceleration_scale').value)
         return g
 
     def run(self, timeout_sec: float = 120.0) -> bool:
@@ -50,7 +63,8 @@ class ArmMoveJClient(Node):
         goal = self.build_goal()
         self.get_logger().info(
             f'MoveJ goal: joints={[round(x, 4) for x in goal.target_joints]} '
-            f'plan_only={goal.plan_only}'
+            f'plan_only={goal.plan_only} '
+            f'vel_scale={goal.velocity_scale:.2f} acc_scale={goal.acceleration_scale:.2f}'
         )
 
         send_future = self._client.send_goal_async(goal, self._feedback_cb)

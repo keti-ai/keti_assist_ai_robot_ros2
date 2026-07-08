@@ -105,8 +105,8 @@ class UnifiedMotionActionServer(Node):
         self._motion_lock = threading.Lock()
         self._current_joints = [0.0] * 7
 
-        self.declare_parameter("default_velocity_scale", 0.30)
-        self.declare_parameter("default_acceleration_scale", 0.30)
+        self.declare_parameter("default_velocity_scale", 1.0)
+        self.declare_parameter("default_acceleration_scale", 0.40)
 
         self.create_subscription(
             JointState,
