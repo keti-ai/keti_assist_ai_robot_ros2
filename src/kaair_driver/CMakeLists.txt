@@ -115,6 +115,11 @@ add_executable(lift_initializer src/lift/lift_initializer.cpp)
 target_include_directories(lift_initializer PRIVATE include)
 target_link_libraries(lift_initializer md485_hw_lib) # 통신 라이브러리 연결
 
+# 리미트 스위치 오버트래블 회피용 리프트 조그(수동 이동) 노드
+add_executable(lift_recovery src/lift/lift_recovery.cpp)
+target_include_directories(lift_recovery PRIVATE include)
+target_link_libraries(lift_recovery md485_hw_lib) # 통신 라이브러리 연결
+
 # Koras 그리퍼 테스트용 실행 파일
 add_executable(koras_test_node src/tool/test_koras.cpp)
 target_include_directories(koras_test_node PRIVATE include)
@@ -139,6 +144,7 @@ install(TARGETS
   dxl_test_node
   lift_test_node
   lift_initializer
+  lift_recovery
   koras_test_node
   DESTINATION lib/${PROJECT_NAME}
 )
