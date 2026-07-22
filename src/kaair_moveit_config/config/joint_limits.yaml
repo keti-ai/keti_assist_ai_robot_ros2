@@ -7,13 +7,13 @@ joint_limits:
   head_joint1:
     has_velocity_limits: true
     max_velocity: 3.14
-    has_acceleration_limits: false
-    max_acceleration: 0
+    has_acceleration_limits: true
+    max_acceleration: 1.0
   head_joint2:
     has_velocity_limits: true
     max_velocity: 3.14
-    has_acceleration_limits: false
-    max_acceleration: 0
+    has_acceleration_limits: true
+    max_acceleration: 1.0
   joint1:
     has_velocity_limits: true
     max_velocity: 2.14
@@ -52,10 +52,10 @@ joint_limits:
   lift_joint:
     has_velocity_limits: true
     max_velocity: 0.20000000000000001
-    has_acceleration_limits: false
-    max_acceleration: 0
+    has_acceleration_limits: true
+    max_acceleration: 0.2
   virtual_gripper_joint:
     has_velocity_limits: true
     max_velocity: 0.05
-    has_acceleration_limits: false
-    max_acceleration: 0
+    has_acceleration_limits: true
+    max_acceleration: 0.1
