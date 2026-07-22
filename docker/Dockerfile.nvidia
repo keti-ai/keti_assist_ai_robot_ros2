@@ -144,40 +144,47 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certifi
     && rm -rf /var/lib/apt/lists/*
 
 # ==========================================
-# 9. Cyclone DDS Installation
+# (Optional) 9. Cyclone DDS Installation
 # ==========================================
-RUN apt-get update && apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp
+#RUN apt-get update && apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp
 
 # ==========================================
 # 10. 사용자 계정 설정 및 터미널 환경 최적화
 # ==========================================
-ARG USERNAME=developer
+ARG USERNAME=admin
 ARG USER_UID=1000
 ARG USER_GID=1000
-
+    
 # sudo 패키지 설치 및 사용자 권한 부여
 RUN apt-get update && apt-get install -y sudo \
-    && groupadd --gid $USER_UID $USERNAME \
-    && useradd --uid $USER_UID --gid $USER_UID -m $USERNAME \
-    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
-    && chmod 0440 /etc/sudoers.d/$USERNAME \
-    && rm -rf /var/lib/apt/lists/*
+    && if id -u ${USER_UID} >/dev/null 2>&1; then \
+            EXIST_USER=$(getent passwd ${USER_UID} | cut -d: -f1); \
+            usermod -l ${USERNAME} ${EXIST_USER}; \
+            usermod -d /home/${USERNAME} -m ${USERNAME}; \
+        else \
+            groupadd --gid ${USER_GID} ${USERNAME}; \
+            useradd --uid ${USER_UID} --gid ${USER_GID} -m ${USERNAME}; \
+        fi \
+    && echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} \
+    && chmod 0440 /etc/sudoers.d/${USERNAME}
+
 
 # 환경 변수 및 Alias 설정 (root 및 사용자 공통)
-RUN for user_home in /root /home/${USERNAME}; do \
-    echo 'export TERM=xterm-256color' >> ${user_home}/.bashrc && \
-    echo 'alias eb="nano ~/.bashrc"' >> ${user_home}/.bashrc && \
-    echo 'alias sb="source ~/.bashrc"' >> ${user_home}/.bashrc && \
-    echo 'alias cbs="colcon build --symlink-install"' >> ${user_home}/.bashrc && \
-    echo 'alias cclean="rm -rf build/ install/ log/"' >> ${user_home}/.bashrc && \
-    echo "source /opt/ros/humble/setup.bash" >> ${user_home}/.bashrc && \
-    echo 'for ws in /xarm_ws /camera_ws /ros_ws; do [ -f "$ws/install/setup.bash" ] && source "$ws/install/setup.bash"; done' >> ${user_home}/.bashrc; \
+RUN USER_HOME=$(getent passwd $(cat /tmp/container_user) | cut -d: -f6) && \
+    for user_home in /root ${USER_HOME}; do \
+        echo 'export TERM=xterm-256color' >> ${user_home}/.bashrc && \
+        echo 'alias eb="nano ~/.bashrc"' >> ${user_home}/.bashrc && \
+        echo 'alias sb="source ~/.bashrc"' >> ${user_home}/.bashrc && \
+        echo 'alias cbs="colcon build --symlink-install"' >> ${user_home}/.bashrc && \
+        echo 'alias cclean="rm -rf build/ install/ log/"' >> ${user_home}/.bashrc; \
+        echo 'for ws in /xarm_ws /camera_ws /ros_ws; do [ -f "$ws/install/setup.bash" ] && source "$ws/install/setup.bash"; done' >> ${user_home}/.bashrc; \
     done
 
 # 사용자별 터미널 색상 구분
 RUN echo 'export PS1="\[\e[01;36m\]\u@docker\[\e[00m\]:\[\e[01;33m\]\w\[\e[00m\]\$ "' >> /home/${USERNAME}/.bashrc && \
     echo 'export PS1="\[\e[01;31m\]\u@container\[\e[00m\]:\[\e[01;37m\]\w\[\e[00m\]# "' >> /root/.bashrc
 
+USER ${USERNAME}
 # ==========================================
 # 11. 최종 작업 환경 설정
 # ==========================================
