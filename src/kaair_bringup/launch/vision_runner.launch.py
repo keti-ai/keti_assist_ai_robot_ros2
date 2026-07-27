@@ -39,6 +39,7 @@ def generate_launch_description():
             'depth_qos': 'default',
             'point_cloud_qos': 'default',
             'publish_tf': 'false',
+            'output': 'own_log',
         }.items(),
         condition=IfCondition(use_head_camera),
     )
@@ -54,6 +55,7 @@ def generate_launch_description():
             'camera_namespace': '/hand',
             'pointcloud.enable': 'true',
             'publish_tf': 'false',
+            'output': 'own_log',
         }.items(),
         condition=IfCondition(use_hand_camera),
     )
