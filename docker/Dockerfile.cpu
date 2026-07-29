@@ -134,7 +134,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certifi
 # ==========================================
 # (Optional) 9. Cyclone DDS Installation
 # ==========================================
-#RUN apt-get update && apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp
+RUN apt-get update && apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp
 
 # MoveIT WS 복사
 RUN cp -r /root/ws_moveit /
@@ -168,7 +168,7 @@ RUN USER_HOME=$(getent passwd $(cat /tmp/container_user) | cut -d: -f6) && \
         echo 'alias sb="source ~/.bashrc"' >> ${user_home}/.bashrc && \
         echo 'alias cbs="colcon build --symlink-install"' >> ${user_home}/.bashrc && \
         echo 'alias cclean="rm -rf build/ install/ log/"' >> ${user_home}/.bashrc; \
-        echo 'for ws in /xarm_ws /camera_ws /ros_ws; do [ -f "$ws/install/setup.bash" ] && source "$ws/install/setup.bash"; done' >> ${user_home}/.bashrc; \
+        echo 'for ws in /ws_moveit /xarm_ws /camera_ws /ros_ws; do [ -f "$ws/install/setup.bash" ] && source "$ws/install/setup.bash"; done' >> ${user_home}/.bashrc; \
     done
 
 # 사용자별 터미널 색상 구분
