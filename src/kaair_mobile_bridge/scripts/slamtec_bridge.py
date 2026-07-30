@@ -19,9 +19,22 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 
 import argparse
 import math
+import os
 import time
 import threading
 from copy import deepcopy
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+
+# rcutils의 {time} 토큰은 epoch 초 단위라 직관적이지 않고, 컨테이너의 시스템
+# 타임존이 UTC로 설정된 경우가 많아 datetime.now()만 쓰면 한국 시간과 어긋나므로,
+# Asia/Seoul 로 명시적으로 고정한 사람이 읽기 쉬운 시:분:초.밀리초 시간을 붙인다.
+_KST = ZoneInfo("Asia/Seoul")
+
+
+def _now() -> str:
+    return datetime.now(_KST).strftime("%H:%M:%S.%f")[:-3]
 
 
 class SlamwareBridge(Node):
@@ -134,11 +147,20 @@ class SlamwareBridge(Node):
         )
 
 
-        self.get_logger().info(
+        self._info(
             f'✅ Bridge Started: '
             f'[Main Domain: {main_context.get_domain_id()}] <-> '
             f'[Slamware Domain: {slamware_context.get_domain_id()}]'
         )
+
+    def _info(self, msg, **kwargs):
+        self.get_logger().info(f'[{_now()}] {msg}', **kwargs)
+
+    def _warn(self, msg, **kwargs):
+        self.get_logger().warn(f'[{_now()}] {msg}', **kwargs)
+
+    def _err(self, msg, **kwargs):
+        self.get_logger().error(f'[{_now()}] {msg}', **kwargs)
 
     def map_callback(self, msg):
         self.map_pub.publish(msg)
@@ -189,7 +211,7 @@ class SlamwareBridge(Node):
         BLUE  = "\033[94m"
         RESET = "\033[0m"
         pose  = goal_request.pose.pose
-        self.get_logger().info(
+        self._info(
             f'{BLUE}[NavigateToPose] ✅ Goal RECEIVED — '
             f'x={pose.position.x:.3f}, y={pose.position.y:.3f}, '
             f'yaw={math.degrees(self.get_yaw(pose.orientation)):.1f}° '
@@ -198,7 +220,7 @@ class SlamwareBridge(Node):
         return GoalResponse.ACCEPT
 
     def cancel_callback(self, goal_handle):
-        self.get_logger().info('🛑 Received cancel request')
+        self._info('🛑 Received cancel request')
         return CancelResponse.ACCEPT
 
     def basic_state_callback(self, msg):
@@ -218,12 +240,12 @@ class SlamwareBridge(Node):
             GREEN_COLOR = "\033[92m"
             RESET_COLOR = "\033[0m"
             
-            self.get_logger().info(
+            self._info(
                 f'{GREEN_COLOR}[Battery Status] Remaining: {pct}% | State: {status_str}{RESET_COLOR}'
             )
         else:
             # 아직 메시지를 수신하지 못한 경우 무겁지 않게 알림
-            self.get_logger().warn('⏳ Waiting for Slamware battery state data...', throttle_duration_sec=5.0)
+            self._warn('⏳ Waiting for Slamware battery state data...', throttle_duration_sec=5.0)
 
     # ------------------------------------------------------------------ #
     #  실제 네비게이션 로직 - 별도 스레드에서 동기 실행
@@ -352,7 +374,7 @@ class SlamwareBridge(Node):
         BLUE  = "\033[94m"
         RESET = "\033[0m"
         goal_pose_dbg = goal_handle.request.pose.pose
-        self.get_logger().info(
+        self._info(
             f'{BLUE}[NavigateToPose] 🏃 Execute START — '
             f'x={goal_pose_dbg.position.x:.3f}, y={goal_pose_dbg.position.y:.3f}, '
             f'yaw={math.degrees(self.get_yaw(goal_pose_dbg.orientation)):.1f}°{RESET}'
@@ -387,14 +409,14 @@ class SlamwareBridge(Node):
         while True:
             # [A-1] Preemption 체크
             if self.active_goal_handle != goal_handle:
-                self.get_logger().warn('🔄 [Preempt] 새 목표 수신. 기존 감시를 부드럽게 종료합니다.')
+                self._warn('🔄 [Preempt] 새 목표 수신. 기존 감시를 부드럽게 종료합니다.')
                 goal_handle.canceled() 
                 time.sleep(0.1) 
                 return result
 
             # [A-2] 클라이언트 취소 요청 체크
             if goal_handle.is_cancel_requested:
-                self.get_logger().warn('🛑 [Cancel] 클라이언트에 의해 취소됨')
+                self._warn('🛑 [Cancel] 클라이언트에 의해 취소됨')
                 from slamware_ros_sdk.msg import CancelActionRequest
                 self.slam_cancel_pub.publish(CancelActionRequest())
                 goal_handle.canceled()
@@ -406,7 +428,7 @@ class SlamwareBridge(Node):
 
             # [B] 전체 타임아웃 체크
             if elapsed_total > TOTAL_TIMEOUT:
-                self.get_logger().error(f'⏳ [Timeout] 전체 제한시간 초과')
+                self._err(f'⏳ [Timeout] 전체 제한시간 초과')
                 goal_handle.abort()
                 return result
 
@@ -443,7 +465,7 @@ class SlamwareBridge(Node):
                 # 🌟 조금이라도 움직임이 감지되면 '마지막 이동 시간'을 갱신 (Timer Reset)
                 if move_delta > STALL_POS_THRESHOLD or yaw_delta > STALL_YAW_THRESHOLD:
                     if (now - last_move_time).nanoseconds / 1e9 > 2.0:
-                        self.get_logger().info('🔄 [Recovery] 로봇이 정지 상태를 탈출하여 다시 이동을 시작했습니다.')
+                        self._info('🔄 [Recovery] 로봇이 정지 상태를 탈출하여 다시 이동을 시작했습니다.')
                     last_move_time = now
 
             last_snapshot = current_snapshot
@@ -457,7 +479,7 @@ class SlamwareBridge(Node):
                 if stall_duration > STALL_TIME_NEAR_GOAL:
                     GREEN = "\033[92m"
                     RESET = "\033[0m"
-                    self.get_logger().info(
+                    self._info(
                         f'{GREEN}[NavigateToPose] 🏁 도착 성공 — '
                         f'오차: {dist_to_goal:.2f}m, {math.degrees(yaw_error):.1f}°{RESET}'
                     )
@@ -469,7 +491,7 @@ class SlamwareBridge(Node):
                         goal_attempt += 1
                         YELLOW = "\033[93m"
                         RESET  = "\033[0m"
-                        self.get_logger().warn(
+                        self._warn(
                             f'{YELLOW}[NavigateToPose] ⏳ 정지 타임아웃 ({STALL_TIMEOUT_FOR_REPLAN:.1f}s) — '
                             f'move topic 재전송 ({goal_attempt}/{MAX_GOAL_ATTEMPTS}), '
                             f'남은 거리: {dist_to_goal:.2f}m{RESET}'
@@ -482,14 +504,14 @@ class SlamwareBridge(Node):
 
                     RED   = "\033[91m"
                     RESET = "\033[0m"
-                    self.get_logger().error(
+                    self._err(
                         f'{RED}[NavigateToPose] ⚠️ 막힘/고립 — '
                         f'재시도 {MAX_GOAL_ATTEMPTS}회 후 주행 실패: 남은 거리 {dist_to_goal:.2f}m{RESET}'
                     )
                     goal_handle.abort()
                     return result
                 elif stall_duration > 2.0:
-                    self.get_logger().warn(
+                    self._warn(
                         f'⏳ [Stagnation Detection] 로봇 일시 정지 중 (남은 거리: {dist_to_goal:.2f}m). '
                         f'정지 타임아웃: {stall_duration:.1f}s / {STALL_TIMEOUT_FOR_REPLAN}s '
                         f'(시도 {goal_attempt}/{MAX_GOAL_ATTEMPTS})',
@@ -505,7 +527,7 @@ class SlamwareBridge(Node):
     def service_callback_shift_pose(self, request: MobileShift.Request, response: MobileShift.Response):
         distance = request.distance
         if distance == 0.0:
-            self.get_logger().warn('[Shift] distance=0, 이동 없음')
+            self._warn('[Shift] distance=0, 이동 없음')
             response.successed = False
             return response
 
@@ -514,7 +536,7 @@ class SlamwareBridge(Node):
         CYAN  = "\033[96m"
         RESET = "\033[0m"
         direction_str = '전진' if direction > 0 else '후진'
-        self.get_logger().info(
+        self._info(
             f'{CYAN}[Shift] {direction_str} 명령 — {abs(distance):.2f}m ({duration:.2f}s){RESET}'
         )
 
@@ -536,7 +558,7 @@ class SlamwareBridge(Node):
         self.cmd_vel_pub.publish(Twist())
         GREEN = "\033[92m"
         RESET = "\033[0m"
-        self.get_logger().info(f'{GREEN}[Shift] ✅ 이동 완료{RESET}')
+        self._info(f'{GREEN}[Shift] ✅ 이동 완료{RESET}')
 
     # ------------------------------------------------------------------ #
     #  mobile/rotate  서비스 — 상대 각도 회전 (Slamware RotateRequest)
@@ -544,7 +566,7 @@ class SlamwareBridge(Node):
     def service_callback_rotate(self, request: MobileRotate.Request, response: MobileRotate.Response):
         theta = request.theta
         if theta == 0.0:
-            self.get_logger().warn('[Rotate] theta=0, 회전 없음')
+            self._warn('[Rotate] theta=0, 회전 없음')
             response.successed = False
             return response
 
@@ -557,13 +579,13 @@ class SlamwareBridge(Node):
         GREEN = "\033[92m"
         RESET = "\033[0m"
         self.rotate_pub.publish(rotate_msg)
-        self.get_logger().info(f'{CYAN}[Rotate] 상대 회전 명령 — {math.degrees(theta):.1f}°{RESET}')
+        self._info(f'{CYAN}[Rotate] 상대 회전 명령 — {math.degrees(theta):.1f}°{RESET}')
 
         if request.wait:
             time.sleep(1.0)
             while self.robot_is_moving:
                 time.sleep(0.3)
-            self.get_logger().info(f'{GREEN}[Rotate] ✅ 회전 완료{RESET}')
+            self._info(f'{GREEN}[Rotate] ✅ 회전 완료{RESET}')
 
         response.successed = True
         return response
@@ -582,13 +604,13 @@ class SlamwareBridge(Node):
         GREEN = "\033[92m"
         RESET = "\033[0m"
         self.rotate_to_pub.publish(rotate_msg)
-        self.get_logger().info(f'{CYAN}[AbsRotate] 절대 회전 명령 → {math.degrees(theta):.1f}°{RESET}')
+        self._info(f'{CYAN}[AbsRotate] 절대 회전 명령 → {math.degrees(theta):.1f}°{RESET}')
 
         if request.wait:
             time.sleep(1.0)
             while self.robot_is_moving:
                 time.sleep(0.3)
-            self.get_logger().info(f'{GREEN}[AbsRotate] ✅ 회전 완료{RESET}')
+            self._info(f'{GREEN}[AbsRotate] ✅ 회전 완료{RESET}')
 
         response.successed = True
         return response
@@ -641,6 +663,10 @@ class SlamwareBridge(Node):
 
 
 def main():
+    # 기본 {time} 토큰(epoch 초)이 안 보이도록 콘솔 출력 포맷을 정리한다.
+    # 사용자가 이미 RCUTILS_CONSOLE_OUTPUT_FORMAT 을 설정했다면 그대로 존중한다.
+    os.environ.setdefault("RCUTILS_CONSOLE_OUTPUT_FORMAT", "[{severity}] [{name}]: {message}")
+
     parser = argparse.ArgumentParser(description='ROS 2 Domain Bridge for Slamware')
     parser.add_argument('--main-domain', type=int, default=9)
     parser.add_argument('--slam-domain', type=int, default=35)

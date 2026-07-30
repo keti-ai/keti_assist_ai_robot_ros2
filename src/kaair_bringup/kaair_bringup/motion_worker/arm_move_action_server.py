@@ -8,8 +8,11 @@ MoveL  → Pilz LIN (Cartesian linear)
 MoveT  → Pilz LIN (tool delta → base frame pose goal)
 """
 
+import os
 import threading
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import rclpy
@@ -46,6 +49,15 @@ _RST  = "\033[0m"
 
 def _blue(s: str) -> str: return f"{_BLUE}{s}{_RST}"
 def _red(s: str)  -> str: return f"{_RED}{s}{_RST}"
+
+# rcutils의 {time} 토큰은 epoch 초 단위라 직관적이지 않으므로, 로그 메시지 앞에
+# 사람이 읽기 쉬운 시:분:초.밀리초 형태의 시스템 시간을 직접 붙인다.
+# 컨테이너의 시스템 타임존이 UTC로 설정된 경우가 많아 datetime.now()만 쓰면
+# 한국 시간과 9시간 어긋나므로, Asia/Seoul 로 명시적으로 고정한다.
+_KST = ZoneInfo("Asia/Seoul")
+
+def _now() -> str:
+    return datetime.now(_KST).strftime("%H:%M:%S.%f")[:-3]
 
 MOVE_GROUP = "arm"
 MOVE_ACTION = "move_action"
@@ -162,13 +174,19 @@ class UnifiedMotionActionServer(Node):
             callback_group=self._cb_group,
         )
 
-        self.get_logger().info(
+        self._info(
             f"UnifiedMotionActionServer 시작 (Pilz PTP/LIN): "
             f"{ACTION_ARM_MOVE}, {ACTION_MOVEL}, {ACTION_MOVET}, {ACTION_ARM_TASK}"
         )
 
+    def _info(self, msg):
+        self.get_logger().info(f"[{_now()}] {msg}")
+
+    def _err(self, msg):
+        self.get_logger().error(f"[{_now()}] {msg}")
+
     def _cancel_cb(self, _goal_handle):
-        self.get_logger().info("Cancel 요청 수신")
+        self._info("Cancel 요청 수신")
         return CancelResponse.ACCEPT
 
     def _on_joint_state(self, msg: JointState):
@@ -413,10 +431,10 @@ class UnifiedMotionActionServer(Node):
             result.message = f"target_joints 길이가 7이 아님: {len(target_joints)}"
             result.final_joints = self._current_joints
             goal_handle.abort()
-            self.get_logger().error(_red(f"[MoveJoint] {result.message}"))
+            self._err(_red(f"[MoveJoint] {result.message}"))
             return result
 
-        self.get_logger().info(
+        self._info(
             f"[MoveJoint/PTP] target_joints={target_joints}, plan_only={plan_only} "
             f"vel_scale={velocity_scale:.2f} acc_scale={acceleration_scale:.2f}"
         )
@@ -440,7 +458,7 @@ class UnifiedMotionActionServer(Node):
             result.message = f"Planning 실패: {msg}"
             result.final_joints = self._current_joints
             goal_handle.abort()
-            self.get_logger().error(_red(f"[MoveJoint] {result.message}"))
+            self._err(_red(f"[MoveJoint] {result.message}"))
             return result
 
         if plan_only:
@@ -469,12 +487,12 @@ class UnifiedMotionActionServer(Node):
                 f"acc_scale={acceleration_scale:.2f})"
             )
             goal_handle.succeed()
-            self.get_logger().info(_blue(f"[MoveJoint] {result.message}"))
+            self._info(_blue(f"[MoveJoint] {result.message}"))
         else:
             result.success = False
             result.message = f"이동 실패: {msg}"
             goal_handle.abort()
-            self.get_logger().error(_red(f"[MoveJoint] {result.message}"))
+            self._err(_red(f"[MoveJoint] {result.message}"))
 
         return result
 
@@ -613,7 +631,7 @@ class UnifiedMotionActionServer(Node):
 
         base_frame = getattr(goal, "base_frame", "").strip() or DEFAULT_BASE_FRAME
 
-        self.get_logger().info(
+        self._info(
             f"[MoveLinear/LIN] frame={base_frame} "
             f"pos=[{x:.3f},{y:.3f},{z:.3f}] is_relative={is_relative} "
             f"vel_scale={velocity_scale:.2f} acc_scale={acceleration_scale:.2f}"
@@ -627,7 +645,7 @@ class UnifiedMotionActionServer(Node):
             result.success = False
             result.message = f"target pose 생성 실패: {e}"
             goal_handle.abort()
-            self.get_logger().error(_red(f"[MoveLinear] {result.message}"))
+            self._err(_red(f"[MoveLinear] {result.message}"))
             return result
 
         result.final_pose = target_pose
@@ -652,12 +670,12 @@ class UnifiedMotionActionServer(Node):
                 f"acc_scale={acceleration_scale:.2f})"
             )
             goal_handle.succeed()
-            self.get_logger().info(_blue(f"[MoveLinear] {result.message}"))
+            self._info(_blue(f"[MoveLinear] {result.message}"))
         else:
             result.success = False
             result.message = msg
             goal_handle.abort()
-            self.get_logger().error(_red(f"[MoveLinear] {result.message}"))
+            self._err(_red(f"[MoveLinear] {result.message}"))
 
         return result
 
@@ -686,7 +704,7 @@ class UnifiedMotionActionServer(Node):
             getattr(goal, "acceleration_scale", 0.0),
         )
 
-        self.get_logger().info(
+        self._info(
             f"[MoveTool/LIN] delta=[{dx:.3f},{dy:.3f},{dz:.3f}] "
             f"vel_scale={velocity_scale:.2f} acc_scale={acceleration_scale:.2f}"
         )
@@ -699,7 +717,7 @@ class UnifiedMotionActionServer(Node):
             result.success = False
             result.message = f"target pose 생성 실패: {e}"
             goal_handle.abort()
-            self.get_logger().error(_red(f"[MoveTool] {result.message}"))
+            self._err(_red(f"[MoveTool] {result.message}"))
             return result
 
         result.final_pose = target_pose
@@ -724,12 +742,12 @@ class UnifiedMotionActionServer(Node):
                 f"acc_scale={acceleration_scale:.2f})"
             )
             goal_handle.succeed()
-            self.get_logger().info(_blue(f"[MoveTool] {result.message}"))
+            self._info(_blue(f"[MoveTool] {result.message}"))
         else:
             result.success = False
             result.message = msg
             goal_handle.abort()
-            self.get_logger().error(_red(f"[MoveTool] {result.message}"))
+            self._err(_red(f"[MoveTool] {result.message}"))
 
         return result
 
@@ -899,7 +917,7 @@ class UnifiedMotionActionServer(Node):
         goal_velocity_scale = float(getattr(goal, "velocity_scale", 0.0))
         goal_acceleration_scale = float(getattr(goal, "acceleration_scale", 0.0))
 
-        self.get_logger().info(
+        self._info(
             f"[ArmTask] task_type={task_type} pos=[{x:.3f},{y:.3f},{z:.3f}] "
             f"goal_vel_scale={goal_velocity_scale:.2f} "
             f"goal_acc_scale={goal_acceleration_scale:.2f}"
@@ -917,14 +935,14 @@ class UnifiedMotionActionServer(Node):
             return result
 
         total = len(steps)
-        self.get_logger().info(_blue(f"[ArmTask] 태스크 시작: {task_type} ({total}스텝)"))
+        self._info(_blue(f"[ArmTask] 태스크 시작: {task_type} ({total}스텝)"))
 
         for i, (step_name, step_fn) in enumerate(steps):
             feedback.status = f"Step {i + 1}/{total}: {step_name}"
             feedback.step = i + 1
             feedback.total_steps = total
             goal_handle.publish_feedback(feedback)
-            self.get_logger().info(_blue(f"[ArmTask] {feedback.status}"))
+            self._info(_blue(f"[ArmTask] {feedback.status}"))
 
             current_plan_only = plan_only if i == 0 else False
             ok, msg = step_fn(goal_handle, current_plan_only)
@@ -939,7 +957,7 @@ class UnifiedMotionActionServer(Node):
                 result.success = False
                 result.message = f"Step {i + 1} ({step_name}) 실패: {msg}"
                 goal_handle.abort()
-                self.get_logger().error(_red(f"[ArmTask] {result.message}"))
+                self._err(_red(f"[ArmTask] {result.message}"))
                 return result
 
             if plan_only:
@@ -951,11 +969,14 @@ class UnifiedMotionActionServer(Node):
         result.success = True
         result.message = f"{task_type} 완료 ({total}스텝)"
         goal_handle.succeed()
-        self.get_logger().info(_blue(f"[ArmTask] {result.message}"))
+        self._info(_blue(f"[ArmTask] {result.message}"))
         return result
 
 
 def main(args=None):
+    # 기본 {time} 토큰(epoch 초)이 안 보이도록 콘솔 출력 포맷을 정리한다.
+    # 사용자가 이미 RCUTILS_CONSOLE_OUTPUT_FORMAT 을 설정했다면 그대로 존중한다.
+    os.environ.setdefault("RCUTILS_CONSOLE_OUTPUT_FORMAT", "[{severity}] [{name}]: {message}")
     rclpy.init(args=args)
     node = UnifiedMotionActionServer()
     executor = MultiThreadedExecutor()
