@@ -47,6 +47,7 @@ class SlamwareBridge(Node):
         self.active_goal_handle = None
 
         self.latest_battery_state = None
+        self._log_throttle_last_time = {}
 
         self._action_server = ActionServer(
             self,
@@ -85,7 +86,7 @@ class SlamwareBridge(Node):
         self.shift_velocity = 0.15  # m/s
 
         # NavigateToPose: 정지 감지 타임아웃 및 goal 재전송 횟수
-        self.declare_parameter('nav_stall_timeout_sec', 5.0)
+        self.declare_parameter('nav_stall_timeout_sec', 6.0)
         self.declare_parameter('nav_goal_attempt_count', 2)
         volatile_qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
@@ -153,14 +154,40 @@ class SlamwareBridge(Node):
             f'[Slamware Domain: {slamware_context.get_domain_id()}]'
         )
 
-    def _info(self, msg, **kwargs):
-        self.get_logger().info(f'[{_now()}] {msg}', **kwargs)
+    def _should_log_throttled(self, key: str, throttle_duration_sec: float) -> bool:
+        """자체 스로틀링 구현.
 
-    def _warn(self, msg, **kwargs):
-        self.get_logger().warn(f'[{_now()}] {msg}', **kwargs)
+        rclpy의 get_logger().log(...)는 throttle_duration_sec 같은 필터 설정을
+        '호출된 소스 라인'을 키로 캐싱하는데, _info/_warn/_err처럼 모든 로그가
+        한 줄을 공유하는 래퍼를 거치면 서로 다른 호출부가 필터 유무/파라미터를
+        다르게 넘기는 순간 "Requested logging filters cannot be changed between
+        calls." 예외가 발생한다. 이를 피하기 위해 rclpy 내장 throttle 필터를
+        쓰지 않고 여기서 직접 시간 간격을 체크한다.
+        """
+        now = time.monotonic()
+        last = self._log_throttle_last_time.get(key, 0.0)
+        if now - last < throttle_duration_sec:
+            return False
+        self._log_throttle_last_time[key] = now
+        return True
 
-    def _err(self, msg, **kwargs):
-        self.get_logger().error(f'[{_now()}] {msg}', **kwargs)
+    def _info(self, msg, *, throttle_duration_sec=None, throttle_key=None):
+        if throttle_duration_sec is not None:
+            if not self._should_log_throttled(throttle_key or msg, throttle_duration_sec):
+                return
+        self.get_logger().info(f'[{_now()}] {msg}')
+
+    def _warn(self, msg, *, throttle_duration_sec=None, throttle_key=None):
+        if throttle_duration_sec is not None:
+            if not self._should_log_throttled(throttle_key or msg, throttle_duration_sec):
+                return
+        self.get_logger().warn(f'[{_now()}] {msg}')
+
+    def _err(self, msg, *, throttle_duration_sec=None, throttle_key=None):
+        if throttle_duration_sec is not None:
+            if not self._should_log_throttled(throttle_key or msg, throttle_duration_sec):
+                return
+        self.get_logger().error(f'[{_now()}] {msg}')
 
     def map_callback(self, msg):
         self.map_pub.publish(msg)
@@ -245,7 +272,11 @@ class SlamwareBridge(Node):
             )
         else:
             # 아직 메시지를 수신하지 못한 경우 무겁지 않게 알림
-            self._warn('⏳ Waiting for Slamware battery state data...', throttle_duration_sec=5.0)
+            self._warn(
+                '⏳ Waiting for Slamware battery state data...',
+                throttle_duration_sec=5.0,
+                throttle_key='battery_wait',
+            )
 
     # ------------------------------------------------------------------ #
     #  실제 네비게이션 로직 - 별도 스레드에서 동기 실행
@@ -699,3 +730,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
