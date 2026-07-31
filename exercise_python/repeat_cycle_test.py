@@ -13,10 +13,10 @@ Loop (지정 횟수만큼, 0 이면 Ctrl+C 로 멈출 때까지 무한 반복)
   2. Lift Move Up
   3. Head Move
   4. MoveL
-  5. MoveT
-  6. Gripper Close
-  7. MoveJ
-  8. Gripper Open
+  5. MoveT       ┐
+  6. Gripper Close ┘ 동시 실행, 둘 다 완료되어야 다음 단계로 진행
+  7. MoveJ       ┐
+  8. Gripper Open  ┘ 동시 실행, 둘 다 완료되어야 다음 단계로 진행
   9. Head Move
   10. Lift Down
 
@@ -34,6 +34,7 @@ Loop (지정 횟수만큼, 0 이면 Ctrl+C 로 멈출 때까지 무한 반복)
 import argparse
 import sys
 import time
+import traceback
 
 import rclpy
 from action_msgs.msg import GoalStatus
@@ -115,6 +116,10 @@ class StepFailed(Exception):
     """시퀀스 중 한 스텝이 실패했을 때 (stop-on-fail 모드에서) 던지는 예외."""
 
 
+# plan_only 모드에서 그리퍼 goal을 보내지 않았음을 나타내는 센티널
+_GRIPPER_SKIP = object()
+
+
 class RepeatCycleTester(Node):
     def __init__(self, plan_only: bool, velocity_scale: float, acceleration_scale: float, timeout_sec: float):
         super().__init__("repeat_cycle_tester")
@@ -130,7 +135,9 @@ class RepeatCycleTester(Node):
         self._lift_client = ActionClient(self, LiftMove, ACTION_LIFT)
         self._gripper_client = ActionClient(self, GripperCommand, ACTION_GRIPPER)
 
-        self._active_goal_handle = None
+        # 동시에 여러 goal이 진행될 수 있으므로(예: MoveT + GripperClose) list로 관리
+        # (ClientGoalHandle은 해시 불가능(unhashable)이라 set은 사용할 수 없다)
+        self._active_goal_handles = []
 
     # -------------------------------------------------------------------
     # 서버 대기 (시작 시 한 번에 확인)
@@ -154,8 +161,13 @@ class RepeatCycleTester(Node):
 
     # -------------------------------------------------------------------
     # 공통 goal 전송/대기 헬퍼 (kaair_msgs 액션 공통: result.success / result.message)
+    #
+    # 두 액션을 동시에 실행하려면(예: MoveT + GripperClose) "goal 전송(accept 확인)"과
+    # "결과 대기"를 분리해야 한다. 아래 _start_goal/_wait_goal 쌍이 그 역할을 하며,
+    # 순차 실행만 필요한 경우를 위해 둘을 합친 _send_and_wait 도 그대로 제공한다.
     # -------------------------------------------------------------------
-    def _send_and_wait(self, client: ActionClient, label: str, goal, feedback_cb=None):
+    def _start_goal(self, client: ActionClient, label: str, goal, feedback_cb=None):
+        """goal을 비동기로 전송하고 accept 여부까지만 확인한다 (결과는 기다리지 않음)."""
         self.get_logger().info(f"[{label}] goal 전송")
         send_future = client.send_goal_async(goal, feedback_cb)
         rclpy.spin_until_future_complete(self, send_future)
@@ -163,12 +175,20 @@ class RepeatCycleTester(Node):
         gh = send_future.result()
         if gh is None or not gh.accepted:
             self.get_logger().error(f"[{label}] goal 거절됨")
+            return None
+
+        self._active_goal_handles.append(gh)
+        return gh
+
+    def _wait_goal(self, gh, label: str):
+        """_start_goal 로 받은 goal handle의 결과를 기다린다."""
+        if gh is None:
             return False, "goal rejected"
 
-        self._active_goal_handle = gh
         result_future = gh.get_result_async()
         rclpy.spin_until_future_complete(self, result_future, timeout_sec=self.timeout_sec)
-        self._active_goal_handle = None
+        if gh in self._active_goal_handles:
+            self._active_goal_handles.remove(gh)
 
         if not result_future.done():
             self.get_logger().error(f"[{label}] 결과 대기 시간 초과")
@@ -182,6 +202,10 @@ class RepeatCycleTester(Node):
         self.get_logger().info(f"[{label}] result: success={success} msg={message!r}")
         return success, message
 
+    def _send_and_wait(self, client: ActionClient, label: str, goal, feedback_cb=None):
+        gh = self._start_goal(client, label, goal, feedback_cb)
+        return self._wait_goal(gh, label)
+
     def _feedback_cb(self, label):
         def cb(msg):
             self.get_logger().info(f"[{label}] feedback: {msg.feedback.status!r}", throttle_duration_sec=0.5)
@@ -190,13 +214,20 @@ class RepeatCycleTester(Node):
     # -------------------------------------------------------------------
     # 개별 액션 스텝
     # -------------------------------------------------------------------
-    def move_j(self, joints, label="MoveJ"):
+    def _build_movej_goal(self, joints):
         g = MoveJoint.Goal()
         g.target_joints = [float(v) for v in joints]
         g.plan_only = self.plan_only
         g.velocity_scale = self.velocity_scale
         g.acceleration_scale = self.acceleration_scale
-        return self._send_and_wait(self._movej_client, label, g, self._feedback_cb(label))
+        return g
+
+    def start_move_j(self, joints, label="MoveJ"):
+        """MoveJ goal만 전송(accept 확인)하고, 결과 대기는 하지 않는다. 동시 실행용."""
+        return self._start_goal(self._movej_client, label, self._build_movej_goal(joints), self._feedback_cb(label))
+
+    def move_j(self, joints, label="MoveJ"):
+        return self._send_and_wait(self._movej_client, label, self._build_movej_goal(joints), self._feedback_cb(label))
 
     def move_l(self, target: dict, label="MoveL"):
         g = MoveLinear.Goal()
@@ -209,14 +240,21 @@ class RepeatCycleTester(Node):
         g.acceleration_scale = self.acceleration_scale
         return self._send_and_wait(self._movel_client, label, g, self._feedback_cb(label))
 
-    def move_t(self, delta: dict, label="MoveT"):
+    def _build_movet_goal(self, delta: dict):
         g = MoveTool.Goal()
         g.dx, g.dy, g.dz = float(delta["dx"]), float(delta["dy"]), float(delta["dz"])
         g.qx, g.qy, g.qz, g.qw = euler_to_quat(delta["rx"], delta["ry"], delta["rz"])
         g.plan_only = self.plan_only
         g.velocity_scale = self.velocity_scale
         g.acceleration_scale = self.acceleration_scale
-        return self._send_and_wait(self._movet_client, label, g, self._feedback_cb(label))
+        return g
+
+    def start_move_t(self, delta: dict, label="MoveT"):
+        """MoveT goal만 전송(accept 확인)하고, 결과 대기는 하지 않는다. 동시 실행용."""
+        return self._start_goal(self._movet_client, label, self._build_movet_goal(delta), self._feedback_cb(label))
+
+    def move_t(self, delta: dict, label="MoveT"):
+        return self._send_and_wait(self._movet_client, label, self._build_movet_goal(delta), self._feedback_cb(label))
 
     def head_move(self, joints: dict, label="HeadMove"):
         g = HeadMove.Goal()
@@ -231,10 +269,14 @@ class RepeatCycleTester(Node):
         g.plan_only = self.plan_only
         return self._send_and_wait(self._lift_client, label, g, self._feedback_cb(label))
 
-    def gripper_move(self, position: float, label="Gripper"):
+    def start_gripper(self, position: float, label="Gripper"):
+        """
+        그리퍼 goal만 전송(accept 확인)하고, 결과 대기는 하지 않는다. 동시 실행용.
+        plan_only 모드에서는 goal을 보내지 않고 _GRIPPER_SKIP 센티널을 반환한다.
+        """
         if self.plan_only:
             self.get_logger().info(f"[{label}] plan_only 모드 — 그리퍼는 실제 이동 없이 스킵")
-            return True, "skipped (plan_only)"
+            return _GRIPPER_SKIP
 
         g = GripperCommand.Goal()
         g.command.position = float(position)
@@ -243,19 +285,29 @@ class RepeatCycleTester(Node):
         self.get_logger().info(f"[{label}] goal 전송: position={position}m")
         if not self._gripper_client.wait_for_server(timeout_sec=5.0):
             self.get_logger().error(f"[{label}] 액션 서버 연결 실패")
-            return False, "server unavailable"
+            return None
 
         send_future = self._gripper_client.send_goal_async(g)
         rclpy.spin_until_future_complete(self, send_future)
         gh = send_future.result()
         if gh is None or not gh.accepted:
             self.get_logger().error(f"[{label}] goal 거절됨")
-            return False, "goal rejected"
+            return None
 
-        self._active_goal_handle = gh
+        self._active_goal_handles.append(gh)
+        return gh
+
+    def _wait_gripper(self, gh, label: str):
+        """start_gripper 로 받은 goal handle(또는 skip 센티널/None)의 결과를 기다린다."""
+        if gh is _GRIPPER_SKIP:
+            return True, "skipped (plan_only)"
+        if gh is None:
+            return False, "goal rejected / server unavailable"
+
         result_future = gh.get_result_async()
         rclpy.spin_until_future_complete(self, result_future, timeout_sec=self.timeout_sec)
-        self._active_goal_handle = None
+        if gh in self._active_goal_handles:
+            self._active_goal_handles.remove(gh)
 
         if not result_future.done():
             self.get_logger().error(f"[{label}] 결과 대기 시간 초과")
@@ -272,11 +324,17 @@ class RepeatCycleTester(Node):
         )
         return True, ""
 
+    def gripper_move(self, position: float, label="Gripper"):
+        gh = self.start_gripper(position, label)
+        return self._wait_gripper(gh, label)
+
     def cancel_active_goal(self):
-        if self._active_goal_handle is not None:
-            self.get_logger().warn("현재 진행 중인 goal 취소 요청")
-            future = self._active_goal_handle.cancel_goal_async()
-            rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
+        if self._active_goal_handles:
+            self.get_logger().warn(f"현재 진행 중인 goal {len(self._active_goal_handles)}개 취소 요청")
+            for gh in list(self._active_goal_handles):
+                future = gh.cancel_goal_async()
+                rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
+            self._active_goal_handles.clear()
 
 
 # -----------------------------------------------------------------------
@@ -289,6 +347,33 @@ def run_step(node: RepeatCycleTester, fn, *args, stop_on_fail: bool, label: str,
     if pause > 0:
         time.sleep(pause)
     return success
+
+
+def run_concurrent_steps(node: RepeatCycleTester, steps, *, stop_on_fail: bool, pause: float) -> bool:
+    """
+    여러 스텝을 동시에 실행한다 (예: MoveT + GripperClose).
+
+    steps: [(start_fn, wait_fn, label), ...]
+      - start_fn(): goal을 비동기로 전송하고 accept 여부까지만 확인한 handle을 반환
+      - wait_fn(handle): 해당 handle의 결과를 기다려 (success, message)를 반환
+
+    모든 goal을 먼저 전송(accept 확인)한 뒤에 결과를 기다리므로, goal 전송 시점에는
+    이미 각 액션 서버에서 동시에 실행이 시작된 상태다. 두 스텝 모두 완료(성공/실패 확정)
+    되어야 다음 단계로 진행한다.
+    """
+    handles = [start_fn() for start_fn, _wait_fn, _label in steps]
+
+    overall_ok = True
+    for (_start_fn, wait_fn, label), handle in zip(steps, handles):
+        success, message = wait_fn(handle)
+        if not success:
+            overall_ok = False
+            if stop_on_fail:
+                raise StepFailed(f"{label} 실패: {message}")
+
+    if pause > 0:
+        time.sleep(pause)
+    return overall_ok
 
 
 def run_initialize(node: RepeatCycleTester, stop_on_fail: bool, pause: float) -> bool:
@@ -319,14 +404,28 @@ def run_loop_iteration(node: RepeatCycleTester, iteration: int, total: int,
                     stop_on_fail=stop_on_fail, pause=pause)
     ok &= run_step(node, node.move_l, MOVEL_TARGET, label="4.MoveL",
                     stop_on_fail=stop_on_fail, pause=pause)
-    ok &= run_step(node, node.move_t, MOVET_DELTA, label="5.MoveT",
-                    stop_on_fail=stop_on_fail, pause=pause)
-    ok &= run_step(node, node.gripper_move, GRIPPER_CLOSE_POS, label="6.GripperClose",
-                    stop_on_fail=stop_on_fail, pause=pause)
-    ok &= run_step(node, node.move_j, LOOP_MOVEJ_2_JOINTS, label="7.MoveJ",
-                    stop_on_fail=stop_on_fail, pause=pause)
-    ok &= run_step(node, node.gripper_move, GRIPPER_OPEN_POS, label="8.GripperOpen",
-                    stop_on_fail=stop_on_fail, pause=pause)
+    # 5.MoveT + 6.GripperClose : 동시 실행, 둘 다 완료되어야 다음 단계로 진행
+    ok &= run_concurrent_steps(
+        node,
+        [
+            (lambda: node.start_move_t(MOVET_DELTA, "5.MoveT"),
+             lambda gh: node._wait_goal(gh, "5.MoveT"), "5.MoveT"),
+            (lambda: node.start_gripper(GRIPPER_CLOSE_POS, "6.GripperClose"),
+             lambda gh: node._wait_gripper(gh, "6.GripperClose"), "6.GripperClose"),
+        ],
+        stop_on_fail=stop_on_fail, pause=pause,
+    )
+    # 7.MoveJ + 8.GripperOpen : 동시 실행, 둘 다 완료되어야 다음 단계로 진행
+    ok &= run_concurrent_steps(
+        node,
+        [
+            (lambda: node.start_move_j(LOOP_MOVEJ_2_JOINTS, "7.MoveJ"),
+             lambda gh: node._wait_goal(gh, "7.MoveJ"), "7.MoveJ"),
+            (lambda: node.start_gripper(GRIPPER_OPEN_POS, "8.GripperOpen"),
+             lambda gh: node._wait_gripper(gh, "8.GripperOpen"), "8.GripperOpen"),
+        ],
+        stop_on_fail=stop_on_fail, pause=pause,
+    )
     ok &= run_step(node, node.head_move, HEAD_MOVE_2, label="9.HeadMove",
                     stop_on_fail=stop_on_fail, pause=pause)
     ok &= run_step(node, node.lift_move, LIFT_DOWN_HEIGHT, label="10.LiftDown",
@@ -402,12 +501,25 @@ def main():
     except KeyboardInterrupt:
         node.get_logger().warn("Ctrl+C 감지 — 현재 goal 취소 후 종료합니다.")
         node.cancel_active_goal()
+    except Exception:
+        # StepFailed/KeyboardInterrupt 이외의 예외(rclpy 내부 오류 등)를 여기서 잡지 않으면
+        # 아래 finally의 sys.exit()가 예외를 덮어써서 아무 로그 없이 조용히 종료되어 버린다.
+        # 원인 파악을 위해 반드시 traceback을 출력한다.
+        node.get_logger().error("예상치 못한 예외로 중단됨 — 아래 traceback 확인")
+        traceback.print_exc()
+        fail_count += 1
+        exit_code = 1
     finally:
         node.get_logger().info(
             f"===== 테스트 종료: 성공 {success_count}회 / 실패 {fail_count}회 ====="
         )
         node.destroy_node()
-        rclpy.shutdown()
+        try:
+            rclpy.shutdown()
+        except Exception:
+            # Ctrl+C 시 rclpy의 SIGINT 핸들러가 먼저 shutdown을 호출해두는 경우
+            # "rcl_shutdown already called" 오류가 나는데, 이미 종료 절차 중이므로 무시한다.
+            pass
         sys.exit(exit_code)
 
 

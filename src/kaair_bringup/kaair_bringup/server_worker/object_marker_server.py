@@ -2,10 +2,13 @@
 
 import math
 import struct
+import time
 import traceback
 
 import rclpy
 from rclpy.node import Node
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from rclpy.duration import Duration
 
@@ -19,9 +22,24 @@ from kaair_msgs.srv import CreateObjectMarker
 
 
 class ObjectMarkerServer(Node):
+    # femto depth image is expected to be aligned to the color image resolution.
+    # under CPU load, the driver can occasionally publish frames at the depth
+    # sensor's native (unaligned) resolution instead; those frames must be
+    # skipped rather than used for projection.
+    FEMTO_DEPTH_EXPECTED_WIDTH = 1280
+    FEMTO_DEPTH_EXPECTED_HEIGHT = 720
+    FEMTO_DEPTH_WAIT_TIMEOUT_SEC = 1.5
+    FEMTO_DEPTH_WAIT_POLL_SEC = 0.02
+
     def __init__(self):
         super().__init__('object_marker_server')
         self.map_frame = 'slamware_map'
+
+        # Subscriptions and services share this reentrant group so that the
+        # depth subscription can keep updating latest_depth_msg on another
+        # executor thread while a service callback is blocked waiting for a
+        # correctly-sized depth frame (see _wait_for_valid_femto_depth).
+        self.cb_group = ReentrantCallbackGroup()
 
         sensor_qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
@@ -45,56 +63,65 @@ class ObjectMarkerServer(Node):
             Image,
             '/femto/depth/image_raw',
             self.depth_callback,
-            sensor_qos
+            sensor_qos,
+            callback_group=self.cb_group
         )
 
         self.color_sub = self.create_subscription(
             Image,
             '/femto/color/image_raw',
             self.color_callback,
-            sensor_qos
+            sensor_qos,
+            callback_group=self.cb_group
         )
 
         self.camera_info_sub = self.create_subscription(
             CameraInfo,
             '/femto/depth/camera_info',
             self.camera_info_callback,
-            sensor_qos
+            sensor_qos,
+            callback_group=self.cb_group
         )
 
         self.tool_depth_sub = self.create_subscription(
             Image,
             '/hand/camera/depth/image_rect_raw',
             self.tool_depth_callback,
-            sensor_qos
+            sensor_qos,
+            callback_group=self.cb_group
         )
         self.tool_camera_info_sub = self.create_subscription(
             CameraInfo,
             '/hand/camera/depth/camera_info',
             self.tool_camera_info_callback,
-            sensor_qos
+            sensor_qos,
+            callback_group=self.cb_group
         )
 
         # service server
         self.srv = self.create_service(
             CreateObjectMarker,
             'create_object_marker',
-            self.handle_create_object_marker
+            self.handle_create_object_marker,
+            callback_group=self.cb_group
         )
         self.clear_srv = self.create_service(
             Trigger,
             'clear_object_markers',
-            self.handle_clear_object_markers
+            self.handle_clear_object_markers,
+            callback_group=self.cb_group
         )
         self.tool_srv = self.create_service(
             CreateObjectMarker,
             'create_tool_marker',
-            self.handle_create_tool_marker
+            self.handle_create_tool_marker,
+            callback_group=self.cb_group
         )
         self.clear_tool_srv = self.create_service(
             Trigger,
             'clear_tool_markers',
-            self.handle_clear_tool_markers
+            self.handle_clear_tool_markers,
+            callback_group=self.cb_group
         )
 
         # tf listener for map transform
@@ -135,6 +162,16 @@ class ObjectMarkerServer(Node):
             f'First depth received: width={msg.width}, height={msg.height}, '
             f'encoding={msg.encoding}, step={msg.step}, frame_id={msg.header.frame_id}'
         )
+
+        if not self._is_valid_femto_depth(msg):
+            self.log_once(
+                'depth_unexpected_resolution',
+                f'Unexpected femto depth resolution: {msg.width}x{msg.height} '
+                f'(expected {self.FEMTO_DEPTH_EXPECTED_WIDTH}x{self.FEMTO_DEPTH_EXPECTED_HEIGHT}). '
+                f'Frames with this resolution will be skipped until a correctly '
+                f'aligned frame arrives.',
+                level='warn'
+            )
 
     def color_callback(self, msg):
         self.latest_color_msg = msg
@@ -203,9 +240,32 @@ class ObjectMarkerServer(Node):
         if object_label == '':
             object_label = 'object'
         object_name = f'/object/{object_label}'
+
+        depth_msg, timed_out = self._wait_for_valid_femto_depth()
+        if depth_msg is None:
+            if timed_out:
+                message = (
+                    f'depth_resolution_timeout: no femto depth frame at the expected '
+                    f'{self.FEMTO_DEPTH_EXPECTED_WIDTH}x{self.FEMTO_DEPTH_EXPECTED_HEIGHT} '
+                    f'resolution within {self.FEMTO_DEPTH_WAIT_TIMEOUT_SEC:.1f}s'
+                )
+            else:
+                message = 'no_depth: no femto depth frame received yet'
+            self.get_logger().error(message)
+            response.success = False
+            response.message = message
+            response.x_array = []
+            response.y_array = []
+            response.z_array = []
+            response.depth_raw_array = []
+            response.r_array = []
+            response.g_array = []
+            response.b_array = []
+            return response
+
         return self._process_marker_request(
             request, response, object_name,
-            self.latest_depth_msg, self.latest_camera_info
+            depth_msg, self.latest_camera_info
         )
 
     def _process_marker_request(self, request, response, object_name, depth_msg, camera_info):
@@ -353,6 +413,40 @@ class ObjectMarkerServer(Node):
     # ──────────────────────────────────────────────
     # Depth helpers
     # ──────────────────────────────────────────────
+
+    def _is_valid_femto_depth(self, msg):
+        """Check that a femto depth frame is aligned to the expected resolution."""
+        return (
+            msg is not None and
+            msg.width == self.FEMTO_DEPTH_EXPECTED_WIDTH and
+            msg.height == self.FEMTO_DEPTH_EXPECTED_HEIGHT
+        )
+
+    def _wait_for_valid_femto_depth(self):
+        """Block (polling) until a correctly-sized femto depth frame is available.
+
+        Under CPU load the femto driver can occasionally publish frames at its
+        native (unaligned) resolution instead of the color-aligned resolution.
+        Those frames must not be used for pixel-to-3D projection, so this waits
+        for the next correctly-sized frame, bounded by FEMTO_DEPTH_WAIT_TIMEOUT_SEC.
+
+        Returns:
+            (depth_msg, timed_out): depth_msg is None if no valid frame became
+            available in time; timed_out is True only if we actually waited
+            for the timeout (as opposed to no depth having arrived at all).
+        """
+        msg = self.latest_depth_msg
+        if self._is_valid_femto_depth(msg):
+            return msg, False
+
+        start = time.monotonic()
+        while (time.monotonic() - start) < self.FEMTO_DEPTH_WAIT_TIMEOUT_SEC:
+            time.sleep(self.FEMTO_DEPTH_WAIT_POLL_SEC)
+            msg = self.latest_depth_msg
+            if self._is_valid_femto_depth(msg):
+                return msg, False
+
+        return None, True
 
     def _read_depth_raw(self, u, v, depth_msg=None):
         """Return raw depth (metres) at pixel (u,v) with NO neighbour search. None if unavailable."""
@@ -808,8 +902,15 @@ def main(args=None):
     rclpy.init(args=args)
     node = ObjectMarkerServer()
 
+    # A multi-threaded executor is required here: service handlers may block
+    # for up to FEMTO_DEPTH_WAIT_TIMEOUT_SEC while waiting for a correctly
+    # sized depth frame, and the depth subscription callback must still be
+    # able to run concurrently to deliver that frame.
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
