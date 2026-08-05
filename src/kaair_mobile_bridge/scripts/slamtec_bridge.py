@@ -11,7 +11,10 @@ from nav2_msgs.action import NavigateToPose
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import PoseStamped, TransformStamped, Twist, Point
 from visualization_msgs.msg import Marker
-from slamware_ros_sdk.msg import CancelActionRequest, Line2DFlt32Array, RotateRequest, RotateToRequest, RobotBasicState
+from slamware_ros_sdk.msg import (
+    CancelActionRequest, Line2DFlt32Array, RotateRequest, RotateToRequest, RobotBasicState,
+    MoveToRequest, MoveOptionFlag,
+)
 from kaair_msgs.srv import MobileShift, MobileRotate
 
 from tf2_ros import TransformBroadcaster
@@ -48,6 +51,7 @@ class SlamwareBridge(Node):
 
         self.latest_battery_state = None
         self._log_throttle_last_time = {}
+        self.latest_virtual_tracks = []  # [{'start': (x, y), 'end': (x, y)}, ...]
 
         self._action_server = ActionServer(
             self,
@@ -88,6 +92,13 @@ class SlamwareBridge(Node):
         # NavigateToPose: 정지 감지 타임아웃 및 goal 재전송 횟수
         self.declare_parameter('nav_stall_timeout_sec', 6.0)
         self.declare_parameter('nav_goal_attempt_count', 2)
+
+        # NavigateToPose: virtual track(가상 트랙) 기반 이동 옵션
+        # - 목적지(및 출발지)가 가상 트랙 근처에 있으면 move_to 토픽을 KEY_POINTS
+        #   옵션으로 호출해 트랙을 따라 이동하도록 한다.
+        self.declare_parameter('nav_virtual_track_proximity_m', 1.0)
+        self.declare_parameter('nav_virtual_track_use_obstacle_avoidance', True)
+
         volatile_qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
             history=HistoryPolicy.KEEP_LAST,
@@ -120,17 +131,29 @@ class SlamwareBridge(Node):
         self.goal_topic_sub = self.create_subscription(
             PoseStamped, '/goal_pose', self.goal_topic_callback, 10)
 
+        # NavigateToPose 액션 전용: virtual track을 활용할 수 있는 move_to 토픽
+        self.move_to_pub = self.slam_sub_node.create_publisher(
+            MoveToRequest, '/slamware_ros_sdk_server_node/move_to', 10)
+
         self.slam_cancel_pub = self.slam_sub_node.create_publisher(
             CancelActionRequest, '/slamware_ros_sdk_server_node/cancel_action', 10)
 
         # [메인 도메인] RViz2 시각화용 Marker 퍼블리셔 생성
         self.virtual_wall_pub = self.create_publisher(
             Marker, '/virtual_walls_marker', 10)  # 이름 충돌 방지를 위해 _marker 추가 권장
+        self.virtual_track_pub = self.create_publisher(
+            Marker, '/virtual_tracks_marker', 10)
 
         # [Slamware 도메인] 가상벽 데이터 구독
         self.virtual_wall_sub = self.slam_sub_node.create_subscription(
             Line2DFlt32Array, '/virtual_walls', 
             self.virtual_wall_callback, volatile_qos)
+
+        # [Slamware 도메인] 가상 트랙(virtual track) 데이터 구독
+        # move_to 시 목적지/출발지가 트랙 근처인지 판단하는 데 사용한다.
+        self.virtual_track_sub = self.slam_sub_node.create_subscription(
+            Line2DFlt32Array, '/slamware_ros_sdk_server_node/virtual_tracks',
+            self.virtual_track_callback, volatile_qos)
 
         # [Slamware 도메인] 로봇 기본 상태(배터리 포함) 토픽 구독 추가
         self.basic_state_sub = self.slam_sub_node.create_subscription(
@@ -413,7 +436,6 @@ class SlamwareBridge(Node):
 
         goal_pose = goal_handle.request.pose
         goal_pose.header.frame_id = 'slamware_map'
-        self.goal_pub.publish(goal_pose)
 
         feedback_msg = NavigateToPose.Feedback()
         result = NavigateToPose.Result()
@@ -429,8 +451,35 @@ class SlamwareBridge(Node):
         STALL_TIME_NEAR_GOAL   = 3.0    # 목적지 근처에서 꼈을 때의 마진 (초)
         STALL_TIMEOUT_FOR_REPLAN = self.get_parameter('nav_stall_timeout_sec').get_parameter_value().double_value
         MAX_GOAL_ATTEMPTS      = max(1, self.get_parameter('nav_goal_attempt_count').get_parameter_value().integer_value)
+        VT_PROXIMITY_M         = self.get_parameter('nav_virtual_track_proximity_m').get_parameter_value().double_value
+        VT_USE_OA              = self.get_parameter('nav_virtual_track_use_obstacle_avoidance').get_parameter_value().bool_value
 
         goal_yaw = self.get_yaw(goal_pose.pose.orientation)
+
+        # 목적지(및 현재 위치)가 virtual track 근처인지 판단해 이동 모드를 결정한다.
+        # 이 판단은 실행 시작 시 한 번만 하고, 재전송(재시도) 때도 동일 모드를 유지한다.
+        check_points = [(goal_pose.pose.position.x, goal_pose.pose.position.y)]
+        if self.current_pose is not None:
+            check_points.append((self.current_pose.position.x, self.current_pose.position.y))
+        use_virtual_track = self._is_virtual_track_nearby(check_points, VT_PROXIMITY_M)
+
+        MAGENTA = "\033[95m"
+        RESET_VT = "\033[0m"
+        if use_virtual_track:
+            self._info(
+                f'{MAGENTA}[NavigateToPose] 🛤️ Virtual track 근접 감지(≤{VT_PROXIMITY_M:.1f}m) — '
+                f'KEY_POINTS 모드로 move_to 이동{RESET_VT}'
+            )
+        else:
+            self._info(
+                f'{MAGENTA}[NavigateToPose] Virtual track 없음 — 일반 move_to 이동{RESET_VT}'
+            )
+
+        move_to_req = self._build_move_to_request(
+            goal_pose.pose.position.x, goal_pose.pose.position.y, goal_yaw,
+            use_virtual_track, VT_USE_OA
+        )
+        self.move_to_pub.publish(move_to_req)
 
         last_snapshot = None
         last_move_time = self.get_clock().now()
@@ -524,11 +573,10 @@ class SlamwareBridge(Node):
                         RESET  = "\033[0m"
                         self._warn(
                             f'{YELLOW}[NavigateToPose] ⏳ 정지 타임아웃 ({STALL_TIMEOUT_FOR_REPLAN:.1f}s) — '
-                            f'move topic 재전송 ({goal_attempt}/{MAX_GOAL_ATTEMPTS}), '
+                            f'move_to 재전송 ({goal_attempt}/{MAX_GOAL_ATTEMPTS}), '
                             f'남은 거리: {dist_to_goal:.2f}m{RESET}'
                         )
-                        goal_pose.header.stamp = self.get_clock().now().to_msg()
-                        self.goal_pub.publish(goal_pose)
+                        self.move_to_pub.publish(move_to_req)
                         last_move_time = now
                         last_snapshot = None
                         continue
@@ -677,6 +725,102 @@ class SlamwareBridge(Node):
         # 메인 도메인으로 변환된 Marker 퍼블리시
         self.virtual_wall_pub.publish(marker)
 
+    def virtual_track_callback(self, msg: Line2DFlt32Array):
+        """Slamware가 관리하는 virtual track 목록을 캐싱하고 RViz용 Marker로 발행한다.
+
+        - 캐싱된 좌표는 NavigateToPose 실행 시 목적지가 트랙 근처인지 판단하는 데 사용된다.
+        - virtual_walls와 동일하게 Line2DFlt32Array → Marker(LINE_LIST) 변환을 거쳐야
+          RViz2에서 시각화할 수 있다 (Line2DFlt32Array 자체는 RViz가 지원하는 타입이 아님).
+        """
+        self.latest_virtual_tracks = [
+            {
+                'start': (float(line.start.x), float(line.start.y)),
+                'end': (float(line.end.x), float(line.end.y)),
+            }
+            for line in msg.lines
+        ]
+
+        marker = Marker()
+        marker.header.frame_id = 'slamware_map'
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.ns = 'virtual_tracks'
+        marker.id = 0
+        marker.type = Marker.LINE_LIST
+        marker.action = Marker.ADD
+
+        # virtual_walls(빨강)와 구분되는 색상 (초록색)
+        marker.scale.x = 0.05
+        marker.color.r = 0.0
+        marker.color.g = 1.0
+        marker.color.b = 0.0
+        marker.color.a = 1.0
+
+        marker.points = []
+        for track in self.latest_virtual_tracks:
+            marker.points.append(Point(x=track['start'][0], y=track['start'][1], z=0.0))
+            marker.points.append(Point(x=track['end'][0], y=track['end'][1], z=0.0))
+
+        self.virtual_track_pub.publish(marker)
+
+    @staticmethod
+    def _point_to_segment_distance(px, py, ax, ay, bx, by):
+        """점 (px,py)와 선분 (ax,ay)-(bx,by) 사이의 최단 거리."""
+        abx = bx - ax
+        aby = by - ay
+        seg_len_sq = abx * abx + aby * aby
+        if seg_len_sq < 1e-9:
+            return math.hypot(px - ax, py - ay)
+        t = ((px - ax) * abx + (py - ay) * aby) / seg_len_sq
+        t = max(0.0, min(1.0, t))
+        closest_x = ax + t * abx
+        closest_y = ay + t * aby
+        return math.hypot(px - closest_x, py - closest_y)
+
+    def _distance_to_nearest_virtual_track(self, x, y):
+        """(x, y)에서 가장 가까운 virtual track까지의 거리. 트랙이 없으면 inf."""
+        if not self.latest_virtual_tracks:
+            return math.inf
+        return min(
+            self._point_to_segment_distance(
+                x, y, track['start'][0], track['start'][1], track['end'][0], track['end'][1]
+            )
+            for track in self.latest_virtual_tracks
+        )
+
+    def _is_virtual_track_nearby(self, points, proximity_m):
+        """points(여러 (x, y) 좌표) 중 하나라도 virtual track 근처면 True."""
+        if not self.latest_virtual_tracks:
+            return False
+        return any(
+            self._distance_to_nearest_virtual_track(x, y) <= proximity_m
+            for (x, y) in points
+        )
+
+    def _build_move_to_request(self, x, y, yaw, use_virtual_track, use_obstacle_avoidance):
+        """MoveToRequest 메시지 생성.
+
+        - virtual track 모드: KEY_POINTS (+ KEY_POINTS_WITH_OA) 플래그로
+          트랙을 따라 이동. 로봇이 트랙 경로를 우선 사용한다.
+        - 일반 모드: 기존 /move_base_simple/goal 핸들러와 동일하게
+          MILESTONE + PRECISE 플래그 사용.
+        - 두 모드 모두 WITH_YAW로 최종 목적지의 yaw를 지정한다.
+        """
+        req = MoveToRequest()
+        req.location.x = float(x)
+        req.location.y = float(y)
+        req.location.z = 0.0
+        req.yaw = float(yaw)
+
+        flags = MoveOptionFlag.WITH_YAW | MoveOptionFlag.PRECISE
+        if use_virtual_track:
+            flags |= MoveOptionFlag.KEY_POINTS
+            if use_obstacle_avoidance:
+                flags |= MoveOptionFlag.KEY_POINTS_WITH_OA
+        else:
+            flags |= MoveOptionFlag.MILESTONE
+        req.options.opt_flags.flags = flags
+
+        return req
 
     def get_yaw(self, q):
         """쿼터니언에서 Yaw(z축 회전) 값을 추출합니다."""
