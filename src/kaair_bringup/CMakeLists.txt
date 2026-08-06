@@ -7,6 +7,11 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(image_transport REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(OpenCV REQUIRED)
 
 # 설치 규칙: config, launch, rviz 폴더 전체를 share/PROJECT_NAME 디렉토리로 복사
 install(DIRECTORY
@@ -16,12 +21,28 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
+# ---- C++ 노드: depth_resize_node ----
+# (기존 depth_resizer_node.py 를 대체)
+add_executable(depth_resizer src/depth_resize_node.cpp)
+ament_target_dependencies(depth_resizer
+  rclcpp
+  sensor_msgs
+  image_transport
+  cv_bridge
+  OpenCV
+)
+target_link_libraries(depth_resizer ${OpenCV_LIBRARIES})
+
+install(TARGETS
+  depth_resizer
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 # 1. 경로와 이름을 공백이나 줄바꿈으로 나열 (세미콜론 제외)
 set(PYTHON_NODES
   "kaair_bringup/server_worker/location_server.py"               "location_server"
   "kaair_bringup/server_worker/robot_pose_publisher.py"          "robot_pose_publisher"
   "kaair_bringup/server_worker/object_marker_server.py"               "object_marker_server"
-  "kaair_bringup/server_worker/depth_resizer_node.py"               "depth_resizer"
   "kaair_bringup/server_worker/xarm_bridge.py"                   "xarm_bridge"
   "kaair_bringup/motion_worker/lift_move_action_server.py"       "lift_move_action_server"
   "kaair_bringup/motion_worker/arm_move_action_server.py"        "arm_move_action_server"
