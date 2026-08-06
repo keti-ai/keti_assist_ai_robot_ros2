@@ -50,8 +50,10 @@ public:
       interpolation_ = cv::INTER_NEAREST;
     }
 
-    // 센서 데이터 QoS (BEST_EFFORT) - 카메라 드라이버 기본값과 호환
-    const auto qos = rclcpp::SensorDataQoS().get_rmw_qos_profile();
+    // RELIABLE QoS로 고정 (구독/발행 모두). BEST_EFFORT 카메라 드라이버와
+    // 통신할 때는 image_transport 가 내부적으로 QoS 를 맞춰주지 않으므로,
+    // 실제 연결 시 상대측 QoS 도 RELIABLE 이어야 한다.
+    auto qos = rclcpp::QoS(rclcpp::KeepLast(5)).reliable().get_rmw_qos_profile();
 
     // base topic 에 publisher 를 만들면 raw + 사용 가능한 모든 transport 플러그인이
     // 자동으로 함께 advertise 된다 (compressedDepth 포함).
