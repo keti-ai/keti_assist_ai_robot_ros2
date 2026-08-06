@@ -5,7 +5,15 @@ Unified motion action server (MoveJ / MoveL / MoveT / ArmTask)
 
 MoveJ  → Pilz PTP (joint space)
 MoveL  → Pilz LIN (Cartesian linear)
-MoveT  → Pilz LIN (tool delta → base frame pose goal)
+MoveT  → compute_cartesian_path(직선 waypoint IK) + TOTG 재파라미터화 후
+         ExecuteTrajectory로 직접 실행 (tool delta → base frame pose goal)
+
+MoveT는 기존에 Pilz LIN을 사용했으나, LIN은 지정된 Cartesian 속도를 그대로
+유지하려다 손목 특이점 근처에서 필요한 조인트 각속도가 joint_limits.yaml의
+한계를 넘으면 플래닝 자체를 거부한다(하드 실패). 반면 compute_cartesian_path는
+동일하게 직선 waypoint를 따라가는 조인트 궤적을 만든 뒤, TOTG
+(Time-Optimal Trajectory Generation)로 재파라미터화하여 조인트 한계를 넘는
+구간에서는 실패하지 않고 자동으로 속도를 늦춰 안전하게 통과한다.
 """
 
 import os
@@ -27,7 +35,7 @@ from geometry_msgs.msg import Pose
 from sensor_msgs.msg import JointState
 from shape_msgs.msg import SolidPrimitive
 
-from moveit_msgs.action import MoveGroup
+from moveit_msgs.action import ExecuteTrajectory, MoveGroup
 from moveit_msgs.msg import (
     BoundingVolume,
     Constraints,
@@ -37,6 +45,7 @@ from moveit_msgs.msg import (
     OrientationConstraint,
     PositionConstraint,
 )
+from moveit_msgs.srv import GetCartesianPath
 from scipy.spatial.transform import Rotation as R
 from tf2_ros import Buffer, TransformListener
 
@@ -108,6 +117,18 @@ MOVEIT_ERROR_MAP = {
     MoveItErrorCodes.START_STATE_IN_COLLISION: "시작 상태 충돌",
 }
 
+# MoveTool(직선 tool-delta 이동) 전용: /compute_cartesian_path 로 waypoint IK
+# 기반 조인트 궤적을 만든다. move_group의 CartesianPathService는 내부적으로
+# TimeOptimalTrajectoryGeneration(TOTG)을 scale=1.0으로 적용해 시간을 채워주므로,
+# 실제 최대 속도/가속도(velocity_scale, acceleration_scale)는 이 노드에서
+# 궤적의 time_from_start/velocities/accelerations를 균일하게 재조정해서 적용한다.
+CARTESIAN_PATH_SERVICE = "compute_cartesian_path"
+EXECUTE_TRAJECTORY_ACTION = "execute_trajectory"
+CARTESIAN_MAX_STEP = 0.01
+CARTESIAN_JUMP_THRESHOLD = 0.0
+# 요청한 waypoint 중 이 비율 이상을 실제로 따라가지 못하면(장애물/IK 실패 등) 실패 처리
+CARTESIAN_MIN_FRACTION = 0.99
+
 
 class UnifiedMotionActionServer(Node):
     def __init__(self):
@@ -135,6 +156,19 @@ class UnifiedMotionActionServer(Node):
             self,
             MoveGroup,
             MOVE_ACTION,
+            callback_group=self._cb_group,
+        )
+
+        self._cartesian_path_client = self.create_client(
+            GetCartesianPath,
+            CARTESIAN_PATH_SERVICE,
+            callback_group=self._cb_group,
+        )
+
+        self._execute_trajectory_client = ActionClient(
+            self,
+            ExecuteTrajectory,
+            EXECUTE_TRAJECTORY_ACTION,
             callback_group=self._cb_group,
         )
 
@@ -604,6 +638,150 @@ class UnifiedMotionActionServer(Node):
         return ok, msg
 
     # -------------------------------------------------------------------------
+    # Cartesian path (compute_cartesian_path + TOTG) → ExecuteTrajectory
+    # MoveTool 전용 실행 경로. Pilz LIN처럼 joint 속도 한계를 넘으면 하드 실패하는
+    # 대신, TOTG가 문제 구간에서 자동으로 감속하므로 특이점 근처 장거리 이동에서도
+    # 안전하게 도달한다.
+    # -------------------------------------------------------------------------
+    def _scale_trajectory_timing(self, joint_trajectory, velocity_scale, acceleration_scale):
+        """TOTG가 scale=1.0으로 채운 timing을 velocity/acceleration_scale에 맞게
+        균일하게 재조정한다. 시간을 1/effective_scale 배 늘리면 속도는
+        effective_scale 배, 가속도는 effective_scale^2 배로 줄어들어 항상
+        joint_limits.yaml 한계 내에 머문다(요청한 acceleration_scale보다 더
+        보수적으로 느려질 수는 있어도 초과하지는 않음)."""
+        vel_scale = max(MIN_SCALE, min(float(velocity_scale), MAX_SCALE))
+        acc_scale = max(MIN_SCALE, min(float(acceleration_scale), MAX_SCALE))
+        effective_scale = min(vel_scale, acc_scale ** 0.5)
+        effective_scale = max(effective_scale, MIN_SCALE)
+
+        stretch = 1.0 / effective_scale
+        for point in joint_trajectory.points:
+            t = point.time_from_start.sec + point.time_from_start.nanosec * 1e-9
+            new_t = t * stretch
+            point.time_from_start.sec = int(new_t)
+            point.time_from_start.nanosec = int(round((new_t - int(new_t)) * 1e9))
+            point.velocities = [v * effective_scale for v in point.velocities]
+            point.accelerations = [a * effective_scale * effective_scale for a in point.accelerations]
+        return effective_scale
+
+    def _compute_cartesian_path(self, target_pose, frame_id, goal_handle):
+        if not self._cartesian_path_client.wait_for_service(timeout_sec=3.0):
+            return False, "compute_cartesian_path 서비스에 연결할 수 없음"
+
+        req = GetCartesianPath.Request()
+        req.header.frame_id = frame_id
+        req.group_name = MOVE_GROUP
+        req.link_name = EEF_LINK
+        req.waypoints = [target_pose]
+        req.max_step = CARTESIAN_MAX_STEP
+        req.jump_threshold = CARTESIAN_JUMP_THRESHOLD
+        req.avoid_collisions = True
+
+        future = self._cartesian_path_client.call_async(req)
+        ok, err = self._wait_future(future, timeout_sec=10.0, goal_handle=goal_handle)
+        if err == "cancel_requested":
+            return None, "Cancelled"
+        if not ok:
+            return False, f"compute_cartesian_path 대기 실패: {err}"
+
+        response = future.result()
+        if response is None:
+            return False, "compute_cartesian_path 응답 없음"
+        if response.error_code.val != MoveItErrorCodes.SUCCESS:
+            return False, (
+                f"Cartesian 경로 계산 실패: "
+                f"{MOVEIT_ERROR_MAP.get(response.error_code.val, response.error_code.val)}"
+            )
+        if response.fraction < CARTESIAN_MIN_FRACTION:
+            return False, (
+                f"Cartesian 경로 일부만 계산됨 (fraction={response.fraction:.3f}, "
+                f"장애물/IK 한계 등으로 직선 경로를 끝까지 따라갈 수 없음)"
+            )
+        return True, response
+
+    def _execute_cartesian_path_move(
+        self,
+        target_pose,
+        frame_id,
+        plan_only,
+        velocity_scale,
+        acceleration_scale,
+        goal_handle,
+        feedback=None,
+    ):
+        if feedback is not None:
+            feedback.status = "Planning"
+            if hasattr(feedback, "current_joints"):
+                feedback.current_joints = self._current_joints
+            goal_handle.publish_feedback(feedback)
+
+        ok, payload = self._compute_cartesian_path(target_pose, frame_id, goal_handle)
+        if ok is None:
+            return None, "Planning 중 취소됨"
+        if not ok:
+            return False, f"Planning 실패: {payload}"
+
+        response = payload
+        effective_scale = self._scale_trajectory_timing(
+            response.solution.joint_trajectory, velocity_scale, acceleration_scale
+        )
+
+        if plan_only:
+            return True, f"Planning 성공 (fraction={response.fraction:.3f})"
+
+        if not self._execute_trajectory_client.wait_for_server(timeout_sec=3.0):
+            return False, "ExecuteTrajectory 액션 서버에 연결할 수 없음"
+
+        exec_goal = ExecuteTrajectory.Goal()
+        exec_goal.trajectory = response.solution
+
+        if feedback is not None:
+            feedback.status = "Moving"
+            if hasattr(feedback, "current_joints"):
+                feedback.current_joints = self._current_joints
+            goal_handle.publish_feedback(feedback)
+
+        send_future = self._execute_trajectory_client.send_goal_async(exec_goal)
+        deadline = time.time() + 10.0
+        while not send_future.done():
+            if goal_handle.is_cancel_requested:
+                return None, "Cancelled"
+            if time.time() > deadline:
+                return False, "ExecuteTrajectory goal 수락 대기 타임아웃"
+            time.sleep(0.02)
+
+        exec_handle = send_future.result()
+        if exec_handle is None or not exec_handle.accepted:
+            return False, "ExecuteTrajectory goal 거절됨"
+
+        result_future = exec_handle.get_result_async()
+        sleep_interval = 1.0 / FEEDBACK_HZ
+
+        while not result_future.done():
+            if goal_handle.is_cancel_requested:
+                cancel_future = exec_handle.cancel_goal_async()
+                cdeadline = time.time() + 5.0
+                while not cancel_future.done() and time.time() < cdeadline:
+                    time.sleep(0.02)
+                return None, "Cancelled"
+
+            if feedback is not None:
+                if hasattr(feedback, "current_joints"):
+                    feedback.current_joints = self._current_joints
+                goal_handle.publish_feedback(feedback)
+            time.sleep(sleep_interval)
+
+        wrapped = result_future.result()
+        if wrapped.status != GoalStatus.STATUS_SUCCEEDED:
+            return False, f"ExecuteTrajectory 액션 비정상 종료 status={wrapped.status}"
+
+        ec = wrapped.result.error_code.val
+        if ec == MoveItErrorCodes.SUCCESS:
+            return True, f"성공 (effective_speed_scale={effective_scale:.2f})"
+
+        return False, MOVEIT_ERROR_MAP.get(ec, f"MoveIt 오류 코드 {ec}")
+
+    # -------------------------------------------------------------------------
     # MoveLinear (Pilz LIN)
     # -------------------------------------------------------------------------
     def _execute_move_linear(self, goal_handle):
@@ -680,7 +858,7 @@ class UnifiedMotionActionServer(Node):
         return result
 
     # -------------------------------------------------------------------------
-    # MoveTool (Pilz LIN, goal in link_base)
+    # MoveTool (compute_cartesian_path + TOTG → ExecuteTrajectory, goal in link_base)
     # -------------------------------------------------------------------------
     def _execute_move_tool(self, goal_handle):
         with self._motion_lock:
@@ -705,7 +883,7 @@ class UnifiedMotionActionServer(Node):
         )
 
         self._info(
-            f"[MoveTool/LIN] delta=[{dx:.3f},{dy:.3f},{dz:.3f}] "
+            f"[MoveTool/CartesianPath] delta=[{dx:.3f},{dy:.3f},{dz:.3f}] "
             f"vel_scale={velocity_scale:.2f} acc_scale={acceleration_scale:.2f}"
         )
 
@@ -721,7 +899,7 @@ class UnifiedMotionActionServer(Node):
             return result
 
         result.final_pose = target_pose
-        ok, msg = self._execute_pilz_lin(
+        ok, msg = self._execute_cartesian_path_move(
             target_pose,
             BASE_FRAME,
             plan_only,
