@@ -54,6 +54,7 @@ set(PYTHON_NODES
   "kaair_bringup/server_worker/location_server.py"               "location_server"
   "kaair_bringup/server_worker/robot_pose_publisher.py"          "robot_pose_publisher"
   "kaair_bringup/server_worker/object_marker_server.py"               "object_marker_server"
+  "kaair_bringup/server_worker/depth_pointcloud_publisher.py"         "depth_pointcloud_publisher"
   "kaair_bringup/server_worker/xarm_bridge.py"                   "xarm_bridge"
   "kaair_bringup/motion_worker/lift_move_action_server.py"       "lift_move_action_server"
   "kaair_bringup/motion_worker/arm_move_action_server.py"        "arm_move_action_server"

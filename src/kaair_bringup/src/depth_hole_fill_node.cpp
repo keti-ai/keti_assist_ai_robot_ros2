@@ -133,6 +133,13 @@ public:
       fill_passes_ = 1;
     }
 
+    // kernel_size / min_valid_neighbors / fill_passes 는 노드를 재시작하지
+    // 않고도 `ros2 param set /depth_hole_filler <name> <value>` 로 실시간
+    // 조정할 수 있도록 콜백을 등록한다 (topic/transport 파라미터는 구독/발행
+    // 객체를 다시 만들어야 하므로 런타임 변경을 거부한다).
+    param_callback_handle_ = this->add_on_set_parameters_callback(
+      std::bind(&DepthHoleFillNode::onParamChange, this, std::placeholders::_1));
+
     auto qos = rclcpp::QoS(rclcpp::KeepLast(5)).reliable().get_rmw_qos_profile();
 
     pub_ = image_transport::create_publisher(this, output_topic_, qos);
@@ -146,10 +153,57 @@ public:
       "depth_hole_fill_node: %s (%s transport) -> %s, kernel=%dx%d "
       "min_valid_neighbors=%d fill_passes=%d",
       input_topic_.c_str(), input_transport_.c_str(), output_topic_.c_str(),
-      kernel_size_, kernel_size_, min_valid_neighbors_, fill_passes_);
+      kernel_size_.load(), kernel_size_.load(), min_valid_neighbors_.load(),
+      fill_passes_.load());
   }
 
 private:
+  rcl_interfaces::msg::SetParametersResult onParamChange(
+    const std::vector<rclcpp::Parameter> & params)
+  {
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+
+    for (const auto & p : params) {
+      if (p.get_name() == "kernel_size") {
+        int v = p.as_int();
+        if (v < 3) {
+          v = 3;
+        }
+        if (v % 2 == 0) {
+          ++v;
+        }
+        kernel_size_.store(v);
+      } else if (p.get_name() == "min_valid_neighbors") {
+        int v = p.as_int();
+        if (v < 1) {
+          v = 1;
+        }
+        min_valid_neighbors_.store(v);
+      } else if (p.get_name() == "fill_passes") {
+        int v = p.as_int();
+        if (v < 1) {
+          v = 1;
+        }
+        fill_passes_.store(v);
+      } else if (p.get_name() == "input_topic" || p.get_name() == "output_topic" ||
+        p.get_name() == "input_transport")
+      {
+        result.successful = false;
+        result.reason = "topic/transport 파라미터는 런타임에 변경할 수 없습니다 (노드 재시작 필요)";
+      }
+    }
+
+    if (result.successful) {
+      RCLCPP_INFO(
+        this->get_logger(),
+        "필터 파라미터 갱신: kernel=%dx%d min_valid_neighbors=%d fill_passes=%d",
+        kernel_size_.load(), kernel_size_.load(), min_valid_neighbors_.load(),
+        fill_passes_.load());
+    }
+    return result;
+  }
+
   void imageCallback(const Image::ConstSharedPtr & msg)
   {
     cv_bridge::CvImageConstPtr cv_ptr;
@@ -162,13 +216,18 @@ private:
       return;
     }
 
+    // 프레임 하나를 처리하는 동안은 값이 바뀌어도 일관되도록 한 번만 읽어둔다.
+    const int kernel_size = kernel_size_.load();
+    const int min_valid_neighbors = min_valid_neighbors_.load();
+    const int fill_passes = fill_passes_.load();
+
     cv::Mat filled;
     if (msg->encoding == sensor_msgs::image_encodings::TYPE_16UC1 ||
       msg->encoding == sensor_msgs::image_encodings::MONO16)
     {
-      filled = runPasses<uint16_t>(cv_ptr->image);
+      filled = runPasses<uint16_t>(cv_ptr->image, kernel_size, min_valid_neighbors, fill_passes);
     } else if (msg->encoding == sensor_msgs::image_encodings::TYPE_32FC1) {
-      filled = runPasses<float>(cv_ptr->image);
+      filled = runPasses<float>(cv_ptr->image, kernel_size, min_valid_neighbors, fill_passes);
     } else {
       RCLCPP_WARN_THROTTLE(
         this->get_logger(), *this->get_clock(), 5000,
@@ -187,24 +246,25 @@ private:
   }
 
   template <typename T>
-  cv::Mat runPasses(const cv::Mat & input)
+  cv::Mat runPasses(const cv::Mat & input, int kernel_size, int min_valid_neighbors, int fill_passes)
   {
     cv::Mat current = input;
-    for (int i = 0; i < fill_passes_; ++i) {
+    for (int i = 0; i < fill_passes; ++i) {
       cv::Mat next;
-      fillHolesOnePass<T>(current, next, kernel_size_, min_valid_neighbors_);
+      fillHolesOnePass<T>(current, next, kernel_size, min_valid_neighbors);
       current = next;
     }
     return current;
   }
 
   std::string input_topic_, output_topic_, input_transport_;
-  int kernel_size_{5};
-  int min_valid_neighbors_{4};
-  int fill_passes_{2};
+  std::atomic<int> kernel_size_{5};
+  std::atomic<int> min_valid_neighbors_{4};
+  std::atomic<int> fill_passes_{2};
 
   image_transport::Publisher pub_;
   image_transport::Subscriber sub_;
+  OnSetParametersCallbackHandle::SharedPtr param_callback_handle_;
 };
 
 int main(int argc, char ** argv)

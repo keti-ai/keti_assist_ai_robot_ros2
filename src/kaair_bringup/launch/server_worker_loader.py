@@ -99,6 +99,12 @@ def launch_setup(context, *args, **kwargs):
                 name="object_marker_server",
                 output="screen",
             ),
+            Node(
+                package="kaair_bringup",
+                executable="depth_pointcloud_publisher",
+                name="depth_pointcloud_publisher",
+                output="screen",
+            ),
             Node(  
                 package="kaair_bringup",
                 executable="robot_pose_publisher",

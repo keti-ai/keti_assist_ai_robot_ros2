@@ -18,12 +18,15 @@
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>visualization_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>std_srvs</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
+  <!-- depth_pointcloud_publisher: depth 이미지를 PointCloud2로 변환/발행 -->
+  <exec_depend>sensor_msgs_py</exec_depend>
 
   <!-- image_transport 런타임 플러그인: depth_resizer/depth_hole_filler 노드가 사용 -->
   <exec_depend>compressed_depth_image_transport</exec_depend>
