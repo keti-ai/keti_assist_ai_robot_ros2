@@ -83,9 +83,11 @@ class ObjectMarkerServer(Node):
             callback_group=self.cb_group
         )
 
+        # depth_hole_fill_node가 노이즈로 인한 0(무효) 픽셀을 median filter로
+        # 메워 재발행한 토픽을 사용 (해상도는 image_rect_raw와 동일)
         self.tool_depth_sub = self.create_subscription(
             Image,
-            '/hand/camera/depth/image_rect_raw',
+            '/hand/camera/depth/image_rect_filled',
             self.tool_depth_callback,
             sensor_qos,
             callback_group=self.cb_group

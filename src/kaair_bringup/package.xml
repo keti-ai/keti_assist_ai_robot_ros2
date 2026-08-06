@@ -12,6 +12,9 @@
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
   <depend>image_transport</depend>
+  <!-- depth_hole_fill_node의 median hole-filling 처리에 사용 -->
+  <depend>cv_bridge</depend>
+  <depend>libopencv-dev</depend>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
@@ -22,7 +25,7 @@
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
 
-  <!-- image_transport 런타임 플러그인: depth_resizer 노드가 compressedDepth 로 구독/발행 -->
+  <!-- image_transport 런타임 플러그인: depth_resizer/depth_hole_filler 노드가 사용 -->
   <exec_depend>compressed_depth_image_transport</exec_depend>
   <exec_depend>compressed_image_transport</exec_depend>
 

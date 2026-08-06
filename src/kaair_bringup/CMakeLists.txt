@@ -10,6 +10,8 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(image_transport REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(OpenCV REQUIRED)
 
 # 설치 규칙: config, launch, rviz 폴더 전체를 share/PROJECT_NAME 디렉토리로 복사
 install(DIRECTORY
@@ -28,8 +30,22 @@ ament_target_dependencies(depth_resizer
   image_transport
 )
 
+# ---- C++ 노드: depth_hole_fill_node ----
+# hand camera depth(image_rect_raw)의 0(무효) 픽셀을 median filter로 채워
+# 홀을 메운다. 해상도는 그대로 유지.
+add_executable(depth_hole_filler src/depth_hole_fill_node.cpp)
+ament_target_dependencies(depth_hole_filler
+  rclcpp
+  sensor_msgs
+  image_transport
+  cv_bridge
+  OpenCV
+)
+target_link_libraries(depth_hole_filler ${OpenCV_LIBRARIES})
+
 install(TARGETS
   depth_resizer
+  depth_hole_filler
   DESTINATION lib/${PROJECT_NAME}
 )
 

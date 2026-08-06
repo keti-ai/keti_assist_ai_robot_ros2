@@ -76,6 +76,24 @@ def generate_launch_description():
         condition=IfCondition(use_hand_camera),
     )
 
+    # hand camera(RealSense) depth의 노이즈로 인해 0(무효)이 되는 픽셀을
+    # median filter로 채워, 해상도는 그대로 유지한 채
+    # /hand/camera/depth/image_rect_filled 로 재발행
+    depth_hole_fill_node = Node(
+        package='kaair_bringup',
+        executable='depth_hole_filler',
+        name='depth_hole_filler',
+        output='screen',
+        condition=IfCondition(use_hand_camera),
+        parameters=[{
+            'input_topic': '/hand/camera/depth/image_rect_raw',
+            'output_topic': '/hand/camera/depth/image_rect_filled',
+            'kernel_size': 5,
+            'min_valid_neighbors': 4,
+            'fill_passes': 2,
+        }],
+    )
+
     # Launch description
     ld = LaunchDescription([
         use_head_camera_arg,
@@ -85,6 +103,9 @@ def generate_launch_description():
         # femto 카메라 드라이버가 완전히 올라와 토픽을 publish하기 시작할 시간을
         # 확보한 뒤 depth_align_node를 실행 (head 카메라 2.0s + 여유 3.0s)
         TimerAction(period=5.0, actions=[GroupAction([depth_align_node])]),
+        # hand 카메라 드라이버가 올라와 image_rect_raw 를 publish하기 시작할
+        # 시간을 확보한 뒤 depth_hole_fill_node를 실행 (hand 카메라 0.0s + 여유 3.0s)
+        TimerAction(period=3.0, actions=[GroupAction([depth_hole_fill_node])]),
     ])
 
     return ld
