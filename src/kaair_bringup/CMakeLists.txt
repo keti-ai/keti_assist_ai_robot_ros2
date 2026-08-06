@@ -22,13 +22,16 @@ install(DIRECTORY
 )
 
 # ---- C++ 노드: depth_resize_node ----
-# (기존 depth_resizer_node.py 를 대체)
+# 해상도 검증 + spatial/temporal depth 일관성 필터 후 aligned 재발행
 add_executable(depth_resizer src/depth_resize_node.cpp)
 ament_target_dependencies(depth_resizer
   rclcpp
   sensor_msgs
   image_transport
+  cv_bridge
+  OpenCV
 )
+target_link_libraries(depth_resizer ${OpenCV_LIBRARIES})
 
 # ---- C++ 노드: depth_hole_fill_node ----
 # hand camera depth(image_rect_raw)의 0(무효) 픽셀을 median filter로 채워

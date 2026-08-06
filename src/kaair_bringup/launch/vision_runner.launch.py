@@ -44,8 +44,10 @@ def generate_launch_description():
     )
 
     # depth_registration(true)으로 카메라 드라이버가 이미 720x1280으로 정렬된
-    # depth를 출력하므로, 리사이즈 없이 해상도(720x1280) 검증 후 그대로
-    # /femto/depth/aligned 로 재발행 (해상도가 튀는 경우 drop)
+    # depth를 출력하므로, 해상도(720x1280) 검증 후 spatial/temporal 일관성
+    # 필터를 적용해 /femto/depth/aligned 로 재발행 (해상도 불일치 시 drop).
+    # 이웃 median과 차이가 큰 flying-pixel / depth 점프를 바로잡아
+    # 포인트클라우드가 기울어져 보이는 현상을 완화한다.
     depth_align_node = Node(
         package='kaair_bringup',
         executable='depth_resizer',
@@ -57,6 +59,14 @@ def generate_launch_description():
             'output_topic': '/femto/depth/aligned',
             'expected_height': 720,
             'expected_width': 1280,
+            'enable_depth_filter': True,
+            'consistency_kernel_size': 5,
+            'max_depth_diff_m': 0.05,
+            'max_depth_diff_ratio': 0.05,
+            'min_valid_neighbors': 5,
+            'invalidate_outliers': False,
+            'temporal_alpha': 0.25,
+            'temporal_jump_m': 0.08,
         }],
     )
 
