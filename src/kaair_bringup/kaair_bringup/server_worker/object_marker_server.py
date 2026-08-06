@@ -61,7 +61,7 @@ class ObjectMarkerServer(Node):
         # subscribers
         self.depth_sub = self.create_subscription(
             Image,
-            '/femto/depth/image_raw',
+            '/femto/depth/aligned',
             self.depth_callback,
             sensor_qos,
             callback_group=self.cb_group
