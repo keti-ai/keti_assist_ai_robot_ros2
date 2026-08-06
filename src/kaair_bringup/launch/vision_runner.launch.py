@@ -31,7 +31,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             'camera_name': 'femto',
-            'depth_registration': 'false',
+            'depth_registration': 'true',
             'enable_point_cloud': 'false',
             'enable_colored_point_cloud': 'false',
             'color_qos': 'default',
@@ -43,8 +43,9 @@ def generate_launch_description():
         condition=IfCondition(use_head_camera),
     )
 
-    # femto depth image가 특정 상황에서 해상도가 튀는 문제를 방지하기 위해
-    # 576x640 입력만 받아 720x1280으로 리사이즈 후 /femto/depth/aligned 로 재발행
+    # depth_registration(true)으로 카메라 드라이버가 이미 720x1280으로 정렬된
+    # depth를 출력하므로, 리사이즈 없이 해상도(720x1280) 검증 후 그대로
+    # /femto/depth/aligned 로 재발행 (해상도가 튀는 경우 drop)
     depth_align_node = Node(
         package='kaair_bringup',
         executable='depth_resizer',
@@ -54,11 +55,8 @@ def generate_launch_description():
         parameters=[{
             'input_topic': '/femto/depth/image_raw',
             'output_topic': '/femto/depth/aligned',
-            'expected_input_height': 576,
-            'expected_input_width': 640,
-            'output_height': 720,
-            'output_width': 1280,
-            'interpolation': 'nearest',
+            'expected_height': 720,
+            'expected_width': 1280,
         }],
     )
 
