@@ -1,6 +1,6 @@
 services:
   kaair_container:
-    image: kaair:humble-jetpack  # 빌드한 이미지 이름
+    image: kaair-moveit:latest  # 빌드한 이미지 이름
     container_name: keti_ros2_container
     network_mode: host           # ROS 2 통신을 위해 host 모드 권장
     ipc: host                    # FastDDS 공유 메모리 통신을 위해 필요
@@ -14,6 +14,7 @@ services:
     environment:
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
+      - TZ=Asia/Seoul               # 컨테이너 기본 타임존(UTC)으로 인한 로그 시간 불일치 방지
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
 
@@ -26,6 +27,9 @@ services:
       # - RMW_FASTRTPS_USE_QOS_FROM_XML=1
     
     volumes:
+      # 호스트 타임존/로컬타임을 그대로 사용 (TZ 환경변수만으로는 안 맞는 도구 대비)
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
       # GUI 설정을 위한 X11 소켓 매핑
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       # USB, 카메라 장치 매핑
