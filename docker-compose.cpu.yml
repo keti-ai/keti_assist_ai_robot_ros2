@@ -1,6 +1,6 @@
 services:
   kaair_container:
-    image: kaair-moveit:latest  # 빌드한 이미지 이름
+    image: kaair-moveit:${ROS_DISTRO:-jazzy}  # 빌드한 이미지 이름 (ROS_DISTRO=humble|jazzy, 기본 jazzy)
     container_name: keti_ros2_container
     network_mode: host           # ROS 2 통신을 위해 host 모드 권장
     ipc: host                    # FastDDS 공유 메모리 통신을 위해 필요

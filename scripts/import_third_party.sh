@@ -49,7 +49,7 @@ if [ ! -f "$REPOS_FILE" ]; then
 fi
 
 if ! command -v vcs >/dev/null 2>&1; then
-    echo "❌ vcstool이 필요합니다. 설치: sudo apt install python3-vcstool"
+    echo "❌ vcstool이 필요합니다. 설치: sudo apt install vcstool"
     exit 1
 fi
 

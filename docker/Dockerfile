@@ -173,6 +173,8 @@ RUN USER_HOME=$(getent passwd $(cat /tmp/container_user) | cut -d: -f6) && \
         echo 'alias eb="nano ~/.bashrc"' >> ${user_home}/.bashrc && \
         echo 'alias sb="source ~/.bashrc"' >> ${user_home}/.bashrc && \
         echo 'alias cbs="cd /workspace/ros2/ros2_ws && colcon build --symlink-install"' >> ${user_home}/.bashrc && \
+        echo 'alias xarm_build="cd /workspace/ros2/xarm_ws && colcon build --symlink-install --packages-up-to xarm_api xarm_controller uf_ros_lib"' >> ${user_home}/.bashrc && \
+        echo 'alias ob_build="cd /workspace/ros2/camera_ws && colcon build --event-handlers console_direct+ --cmake-args -DCMAKE_BUILD_TYPE=Release"' >> ${user_home}/.bashrc && \
         echo 'alias cclean="rm -rf build/ install/ log/"' >> ${user_home}/.bashrc; \
         echo 'source /opt/ros/$ROS_DISTRO/setup.bash' >> ${user_home}/.bashrc; \
         echo 'for ws in /workspace/ros2/xarm_ws /workspace/ros2/camera_ws /workspace/ros2/ros2_ws; do [ -f "$ws/install/setup.bash" ] && source "$ws/install/setup.bash"; done' >> ${user_home}/.bashrc; \

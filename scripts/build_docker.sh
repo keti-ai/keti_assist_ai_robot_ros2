@@ -40,7 +40,7 @@ fi
 # 3. 기본 설정
 # -----------------------------------------------------------------------------
 DOCKERFILE="Dockerfile"
-IMAGE_TAG="kaair-moveit:latest"
+IMAGE_TAG="kaair-moveit:${ROS_DISTRO}"
 
 # 호스트 사용자 정보
 USER_UID=$(id -u)

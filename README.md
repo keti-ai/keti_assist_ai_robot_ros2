@@ -22,7 +22,7 @@ It improves upon the original repository to enable easier and more seamless use 
   Docker 이미지에는 이 패키지들을 넣지 않는다. 컨테이너 기동 후 아래처럼 가져온 뒤 각 워크스페이스에서 빌드한다.
   ```bash
   cd keti_assist_ai_robot_ros2
-  sudo apt update && sudo apt install -y python3-vcstool
+  sudo apt update && sudo apt install -y vcstool
   bash scripts/import_third_party.sh -t humble   # or: -t jazzy
   ```
   You can also import directly from the repository root:
@@ -49,13 +49,14 @@ It improves upon the original repository to enable easier and more seamless use 
     ```
   #### Build Docker Image .sh what you want
   ```bash
-  # change input argument (cpu,nvidia,jetpack)
-  bash scripts/build_docker.sh -t nvidia
+  bash scripts/build_docker.sh
   ```
-  #### This copies `docker-compose.yml` in your workspace repository
   #### Move to Workspace Directory and docker-compose up. You can edit docker-compse.yml and rerun this code.
   ```bash
-  docker-compose up -d
+  docker compose up -f docker-compose.cpu.yml up -d
+  docker compose up -f docker-compose.jetpack.yml up -d
+  # If you want to change ROS distro, edit .env or input args
+  ROS_DISTRO=humble docker compose -f docker-compose.cpu.yml up -d
   ```
   #### Attach to docker shell
   ```bash
