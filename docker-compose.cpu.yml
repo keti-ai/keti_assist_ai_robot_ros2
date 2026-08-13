@@ -15,12 +15,12 @@ services:
       - TZ=Asia/Seoul               # 컨테이너 기본 타임존(UTC)으로 인한 로그 시간 불일치 방지
 
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-30}         # 원하는 ID로 변경 가능
-      # Fast DDS, Cyclone DDS를 선택해서 주석처리. moveit은 cyclone dds 사용 추천
-      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      # DDS 구현체: 기본 CycloneDDS. FastRTPS로 쓰려면 RMW_IMPLEMENTATION=rmw_fastrtps_cpp 로 실행
+      # 예) RMW_IMPLEMENTATION=rmw_fastrtps_cpp docker compose -f docker-compose.cpu.yml up -d
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
       - CYCLONEDDS_URI=file:///workspace/cyclonedds.xml
-      # - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      # - FASTRTPS_DEFAULT_PROFILES_FILE=/workspace/fastdds_profile.xml
-      # - RMW_FASTRTPS_USE_QOS_FROM_XML=1
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/workspace/fastdds_profile.xml
+      - RMW_FASTRTPS_USE_QOS_FROM_XML=1
     
     volumes:
       # 호스트 타임존/로컬타임을 그대로 사용 (TZ 환경변수만으로는 안 맞는 도구 대비)

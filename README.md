@@ -47,32 +47,38 @@ It improves upon the original repository to enable easier and more seamless use 
     ```bash
     cd keti_assist_ai_robot_ros2
     ```
-  #### Build Docker Image .sh what you want
+  #### Build Docker Image (choose ROS distro, default jazzy)
+  Produces an image tagged `kaair-moveit:<distro>` (e.g. `kaair-moveit:humble`, `kaair-moveit:jazzy`).
   ```bash
-  bash scripts/build_docker.sh
+  bash scripts/build_docker.sh -t humble   # or: -t jazzy
   ```
-  #### Move to Workspace Directory and docker-compose up. You can edit docker-compse.yml and rerun this code.
+  #### Run with docker compose (choose platform, default cpu)
+  Picks the matching compose file (`docker-compose.cpu.yml`, `docker-compose.nvidia.yml`, `docker-compose.jetpack.yml`) and runs `up -d`.
+  Image tag and DDS implementation come from `ROS_DISTRO` / `RMW_IMPLEMENTATION` in the repo-root `.env` file (defaults: `jazzy`, `rmw_cyclonedds_cpp`); pass `-d`/`-r` to override for a single run.
   ```bash
-  docker compose up -f docker-compose.cpu.yml up -d
-  docker compose up -f docker-compose.jetpack.yml up -d
-  # If you want to change ROS distro, edit .env or input args
-  ROS_DISTRO=humble docker compose -f docker-compose.cpu.yml up -d
+  bash scripts/run_docker.sh -p cpu       # or: -p nvidia / -p jetpack
+
+  # override ROS distro / DDS implementation without editing .env
+  bash scripts/run_docker.sh -p cpu -d humble -r rmw_fastrtps_cpp
   ```
   #### Attach to docker shell
   ```bash
-  docker exec -it keti_ros2_container /bin/bash
+  bash scripts/attach_docker.sh
   ```
 
   #### In the docker shell, import third-party sources then build each workspace
   ```bash
   bash scripts/import_third_party.sh -t humble   # or: -t jazzy
-  cd /ros_ws/ros2/xarm_ws && colcon build --symlink-install
-  cd /ros_ws/ros2/camera_ws && colcon build --symlink-install
-  cd /ros_ws/ros2/ros2_ws && colcon build --symlink-install
-  source /opt/ros/$ROS_DISTRO/setup.bash
-  source /ros_ws/ros2/xarm_ws/install/setup.bash
-  source /ros_ws/ros2/camera_ws/install/setup.bash
-  source /ros_ws/ros2/ros2_ws/install/setup.bash
+  # Xarm Packages build alias in docker shell
+  xarm_build
+  # Camera Packages build alias in docker shell
+  ob_build
+  # (If use Slamtec Athena) slamware ros2 packages build alias in docker shell
+  slam_build
+  # kaair Packages build alias in docker shell
+  cbs
+  # Reload bash for sourcing builded packages
+  sb
   ```
 
   #### Test Kaair Fake MoveIT is working
