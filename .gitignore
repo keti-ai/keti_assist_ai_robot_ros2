@@ -88,3 +88,9 @@ ros2/ros2_ws/src/third_party/slamware_sdk/
 ros2/xarm_ws/src/xarm_ros2/
 ros2/camera_ws/src/OrbbecSDK_ROS2/
 ros2/camera_ws/src/Realsense_ROS2/
+
+# ==========================================
+# Slamware SDK에서 해제된 패키지
+# ==========================================
+ros2/slam_ws/src/slamware_ros_sdk
+ros2/slam_ws/src/slamware_sdk
