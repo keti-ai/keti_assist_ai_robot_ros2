@@ -1,0 +1,13 @@
+repositories:
+  ros2/xarm_ws/src/xarm_ros2:
+    type: git
+    url: https://github.com/xArm-Developer/xarm_ros2.git
+    version: jazzy
+  ros2/camera_ws/src/OrbbecSDK_ROS2:
+    type: git
+    url: https://github.com/orbbec/OrbbecSDK_ROS2.git
+    version: v2-main
+  ros2/camera_ws/src/Realsense_ROS2:
+    type: git
+    url: https://github.com/realsenseai/realsense-ros.git
+    version: ros2-master

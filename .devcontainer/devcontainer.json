@@ -7,7 +7,7 @@
     // remoteUser를 지우면 Dockerfile의 'USER' 설정을 그대로 따릅니다.
     // "remoteUser": "developer", 
 
-    "postCreateCommand": "echo \"PYTHONPATH=$(find /ros_ws/install -type d -name 'site-packages' | tr '\\n' ':'):\\$PYTHONPATH\" > .env",
+    "postCreateCommand": "echo \"PYTHONPATH=$(find /ros_ws/ros2/ros2_ws/install /ros_ws/ros2/xarm_ws/install /ros_ws/ros2/camera_ws/install -type d -name 'site-packages' 2>/dev/null | tr '\\n' ':'):\\$PYTHONPATH\" > .env",
 
     "customizations": {
         "vscode": {
@@ -15,7 +15,7 @@
                 "terminal.integrated.defaultProfile.linux": "bash",
                 "python.analysis.extraPaths": [
                     "/opt/ros/humble/lib/python3.10/site-packages",
-                    "/ros_ws/install/*/lib/python3.10/site-packages"
+                    "/ros_ws/ros2/ros2_ws/install/*/lib/python3.10/site-packages"
                 ],
                 "ros.distro": "humble"
             },

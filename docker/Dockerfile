@@ -138,29 +138,9 @@ RUN if [ "$ROS_DISTRO" = "humble" ]; then \
     fi
 
 
-RUN mkdir -p /xarm_ws/src /camera_ws/src /ros_ws
-
-# ==========================================
-# 6. xArm ROS 2 패키지 설치 및 빌드
-# ==========================================
-WORKDIR /xarm_ws/src
-RUN git clone https://github.com/xArm-Developer/xarm_ros2.git --recursive -b $ROS_DISTRO
-
-WORKDIR /xarm_ws
-RUN . /opt/ros/$ROS_DISTRO/setup.bash && \
-    colcon build --packages-up-to xarm_api xarm_controller uf_ros_lib
-
-# ==========================================
-# 7. 카메라 SDK (Orbbec & RealSense) 빌드
-# ==========================================
-WORKDIR /camera_ws/src
-RUN git clone https://github.com/orbbec/OrbbecSDK_ROS2.git && \
-    git clone https://github.com/IntelRealSense/realsense-ros.git -b ros2-master
-
-WORKDIR /camera_ws
-RUN . /opt/ros/$ROS_DISTRO/setup.bash && \
-    colcon build --event-handlers console_direct+ --cmake-args -DCMAKE_BUILD_TYPE=Release && \
-    rm -rf /var/lib/apt/lists/*
+# xArm / 카메라 ROS 패키지는 이미지에 넣지 않는다.
+# 컨테이너 기동 후 scripts/import_third_party.sh 로 가져온 뒤
+# ros2/xarm_ws, ros2/camera_ws 에서 colcon build 한다.
 
 # ==========================================
 # 8. Cyclone DDS Installation
@@ -192,10 +172,10 @@ RUN USER_HOME=$(getent passwd $(cat /tmp/container_user) | cut -d: -f6) && \
         echo 'export TERM=xterm-256color' >> ${user_home}/.bashrc && \
         echo 'alias eb="nano ~/.bashrc"' >> ${user_home}/.bashrc && \
         echo 'alias sb="source ~/.bashrc"' >> ${user_home}/.bashrc && \
-        echo 'alias cbs="colcon build --symlink-install --base-paths /ros_ws/src"' >> ${user_home}/.bashrc && \
+        echo 'alias cbs="cd /workspace/ros2/ros2_ws && colcon build --symlink-install"' >> ${user_home}/.bashrc && \
         echo 'alias cclean="rm -rf build/ install/ log/"' >> ${user_home}/.bashrc; \
         echo 'source /opt/ros/$ROS_DISTRO/setup.bash' >> ${user_home}/.bashrc; \
-        echo 'for ws in /xarm_ws /camera_ws /ros_ws; do [ -f "$ws/install/setup.bash" ] && source "$ws/install/setup.bash"; done' >> ${user_home}/.bashrc; \
+        echo 'for ws in /workspace/ros2/xarm_ws /workspace/ros2/camera_ws /workspace/ros2/ros2_ws; do [ -f "$ws/install/setup.bash" ] && source "$ws/install/setup.bash"; done' >> ${user_home}/.bashrc; \
     done
 
 # 사용자별 터미널 색상 구분
@@ -205,9 +185,10 @@ RUN echo 'export PS1="\[\e[01;36m\]\u@docker\[\e[00m\]:\[\e[01;33m\]\w\[\e[00m\]
 # ==========================================
 # 11. 최종 작업 환경 설정
 # ==========================================
-WORKDIR /ros_ws
+WORKDIR /workspace
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
 
 ENV SHELL=/bin/bash
 

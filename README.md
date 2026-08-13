@@ -14,6 +14,27 @@ It improves upon the original repository to enable easier and more seamless use 
   git clone https://github.com/keti-ai/keti_assist_ai_robot_ros2.git
   ```
 
+- ### Import third-party packages with vcstool
+  External ROS 2 packages are listed in distro-specific repos files and imported into separate workspaces:
+  - `xarm_ros2` → `ros2/xarm_ws` (`humble` or `jazzy` branch)
+  - `OrbbecSDK_ROS2`, `realsense-ros` → `ros2/camera_ws`
+  - KAAIR packages stay in `ros2/ros2_ws`
+  Docker 이미지에는 이 패키지들을 넣지 않는다. 컨테이너 기동 후 아래처럼 가져온 뒤 각 워크스페이스에서 빌드한다.
+  ```bash
+  cd keti_assist_ai_robot_ros2
+  sudo apt update && sudo apt install -y python3-vcstool
+  bash scripts/import_third_party.sh -t humble   # or: -t jazzy
+  ```
+  You can also import directly from the repository root:
+  ```bash
+  vcs import --recursive . < third_party.humble.repos
+  # vcs import --recursive . < third_party.jazzy.repos
+  ```
+  Update already imported repositories with:
+  ```bash
+  vcs pull ros2/xarm_ws ros2/camera_ws
+  ```
+
 - ### Setup Network Buffer
   #### Resize Network socket buffer size for ROS2 DDS Communication optimization
   ```bash
@@ -41,10 +62,16 @@ It improves upon the original repository to enable easier and more seamless use 
   docker exec -it keti_ros2_container /bin/bash
   ```
 
-  #### In the docker shell, build ros2 packages using colcon command
+  #### In the docker shell, import third-party sources then build each workspace
   ```bash
-  colcon build --symlink-install
-  source install/setup.bash
+  bash scripts/import_third_party.sh -t humble   # or: -t jazzy
+  cd /ros_ws/ros2/xarm_ws && colcon build --symlink-install
+  cd /ros_ws/ros2/camera_ws && colcon build --symlink-install
+  cd /ros_ws/ros2/ros2_ws && colcon build --symlink-install
+  source /opt/ros/$ROS_DISTRO/setup.bash
+  source /ros_ws/ros2/xarm_ws/install/setup.bash
+  source /ros_ws/ros2/camera_ws/install/setup.bash
+  source /ros_ws/ros2/ros2_ws/install/setup.bash
   ```
 
   #### Test Kaair Fake MoveIT is working

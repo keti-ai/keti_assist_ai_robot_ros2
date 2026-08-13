@@ -79,4 +79,12 @@ Thumbs.db
 # ==========================================
 docker-compose.yml
 fastdds_profile.xml
-src/third_party/slamware_sdk/
+ros2/ros2_ws/src/third_party/slamware_sdk/
+
+# ==========================================
+# vcstool로 가져오는 third-party 패키지
+# (third_party.humble.repos / third_party.jazzy.repos 참고)
+# ==========================================
+ros2/xarm_ws/src/xarm_ros2/
+ros2/camera_ws/src/OrbbecSDK_ROS2/
+ros2/camera_ws/src/Realsense_ROS2/

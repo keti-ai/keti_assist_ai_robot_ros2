@@ -3,7 +3,7 @@
 # 1. 경로 정의
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-TARGET_DIR="$PROJECT_ROOT/src/third_party/slamware_sdk"
+TARGET_DIR="$PROJECT_ROOT/ros2/ros2_ws/src/third_party/slamware_sdk"
 SDK_REPO="https://github.com/keti-ai/slamware_sdk.git"
 
 # 2. 아키텍처 감지
