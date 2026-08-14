@@ -20,8 +20,8 @@ services:
 
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-30}         # 원하는 ID로 변경 가능
       # DDS 구현체: 기본 CycloneDDS. FastRTPS로 쓰려면 RMW_IMPLEMENTATION=rmw_fastrtps_cpp 로 실행
-      # 예) RMW_IMPLEMENTATION=rmw_fastrtps_cpp docker compose -f docker-compose.nvidia.yml up -d
-      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      # 예) RMW_IMPLEMENTATION=rmw_cyclonedds_cpp docker compose -f docker-compose.nvidia.yml up -d
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
       - CYCLONEDDS_URI=file:///workspace/cyclonedds.xml
       - FASTRTPS_DEFAULT_PROFILES_FILE=/workspace/fastdds_profile.xml
       - RMW_FASTRTPS_USE_QOS_FROM_XML=1
