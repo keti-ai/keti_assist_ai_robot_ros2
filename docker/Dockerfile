@@ -166,25 +166,11 @@ RUN apt-get update && apt-get install -y sudo \
     && chmod 0440 /etc/sudoers.d/${USERNAME}
 
 
-# 환경 변수 및 Alias 설정 (root 및 사용자 공통)
-RUN USER_HOME=$(getent passwd $(cat /tmp/container_user) | cut -d: -f6) && \
-    for user_home in /root ${USER_HOME}; do \
-        echo 'export TERM=xterm-256color' >> ${user_home}/.bashrc && \
-        echo 'alias eb="nano ~/.bashrc"' >> ${user_home}/.bashrc && \
-        echo 'alias sb="source ~/.bashrc"' >> ${user_home}/.bashrc && \
-        echo 'alias cbs="cd /workspace/ros2/ros2_ws && colcon build --symlink-install"' >> ${user_home}/.bashrc && \
-        echo 'alias xarm_build="cd /workspace/ros2/xarm_ws && colcon build --symlink-install --packages-up-to xarm_api xarm_controller uf_ros_lib"' >> ${user_home}/.bashrc && \
-        echo 'alias slam_build="cd /workspace/ros2/slam_ws && colcon build --symlink-install"' >> ${user_home}/.bashrc && \
-        echo 'alias ob_build="cd /workspace/ros2/camera_ws && colcon build --event-handlers console_direct+ --cmake-args -DCMAKE_BUILD_TYPE=Release"' >> ${user_home}/.bashrc && \
-        echo 'alias cclean="rm -rf /workspace/ros2/ros2_ws/build /workspace/ros2/ros2_ws/install /workspace/ros2/ros2_ws/log"' >> ${user_home}/.bashrc && \
-        echo 'cclean_all() { for ws in /workspace/ros2/xarm_ws /workspace/ros2/camera_ws /workspace/ros2/slam_ws /workspace/ros2/ros2_ws; do rm -rf "$ws/build" "$ws/install" "$ws/log"; done; }' >> ${user_home}/.bashrc; \
-        echo 'source /opt/ros/$ROS_DISTRO/setup.bash' >> ${user_home}/.bashrc; \
-        echo 'for ws in /workspace/ros2/xarm_ws /workspace/ros2/camera_ws /workspace/ros2/ros2_ws; do [ -f "$ws/install/setup.bash" ] && source "$ws/install/setup.bash"; done' >> ${user_home}/.bashrc; \
+# 환경 변수·Alias·PS1 설정은 /workspace/.entrypoint.sh 에 모아두고,
+# root / 일반 사용자 양쪽 .bashrc 에서 source 한 줄로 로드한다.
+RUN for user_home in /root /home/${USERNAME}; do \
+        echo 'source /workspace/.entrypoint.sh' >> ${user_home}/.bashrc; \
     done
-
-# 사용자별 터미널 색상 구분
-RUN echo 'export PS1="\[\e[01;36m\]\u@docker\[\e[00m\]:\[\e[01;33m\]\w\[\e[00m\]\$ "' >> /home/${USERNAME}/.bashrc && \
-    echo 'export PS1="\[\e[01;31m\]\u@container\[\e[00m\]:\[\e[01;37m\]\w\[\e[00m\]# "' >> /root/.bashrc
 
 # ==========================================
 # 11. 최종 작업 환경 설정
