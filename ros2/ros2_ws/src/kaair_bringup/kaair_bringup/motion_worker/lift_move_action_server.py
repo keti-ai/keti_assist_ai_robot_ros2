@@ -8,9 +8,12 @@ MoveGroup 을 거치지 않으므로 arm MoveGroup 과 동시에 실행 가능.
 
 import io
 import math
+import os
 import sys
 import threading
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import rclpy
 from action_msgs.msg import GoalStatus
@@ -34,6 +37,15 @@ _RST  = "\033[0m"
 
 def _blue(s: str) -> str: return f"{_BLUE}{s}{_RST}"
 def _red(s: str)  -> str: return f"{_RED}{s}{_RST}"
+
+# rcutils의 {time} 토큰은 epoch 초 단위라 직관적이지 않으므로, 로그 메시지 앞에
+# 사람이 읽기 쉬운 시:분:초.밀리초 형태의 시스템 시간을 직접 붙인다.
+# 컨테이너의 시스템 타임존이 UTC로 설정된 경우가 많아 datetime.now()만 쓰면
+# 한국 시간과 9시간 어긋나므로, Asia/Seoul 로 명시적으로 고정한다.
+_KST = ZoneInfo("Asia/Seoul")
+
+def _now() -> str:
+    return datetime.now(_KST).strftime("%H:%M:%S.%f")[:-3]
 
 _LATCHED_QOS = QoSProfile(
     depth=1,
@@ -81,10 +93,19 @@ class LiftMoveActionServer(Node):
             execute_callback=self._execute_cb,
             cancel_callback=self._cancel_cb,
         )
-        self.get_logger().info(
+        self._info(
             f"LiftMoveActionServer 시작: /kaair_worker/lift_move "
             f"→ {FJT_ACTION} (직접 제어 모드)"
         )
+
+    def _info(self, msg):
+        self.get_logger().info(f"[{_now()}] {msg}")
+
+    def _warn(self, msg):
+        self.get_logger().warning(f"[{_now()}] {msg}")
+
+    def _err(self, msg):
+        self.get_logger().error(f"[{_now()}] {msg}")
 
     # ── URDF 파싱 ─────────────────────────────────────────────────────────────
     def _on_robot_description(self, msg: String):
@@ -97,14 +118,14 @@ class LiftMoveActionServer(Node):
                 self._joint_lower  = float(joint.limit.lower)
                 self._joint_upper  = float(joint.limit.upper)
                 self._max_velocity = float(joint.limit.velocity)
-                self.get_logger().info(
+                self._info(
                     f"{LIFT_JOINT} 리밋: [{self._joint_lower:.3f}, {self._joint_upper:.3f}] m, "
                     f"max_vel={self._max_velocity:.3f} m/s"
                 )
             else:
-                self.get_logger().warning(f"URDF에서 {LIFT_JOINT} 리밋을 찾지 못함")
+                self._warn(f"URDF에서 {LIFT_JOINT} 리밋을 찾지 못함")
         except Exception as e:
-            self.get_logger().warning(f"URDF 파싱 실패: {e}")
+            self._warn(f"URDF 파싱 실패: {e}")
 
     # ── joint state 구독 ──────────────────────────────────────────────────────
     def _on_joint_state(self, msg: JointState):
@@ -113,7 +134,7 @@ class LiftMoveActionServer(Node):
 
     # ── Cancel 콜백 ───────────────────────────────────────────────────────────
     def _cancel_cb(self, _goal_handle) -> CancelResponse:
-        self.get_logger().info("Cancel 요청 수신")
+        self._info("Cancel 요청 수신")
         return CancelResponse.ACCEPT
 
     # ── 궤적 조립 ─────────────────────────────────────────────────────────────
@@ -164,7 +185,7 @@ class LiftMoveActionServer(Node):
         fjt_goal.trajectory          = traj
         fjt_goal.goal_time_tolerance = _ros_duration(2.0)
 
-        self.get_logger().info(_blue(
+        self._info(_blue(
             f"리프트 이동 시작: {self._current_height:.3f} → {target:.3f} m "
             f"(예상 {duration_sec:.2f}s)"
         ))
@@ -191,7 +212,7 @@ class LiftMoveActionServer(Node):
         # 결과 대기 – 피드백 발행 + cancel 감지
         while not result_future.done():
             if goal_handle.is_cancel_requested:
-                self.get_logger().info("Cancel 감지 — FJT 취소 요청")
+                self._info("Cancel 감지 — FJT 취소 요청")
                 cancel_future = fjt_handle.cancel_goal_async()
                 cdeadline = time.time() + 5.0
                 while not cancel_future.done() and time.time() < cdeadline:
@@ -221,7 +242,7 @@ class LiftMoveActionServer(Node):
         target_height = float(g.target_height)
         plan_only     = bool(g.plan_only)
 
-        self.get_logger().info(
+        self._info(
             f"Goal 수신 — target_height={target_height:.3f}m, plan_only={plan_only}"
         )
 
@@ -237,7 +258,7 @@ class LiftMoveActionServer(Node):
             )
             result.final_height = self._current_height
             goal_handle.abort()
-            self.get_logger().error(_red(result.message))
+            self._err(_red(result.message))
             return result
 
         # plan_only=True: 실제 이동 없이 가능 여부만 확인 (범위 검증 통과 = OK)
@@ -246,7 +267,7 @@ class LiftMoveActionServer(Node):
             result.message      = "범위 검증 성공 (plan_only=True, 이동 생략)"
             result.final_height = self._current_height
             goal_handle.succeed()
-            self.get_logger().info(_blue(result.message))
+            self._info(_blue(result.message))
             return result
 
         # 1단계: 이동 실행
@@ -258,22 +279,25 @@ class LiftMoveActionServer(Node):
             result.success  = False
             result.message  = "이동 중 취소됨"
             goal_handle.canceled()
-            self.get_logger().info(result.message)
+            self._info(result.message)
         elif ok:
             result.success  = True
             result.message  = f"이동 완료: {self._current_height:.3f}m"
             goal_handle.succeed()
-            self.get_logger().info(_blue(result.message))
+            self._info(_blue(result.message))
         else:
             result.success  = False
             result.message  = f"이동 실패: {msg}"
             goal_handle.abort()
-            self.get_logger().error(_red(result.message))
+            self._err(_red(result.message))
 
         return result
 
 
 def main(args=None):
+    # 기본 {time} 토큰(epoch 초)이 안 보이도록 콘솔 출력 포맷을 정리한다.
+    # 사용자가 이미 RCUTILS_CONSOLE_OUTPUT_FORMAT 을 설정했다면 그대로 존중한다.
+    os.environ.setdefault("RCUTILS_CONSOLE_OUTPUT_FORMAT", "[{severity}] [{name}]: {message}")
     rclpy.init(args=args)
     node = LiftMoveActionServer()
     executor = MultiThreadedExecutor()

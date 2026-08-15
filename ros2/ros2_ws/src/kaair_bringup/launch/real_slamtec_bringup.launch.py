@@ -94,7 +94,7 @@ def launch_setup(context, *args, **kwargs):
     move_group_node = Node(
         package='moveit_ros_move_group',
         executable='move_group',
-        output='screen',
+        output={'stdout': 'log', 'stderr': 'log'},
         parameters=[moveit_config.to_dict()],
     )
 
@@ -102,7 +102,7 @@ def launch_setup(context, *args, **kwargs):
     rsp_node = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
-        output='both',
+        output='log',
         parameters=[moveit_config.robot_description],
     )
 
@@ -143,7 +143,7 @@ def launch_setup(context, *args, **kwargs):
         namespace='arm',
         parameters=arm_cm_params,
         prefix=[] if use_fake else ['nice -n -20'],
-        output='both',
+        output={'stdout': 'log', 'stderr': 'log'},
     )
 
     arm_jsb_spawner = Node(
@@ -178,7 +178,7 @@ def launch_setup(context, *args, **kwargs):
         executable='ros2_control_node',
         namespace='body',
         parameters=[body_description, body_ctrl_yaml],
-        output='both',
+        output={'stdout': 'log', 'stderr': 'log'},
     )
 
     body_jsb_spawner = Node(

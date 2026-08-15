@@ -4,9 +4,12 @@
 
 import io
 import math
+import os
 import sys
 import threading
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import rclpy
 from action_msgs.msg import GoalStatus
@@ -30,6 +33,15 @@ _RST  = "\033[0m"
 
 def _blue(s: str) -> str: return f"{_BLUE}{s}{_RST}"
 def _red(s: str)  -> str: return f"{_RED}{s}{_RST}"
+
+# rcutils의 {time} 토큰은 epoch 초 단위라 직관적이지 않으므로, 로그 메시지 앞에
+# 사람이 읽기 쉬운 시:분:초.밀리초 형태의 시스템 시간을 직접 붙인다.
+# 컨테이너의 시스템 타임존이 UTC로 설정된 경우가 많아 datetime.now()만 쓰면
+# 한국 시간과 9시간 어긋나므로, Asia/Seoul 로 명시적으로 고정한다.
+_KST = ZoneInfo("Asia/Seoul")
+
+def _now() -> str:
+    return datetime.now(_KST).strftime("%H:%M:%S.%f")[:-3]
 
 _LATCHED_QOS = QoSProfile(
     depth=1,
@@ -79,7 +91,16 @@ class HeadMoveActionServer(Node):
             execute_callback=self._execute_cb,
             cancel_callback=self._cancel_cb,
         )
-        self.get_logger().info(f"HeadMoveActionServer 시작: /{ACTION_HEAD} (joint limit 대기 중)")
+        self._info(f"HeadMoveActionServer 시작: /{ACTION_HEAD} (joint limit 대기 중)")
+
+    def _info(self, msg):
+        self.get_logger().info(f"[{_now()}] {msg}")
+
+    def _warn(self, msg):
+        self.get_logger().warning(f"[{_now()}] {msg}")
+
+    def _err(self, msg):
+        self.get_logger().error(f"[{_now()}] {msg}")
 
     def _on_robot_description(self, msg: String):
         try:
@@ -92,15 +113,15 @@ class HeadMoveActionServer(Node):
                     self._joint_lower[jname] = float(joint.limit.lower)
                     self._joint_upper[jname] = float(joint.limit.upper)
                 else:
-                    self.get_logger().warning(f"URDF에서 {jname} 리밋을 찾지 못함 — 해당 축 검증 비활성화")
-            self.get_logger().info(
+                    self._warn(f"URDF에서 {jname} 리밋을 찾지 못함 — 해당 축 검증 비활성화")
+            self._info(
                 f"{HEAD_JOINT1}: [{self._joint_lower[HEAD_JOINT1]:.3f}, "
                 f"{self._joint_upper[HEAD_JOINT1]:.3f}] rad, "
                 f"{HEAD_JOINT2}: [{self._joint_lower[HEAD_JOINT2]:.3f}, "
                 f"{self._joint_upper[HEAD_JOINT2]:.3f}] rad"
             )
         except Exception as e:
-            self.get_logger().warning(f"URDF 파싱 실패 — joint limit 검증 비활성화: {e}")
+            self._warn(f"URDF 파싱 실패 — joint limit 검증 비활성화: {e}")
 
     def _on_joint_state(self, msg: JointState):
         if HEAD_JOINT1 in msg.name:
@@ -141,7 +162,7 @@ class HeadMoveActionServer(Node):
         return goal
 
     def _cancel_cb(self, goal_handle) -> CancelResponse:
-        self.get_logger().info("Cancel 요청 수신")
+        self._info("Cancel 요청 수신")
         return CancelResponse.ACCEPT
 
     def _within_limits(self, j1: float, j2: float) -> tuple[bool, str]:
@@ -219,7 +240,7 @@ class HeadMoveActionServer(Node):
         j2 = float(g.head_joint2)
         plan_only = bool(g.plan_only)
 
-        self.get_logger().info(
+        self._info(
             f"Goal 수신 — head_joint1={j1:.4f}, head_joint2={j2:.4f}, plan_only={plan_only}"
         )
 
@@ -232,7 +253,7 @@ class HeadMoveActionServer(Node):
             result.message = lim_msg
             self._fill_result_positions(result)
             goal_handle.abort()
-            self.get_logger().error(_red(lim_msg))
+            self._err(_red(lim_msg))
             return result
 
         if plan_only:
@@ -240,10 +261,10 @@ class HeadMoveActionServer(Node):
             result.message = "Joint limit 검사 통과 (plan_only=True, 이동 생략)"
             self._fill_result_positions(result)
             goal_handle.succeed()
-            self.get_logger().info(_blue(result.message))
+            self._info(_blue(result.message))
             return result
 
-        self.get_logger().info(_blue(f"헤드 이동 시작: j1={j1:.4f} rad, j2={j2:.4f} rad"))
+        self._info(_blue(f"헤드 이동 시작: j1={j1:.4f} rad, j2={j2:.4f} rad"))
 
         ok, msg = self._call_controller(j1, j2, goal_handle, feedback)
         self._fill_result_positions(result)
@@ -252,22 +273,25 @@ class HeadMoveActionServer(Node):
             result.success = False
             result.message = "이동 중 취소됨"
             goal_handle.canceled()
-            self.get_logger().info(result.message)
+            self._info(result.message)
         elif ok:
             result.success = True
             result.message = f"이동 완료: j1={self._j1:.4f}, j2={self._j2:.4f}"
             goal_handle.succeed()
-            self.get_logger().info(_blue(result.message))
+            self._info(_blue(result.message))
         else:
             result.success = False
             result.message = f"이동 실패: {msg}"
             goal_handle.abort()
-            self.get_logger().error(_red(result.message))
+            self._err(_red(result.message))
 
         return result
 
 
 def main(args=None):
+    # 기본 {time} 토큰(epoch 초)이 안 보이도록 콘솔 출력 포맷을 정리한다.
+    # 사용자가 이미 RCUTILS_CONSOLE_OUTPUT_FORMAT 을 설정했다면 그대로 존중한다.
+    os.environ.setdefault("RCUTILS_CONSOLE_OUTPUT_FORMAT", "[{severity}] [{name}]: {message}")
     rclpy.init(args=args)
     node = HeadMoveActionServer()
     executor = MultiThreadedExecutor()

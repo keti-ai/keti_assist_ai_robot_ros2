@@ -2,10 +2,13 @@
 
 import math
 import struct
+import time
 import traceback
 
 import rclpy
 from rclpy.node import Node
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from rclpy.duration import Duration
 
@@ -19,14 +22,29 @@ from kaair_msgs.srv import CreateObjectMarker
 
 
 class ObjectMarkerServer(Node):
+    # femto depth image is expected to be aligned to the color image resolution.
+    # under CPU load, the driver can occasionally publish frames at the depth
+    # sensor's native (unaligned) resolution instead; those frames must be
+    # skipped rather than used for projection.
+    FEMTO_DEPTH_EXPECTED_WIDTH = 1280
+    FEMTO_DEPTH_EXPECTED_HEIGHT = 720
+    FEMTO_DEPTH_WAIT_TIMEOUT_SEC = 1.5
+    FEMTO_DEPTH_WAIT_POLL_SEC = 0.02
+
     def __init__(self):
         super().__init__('object_marker_server')
         self.map_frame = 'slamware_map'
 
+        # Subscriptions and services share this reentrant group so that the
+        # depth subscription can keep updating latest_depth_msg on another
+        # executor thread while a service callback is blocked waiting for a
+        # correctly-sized depth frame (see _wait_for_valid_femto_depth).
+        self.cb_group = ReentrantCallbackGroup()
+
         sensor_qos = QoSProfile(
             history=HistoryPolicy.KEEP_LAST,
-            depth=10,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.VOLATILE
         )
 
@@ -43,58 +61,69 @@ class ObjectMarkerServer(Node):
         # subscribers
         self.depth_sub = self.create_subscription(
             Image,
-            '/femto/depth/image_raw',
+            '/femto/depth/aligned',
             self.depth_callback,
-            sensor_qos
+            sensor_qos,
+            callback_group=self.cb_group
         )
 
         self.color_sub = self.create_subscription(
             Image,
             '/femto/color/image_raw',
             self.color_callback,
-            sensor_qos
+            sensor_qos,
+            callback_group=self.cb_group
         )
 
         self.camera_info_sub = self.create_subscription(
             CameraInfo,
             '/femto/depth/camera_info',
             self.camera_info_callback,
-            sensor_qos
+            sensor_qos,
+            callback_group=self.cb_group
         )
 
+        # depth_hole_fill_node가 노이즈로 인한 0(무효) 픽셀을 median filter로
+        # 메워 재발행한 토픽을 사용 (해상도는 image_rect_raw와 동일)
         self.tool_depth_sub = self.create_subscription(
             Image,
             '/hand/camera/depth/image_rect_raw',
             self.tool_depth_callback,
-            sensor_qos
+            sensor_qos,
+            callback_group=self.cb_group
         )
         self.tool_camera_info_sub = self.create_subscription(
             CameraInfo,
             '/hand/camera/depth/camera_info',
             self.tool_camera_info_callback,
-            sensor_qos
+            sensor_qos,
+            callback_group=self.cb_group
         )
 
         # service server
         self.srv = self.create_service(
             CreateObjectMarker,
             'create_object_marker',
-            self.handle_create_object_marker
+            self.handle_create_object_marker,
+            callback_group=self.cb_group
         )
         self.clear_srv = self.create_service(
             Trigger,
             'clear_object_markers',
-            self.handle_clear_object_markers
+            self.handle_clear_object_markers,
+            callback_group=self.cb_group
         )
         self.tool_srv = self.create_service(
             CreateObjectMarker,
             'create_tool_marker',
-            self.handle_create_tool_marker
+            self.handle_create_tool_marker,
+            callback_group=self.cb_group
         )
         self.clear_tool_srv = self.create_service(
             Trigger,
             'clear_tool_markers',
-            self.handle_clear_tool_markers
+            self.handle_clear_tool_markers,
+            callback_group=self.cb_group
         )
 
         # tf listener for map transform
@@ -136,6 +165,16 @@ class ObjectMarkerServer(Node):
             f'encoding={msg.encoding}, step={msg.step}, frame_id={msg.header.frame_id}'
         )
 
+        if not self._is_valid_femto_depth(msg):
+            self.log_once(
+                'depth_unexpected_resolution',
+                f'Unexpected femto depth resolution: {msg.width}x{msg.height} '
+                f'(expected {self.FEMTO_DEPTH_EXPECTED_WIDTH}x{self.FEMTO_DEPTH_EXPECTED_HEIGHT}). '
+                f'Frames with this resolution will be skipped until a correctly '
+                f'aligned frame arrives.',
+                level='warn'
+            )
+
     def color_callback(self, msg):
         self.latest_color_msg = msg
         self.log_once(
@@ -145,17 +184,50 @@ class ObjectMarkerServer(Node):
         )
 
     def camera_info_callback(self, msg):
-        self.latest_camera_info = msg
-        fx = msg.k[0]
-        fy = msg.k[4]
-        cx = msg.k[2]
-        cy = msg.k[5]
+        # Orbbec 드라이버가 native/aligned 해상도의 camera_info 를 번갈아
+        # 보낼 수 있다. aligned depth(1280x720)와 짝이 맞지 않는 intrinsics 는
+        # 채택하지 않고, 이전에 받은 유효 camera_info 를 유지한다.
+        if not self._is_valid_femto_camera_info(msg):
+            suffix = (
+                'keeping previous valid intrinsics'
+                if self.latest_camera_info is not None
+                else 'waiting for matching camera_info'
+            )
+            self.get_logger().warn(
+                f'Ignoring femto camera_info with unexpected resolution '
+                f'{msg.width}x{msg.height} '
+                f'(expected {self.FEMTO_DEPTH_EXPECTED_WIDTH}x'
+                f'{self.FEMTO_DEPTH_EXPECTED_HEIGHT}); {suffix}',
+                throttle_duration_sec=2.0,
+            )
+            return
 
-        self.log_once(
-            'camera_info_received',
-            f'First camera_info received: fx={fx:.3f}, fy={fy:.3f}, '
-            f'cx={cx:.3f}, cy={cy:.3f}, frame_id={msg.header.frame_id}'
-        )
+        prev = self.latest_camera_info
+        self.latest_camera_info = msg
+        fx, fy = msg.k[0], msg.k[4]
+        cx, cy = msg.k[2], msg.k[5]
+
+        if prev is None:
+            self.get_logger().info(
+                f'Accepted femto camera_info: {msg.width}x{msg.height}, '
+                f'fx={fx:.3f}, fy={fy:.3f}, cx={cx:.3f}, cy={cy:.3f}, '
+                f'frame_id={msg.header.frame_id}'
+            )
+        elif (
+            abs(prev.k[0] - fx) > 1e-3 or
+            abs(prev.k[4] - fy) > 1e-3 or
+            abs(prev.k[2] - cx) > 1e-3 or
+            abs(prev.k[5] - cy) > 1e-3
+        ):
+            self.get_logger().warn(
+                f'femto camera_info intrinsics changed at '
+                f'{msg.width}x{msg.height}: '
+                f'fx {prev.k[0]:.3f}->{fx:.3f}, '
+                f'fy {prev.k[4]:.3f}->{fy:.3f}, '
+                f'cx {prev.k[2]:.3f}->{cx:.3f}, '
+                f'cy {prev.k[5]:.3f}->{cy:.3f}',
+                throttle_duration_sec=2.0,
+            )
 
     def tool_depth_callback(self, msg):
         self.latest_tool_depth_msg = msg
@@ -166,16 +238,39 @@ class ObjectMarkerServer(Node):
         )
 
     def tool_camera_info_callback(self, msg):
+        # tool depth 가 이미 있으면 해상도가 일치하는 camera_info 만 채택한다.
+        # 아직 depth 가 없으면 첫 camera_info 를 받아 두고, 이후 depth 와
+        # 불일치하면 _project_to_map 에서 거부한다.
+        tool_depth = self.latest_tool_depth_msg
+        if tool_depth is not None and (
+            msg.width != tool_depth.width or msg.height != tool_depth.height
+        ):
+            self.get_logger().warn(
+                f'Ignoring tool camera_info {msg.width}x{msg.height} '
+                f'(tool depth is {tool_depth.width}x{tool_depth.height})',
+                throttle_duration_sec=2.0,
+            )
+            return
+
+        prev = self.latest_tool_camera_info
+        if prev is not None and (msg.width != prev.width or msg.height != prev.height):
+            self.get_logger().warn(
+                f'Ignoring tool camera_info resolution change '
+                f'{prev.width}x{prev.height} -> {msg.width}x{msg.height}; '
+                f'keeping previous valid intrinsics',
+                throttle_duration_sec=2.0,
+            )
+            return
+
         self.latest_tool_camera_info = msg
-        fx = msg.k[0]
-        fy = msg.k[4]
-        cx = msg.k[2]
-        cy = msg.k[5]
-        self.log_once(
-            'tool_camera_info_received',
-            f'First tool camera_info received: fx={fx:.3f}, fy={fy:.3f}, '
-            f'cx={cx:.3f}, cy={cy:.3f}, frame_id={msg.header.frame_id}'
-        )
+        fx, fy = msg.k[0], msg.k[4]
+        cx, cy = msg.k[2], msg.k[5]
+        if prev is None:
+            self.get_logger().info(
+                f'Accepted tool camera_info: {msg.width}x{msg.height}, '
+                f'fx={fx:.3f}, fy={fy:.3f}, cx={cx:.3f}, cy={cy:.3f}, '
+                f'frame_id={msg.header.frame_id}'
+            )
 
     # ──────────────────────────────────────────────
     # Service handler (exception wrapper)
@@ -203,9 +298,49 @@ class ObjectMarkerServer(Node):
         if object_label == '':
             object_label = 'object'
         object_name = f'/object/{object_label}'
+
+        depth_msg, timed_out = self._wait_for_valid_femto_depth()
+        if depth_msg is None:
+            if timed_out:
+                message = (
+                    f'depth_resolution_timeout: no femto depth frame at the expected '
+                    f'{self.FEMTO_DEPTH_EXPECTED_WIDTH}x{self.FEMTO_DEPTH_EXPECTED_HEIGHT} '
+                    f'resolution within {self.FEMTO_DEPTH_WAIT_TIMEOUT_SEC:.1f}s'
+                )
+            else:
+                message = 'no_depth: no femto depth frame received yet'
+            self.get_logger().error(message)
+            response.success = False
+            response.message = message
+            response.x_array = []
+            response.y_array = []
+            response.z_array = []
+            response.depth_raw_array = []
+            response.r_array = []
+            response.g_array = []
+            response.b_array = []
+            return response
+
+        if not self._is_valid_femto_camera_info(self.latest_camera_info):
+            message = (
+                f'no_valid_camera_info: waiting for /femto/depth/camera_info at '
+                f'{self.FEMTO_DEPTH_EXPECTED_WIDTH}x{self.FEMTO_DEPTH_EXPECTED_HEIGHT}'
+            )
+            self.get_logger().error(message)
+            response.success = False
+            response.message = message
+            response.x_array = []
+            response.y_array = []
+            response.z_array = []
+            response.depth_raw_array = []
+            response.r_array = []
+            response.g_array = []
+            response.b_array = []
+            return response
+
         return self._process_marker_request(
             request, response, object_name,
-            self.latest_depth_msg, self.latest_camera_info
+            depth_msg, self.latest_camera_info
         )
 
     def _process_marker_request(self, request, response, object_name, depth_msg, camera_info):
@@ -354,6 +489,48 @@ class ObjectMarkerServer(Node):
     # Depth helpers
     # ──────────────────────────────────────────────
 
+    def _is_valid_femto_depth(self, msg):
+        """Check that a femto depth frame is aligned to the expected resolution."""
+        return (
+            msg is not None and
+            msg.width == self.FEMTO_DEPTH_EXPECTED_WIDTH and
+            msg.height == self.FEMTO_DEPTH_EXPECTED_HEIGHT
+        )
+
+    def _is_valid_femto_camera_info(self, msg):
+        """Check that femto camera_info matches the aligned depth resolution."""
+        return (
+            msg is not None and
+            msg.width == self.FEMTO_DEPTH_EXPECTED_WIDTH and
+            msg.height == self.FEMTO_DEPTH_EXPECTED_HEIGHT
+        )
+
+    def _wait_for_valid_femto_depth(self):
+        """Block (polling) until a correctly-sized femto depth frame is available.
+
+        Under CPU load the femto driver can occasionally publish frames at its
+        native (unaligned) resolution instead of the color-aligned resolution.
+        Those frames must not be used for pixel-to-3D projection, so this waits
+        for the next correctly-sized frame, bounded by FEMTO_DEPTH_WAIT_TIMEOUT_SEC.
+
+        Returns:
+            (depth_msg, timed_out): depth_msg is None if no valid frame became
+            available in time; timed_out is True only if we actually waited
+            for the timeout (as opposed to no depth having arrived at all).
+        """
+        msg = self.latest_depth_msg
+        if self._is_valid_femto_depth(msg):
+            return msg, False
+
+        start = time.monotonic()
+        while (time.monotonic() - start) < self.FEMTO_DEPTH_WAIT_TIMEOUT_SEC:
+            time.sleep(self.FEMTO_DEPTH_WAIT_POLL_SEC)
+            msg = self.latest_depth_msg
+            if self._is_valid_femto_depth(msg):
+                return msg, False
+
+        return None, True
+
     def _read_depth_raw(self, u, v, depth_msg=None):
         """Return raw depth (metres) at pixel (u,v) with NO neighbour search. None if unavailable."""
         dm = depth_msg if depth_msg is not None else self.latest_depth_msg
@@ -394,8 +571,24 @@ class ObjectMarkerServer(Node):
             self.log_once('no_camera_info', 'No camera_info received yet.', level='warn')
             return None
 
+        # depth 이미지와 camera_info 해상도가 다르면 intrinsics(cx,cy,fx,fy)가
+        # 픽셀 좌표계와 어긋나 마커/포인트가 shifting 된다.
+        if dm is not None and (cam.width != dm.width or cam.height != dm.height):
+            self.get_logger().warn(
+                f'camera_info ({cam.width}x{cam.height})와 depth '
+                f'({dm.width}x{dm.height}) 해상도 불일치 - projection skip',
+                throttle_duration_sec=2.0,
+            )
+            return None
+
         fx, fy = cam.k[0], cam.k[4]
         cx, cy = cam.k[2], cam.k[5]
+        if fx <= 1e-9 or fy <= 1e-9:
+            self.get_logger().error(
+                f'Invalid camera intrinsics fx={fx}, fy={fy}',
+                throttle_duration_sec=2.0,
+            )
+            return None
 
         px = (u - cx) * z / fx
         py = (v - cy) * z / fy
@@ -808,8 +1001,15 @@ def main(args=None):
     rclpy.init(args=args)
     node = ObjectMarkerServer()
 
+    # A multi-threaded executor is required here: service handlers may block
+    # for up to FEMTO_DEPTH_WAIT_TIMEOUT_SEC while waiting for a correctly
+    # sized depth frame, and the depth subscription callback must still be
+    # able to run concurrently to deliver that frame.
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
+
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:
