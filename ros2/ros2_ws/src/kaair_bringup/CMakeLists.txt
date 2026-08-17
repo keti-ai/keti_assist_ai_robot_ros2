@@ -23,11 +23,13 @@ install(DIRECTORY
 
 # ---- C++ 노드: depth_resize_node ----
 # (기존 depth_resizer_node.py 를 대체)
+# raw/compressedDepth 를 image_transport 플러그인 없이 직접 구독/발행하므로
+# image_transport 의존성은 필요 없다 (compressedDepth 의 ConfigHeader 레이아웃은
+# 소스 내에 로컬로 복제해서 사용).
 add_executable(depth_resizer src/depth_resize_node.cpp)
 ament_target_dependencies(depth_resizer
   rclcpp
   sensor_msgs
-  image_transport
 )
 
 # ---- C++ 노드: depth_hole_fill_node ----

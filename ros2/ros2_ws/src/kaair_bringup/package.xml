@@ -28,8 +28,7 @@
   <!-- depth_pointcloud_publisher: depth 이미지를 PointCloud2로 변환/발행 -->
   <exec_depend>sensor_msgs_py</exec_depend>
 
-  <!-- image_transport 런타임 플러그인: depth_resizer/depth_hole_filler 노드가 사용 -->
-  <exec_depend>compressed_depth_image_transport</exec_depend>
+  <!-- image_transport 런타임 플러그인: depth_hole_filler 노드가 사용 -->
   <exec_depend>compressed_image_transport</exec_depend>
 
   <exec_depend>control_msgs</exec_depend>
