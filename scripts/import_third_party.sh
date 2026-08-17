@@ -12,9 +12,9 @@ CAMERA_WS="$ROS2_ROOT/camera_ws"
 
 # -----------------------------------------------------------------------------
 # 2. 인자 파싱 (ROS distro 지정)
-#    우선순위: -t 옵션 > ROS_DISTRO 환경변수 > jazzy
+#    우선순위: -t 옵션 > ROS_DISTRO 환경변수 > humble
 # -----------------------------------------------------------------------------
-ROS_DISTRO="${ROS_DISTRO:-jazzy}"
+ROS_DISTRO="${ROS_DISTRO:-humble}"
 SUPPORTED_DISTROS=("jazzy" "humble")
 
 usage() {
