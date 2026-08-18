@@ -8,14 +8,14 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 
 # -----------------------------------------------------------------------------
-# 2. 인자 파싱 (ROS distro 지정, 기본값 jazzy)
+# 2. 인자 파싱 (ROS distro 지정, 기본값 humble)
 # -----------------------------------------------------------------------------
-ROS_DISTRO="jazzy"
+ROS_DISTRO="humble"
 SUPPORTED_DISTROS=("jazzy" "humble")
 
 usage() {
     echo "Usage: $0 [-t ros_distro]"
-    echo "  -t <distro>   빌드할 ROS 2 배포판 (기본값: jazzy)"
+    echo "  -t <distro>   빌드할 ROS 2 배포판 (기본값: humble)"
     echo "                지원: ${SUPPORTED_DISTROS[*]}"
     echo
     echo "Example: $0 -t humble"
