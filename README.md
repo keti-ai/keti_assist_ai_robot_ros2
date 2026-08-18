@@ -3,7 +3,7 @@
 This repository is an updated version of the kcare_robot_ros2_controller ROS 2 package.
 It improves upon the original repository to enable easier and more seamless use of ROS 2 packages such as controllers, descriptions, and MoveIt. This package offers core interfaces for the control of robot vision, pan-tilt mechanisms, lift systems, and manipulators, serving as an integrated solution for physical AI applications. For detailed usage instructions, please refer to the documentation below.
 
-- [Documentation for KETI Assist AI ROBOT](https://bittersweet-singer-2da.notion.site/2fcb18ffad91806cbfd2c2f29d54d1cd?v=2fcb18ffad9180a6b2e6000c43cecc10&source=copy_link)
+- [Documentation for KETI Assist AI ROBOT](https://app.notion.com/p/2c4b18ffad91802b843ae4a179e2775f?p=3aeb18ffad91801fbfe6cb84cfe1e941&pm=s)
 
 
 ## How To Use Quickly
@@ -25,7 +25,7 @@ It improves upon the original repository to enable easier and more seamless use 
   sudo apt update && sudo apt install -y vcstool
   bash scripts/import_third_party.sh -t humble   # or: -t jazzy
   ```
-  You can also import directly from the repository root:
+  (If script import is OK, You don't need to do this part) You can also import directly from the repository root:
   ```bash
   vcs import --recursive . < third_party.humble.repos
   # vcs import --recursive . < third_party.jazzy.repos
@@ -36,7 +36,7 @@ It improves upon the original repository to enable easier and more seamless use 
   ```
 
 - ### Setup Network Buffer
-  #### Resize Network socket buffer size for ROS2 DDS Communication optimization
+  #### Resize Network socket buffer size for ROS2 DDS Communication optimization. Run Only One time in One PC
   ```bash
   cd keti_assist_ai_robot_ros2
   bash scripts/setup_network_buffer.sh
@@ -56,19 +56,18 @@ It improves upon the original repository to enable easier and more seamless use 
   Picks the matching compose file (`docker-compose.cpu.yml`, `docker-compose.nvidia.yml`, `docker-compose.jetpack.yml`) and runs `up -d`.
   Image tag and DDS implementation come from `ROS_DISTRO` / `RMW_IMPLEMENTATION` in the repo-root `.env` file (defaults: `jazzy`, `rmw_cyclonedds_cpp`); pass `-d`/`-r` to override for a single run.
   ```bash
-  bash scripts/run_docker.sh -p cpu       # or: -p nvidia / -p jetpack
+  bash scripts/run_docker.sh -p jetpack       # or: -p cpu / -p nvidia / -p jetpack
 
   # override ROS distro / DDS implementation without editing .env
-  bash scripts/run_docker.sh -p cpu -d humble -r rmw_fastrtps_cpp
+  bash scripts/run_docker.sh -p jetpack -d humble -r rmw_fastrtps_cpp
   ```
   #### Attach to docker shell
   ```bash
   bash scripts/attach_docker.sh
   ```
 
-  #### In the docker shell, import third-party sources then build each workspace
+  #### In the docker shell, build each workspace
   ```bash
-  bash scripts/import_third_party.sh -t humble   # or: -t jazzy
   # Xarm Packages build alias in docker shell
   xarm_build
   # Camera Packages build alias in docker shell
