@@ -9,6 +9,7 @@ from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
+from control_msgs.msg import JointJog
 from sensor_msgs.msg import Joy, JointState
 from std_msgs.msg import Bool, Float64MultiArray, String
 from std_srvs.srv import Trigger
@@ -46,8 +47,16 @@ class MasterController(Node):
         self.declare_parameter('arm_preset_time_sec', 3.0)
         self.declare_parameter('master_joint_states_topic', '/master/joint_states')
         self.declare_parameter('master_command_topic', '/master/joint_commands')
-        self.declare_parameter('arm_fwd_max_step_rad', 0.03)  # forward publish 1회당 joint 최대 변화량
-        self.declare_parameter('arm_fwd_deadband_rad', 0.001)  # 이 이하 오차는 무시
+        # MoveIt Servo(delta_joint_cmds, JointJog) 로 arm 을 추종시키는 파라미터.
+        # kaair_servo_config.yaml 이 command_in_type: speed_units 이므로
+        # velocities 는 그대로 rad/s 단위로 servo_server 에 전달된다.
+        # velocity = clamp(arm_servo_kp * (target - current), ±arm_servo_max_vel_rad_s)
+        self.declare_parameter('servo_joint_cmd_topic', '/servo_server/delta_joint_cmds')
+        self.declare_parameter('servo_start_service', '/servo_server/start_servo')
+        self.declare_parameter('servo_pause_service', '/servo_server/pause_servo')
+        self.declare_parameter('arm_servo_kp', 4.0)             # rad/s per rad of error
+        self.declare_parameter('arm_servo_max_vel_rad_s', 1.0)  # 속도 클램프(안전 상한)
+        self.declare_parameter('arm_servo_deadband_rad', 0.001)  # 이 이하 오차는 0 속도
         # master_joint8 -> tool(open/close) 매핑 (tool range: 0.0 ~ 0.1)
         # master_joint8 range: [-0.47 .. 0.0] (close .. open)
         self.declare_parameter('tool_open_pos', 0.05)
@@ -58,14 +67,18 @@ class MasterController(Node):
         self._head_step    = self.get_parameter('head_step').value
         self._control_hz   = self.get_parameter('control_hz').value
         self._arm_preset_time_sec = float(self.get_parameter('arm_preset_time_sec').value)
-        self._arm_fwd_max_step_rad = float(self.get_parameter('arm_fwd_max_step_rad').value)
-        self._arm_fwd_deadband_rad = float(self.get_parameter('arm_fwd_deadband_rad').value)
+        self._arm_servo_kp = float(self.get_parameter('arm_servo_kp').value)
+        self._arm_servo_max_vel_rad_s = float(self.get_parameter('arm_servo_max_vel_rad_s').value)
+        self._arm_servo_deadband_rad = float(self.get_parameter('arm_servo_deadband_rad').value)
         self._tool_open_pos = float(self.get_parameter('tool_open_pos').value)
         self._tool_close_pos = float(self.get_parameter('tool_close_pos').value)
         self._tool_toggle_threshold = float(self.get_parameter('tool_toggle_threshold').value)
         joint_states_topic = self.get_parameter('joint_states_topic').value
         master_joint_states_topic = self.get_parameter('master_joint_states_topic').value
         master_command_topic = self.get_parameter('master_command_topic').value
+        servo_joint_cmd_topic = self.get_parameter('servo_joint_cmd_topic').value
+        servo_start_service = self.get_parameter('servo_start_service').value
+        servo_pause_service = self.get_parameter('servo_pause_service').value
 
         # ── 상태 ─────────────────────────────────────────────────────────────
         self.prev_buttons  = []
@@ -90,8 +103,7 @@ class MasterController(Node):
         # URDF 파싱 완료 플래그 (모든 joint limit 수신 후 콜백 무시)
         self._limits_loaded = set()  # 파싱된 joint 이름 집합
         self._current_master_joint8 = None
-        self._last_arm_fwd_cmd = None  # rate-limit용 이전 명령(7축)
-        self._current_arm_pos7 = None  # 실제 arm 현재값(joint1~7)
+        self._current_arm_pos7 = None  # 실제 arm 현재값(joint1~7), servo P제어 오차 계산에 사용
 
         self._cbg = ReentrantCallbackGroup()
 
@@ -135,13 +147,19 @@ class MasterController(Node):
         self._arm_traj_pub = self.create_publisher(
             JointTrajectory, '/arm/xarm7_traj_controller/joint_trajectory', 10,
         )
-        self._arm_fwd_pub = self.create_publisher(
-            Float64MultiArray, '/arm/xarm7_forward_controller/commands', 10,
+        # MoveIt Servo 로 arm 을 추종시키는 JointJog 퍼블리셔.
+        # servo_server 가 이 명령을 /arm/xarm7_traj_controller/joint_trajectory 로
+        # 변환해 직접 publish하므로, arm 은 더 이상 xarm7_forward_controller 로
+        # 전환할 필요가 없다 (controller_mode_switcher 참고).
+        self._servo_joint_pub = self.create_publisher(
+            JointJog, servo_joint_cmd_topic, 10,
         )
         self._master_cmd_pub = self.create_publisher(
             JointState, master_command_topic, 10,
         )
         self._arm_init_set_client = self.create_client(Trigger, '/arm/init_set')
+        self._servo_start_client = self.create_client(Trigger, servo_start_service)
+        self._servo_pause_client = self.create_client(Trigger, servo_pause_service)
 
         # ── 제어 타이머 ───────────────────────────────────────────────────────
         self.create_timer(
@@ -229,7 +247,7 @@ class MasterController(Node):
                 jn = f'master_joint_{i}'
                 if jn not in names:
                     self.get_logger().warn(
-                        f'{jn} not found in /master/joint_states; skip arm forward publish',
+                        f'{jn} not found in /master/joint_states; skip arm servo publish',
                         throttle_duration_sec=1.0,
                     )
                     master_pose7 = []
@@ -241,10 +259,7 @@ class MasterController(Node):
                 master_pose7.append(float(msg.position[idx]))
 
             if master_pose7:
-                cmd7 = self._rate_limit_arm_forward(master_pose7)
-                arm_cmd = Float64MultiArray()
-                arm_cmd.data = cmd7
-                self._arm_fwd_pub.publish(arm_cmd)
+                self._publish_arm_servo_jog(master_pose7)
 
         if 'master_joint_8' in msg.name:
             idx = msg.name.index('master_joint_8')
@@ -264,28 +279,41 @@ class MasterController(Node):
         cmd.data = [tool_pos]
         self._tool_fwd_pub.publish(cmd)
 
-    def _rate_limit_arm_forward(self, target7: list[float]) -> list[float]:
-        """forward(position) 명령을 주기당 최대 변화량으로 제한한다."""
-        if self._last_arm_fwd_cmd is None:
-            self._last_arm_fwd_cmd = list(target7)
-            return list(target7)
+    def _publish_arm_servo_jog(self, target7: list[float]) -> None:
+        """마스터 절대 조인트 값(target7)을 MoveIt Servo 로 그대로 추종시킨다.
 
-        out = []
-        max_step = max(self._arm_fwd_max_step_rad, 1e-6)
-        deadband = max(self._arm_fwd_deadband_rad, 0.0)
-        for cur, tgt in zip(self._last_arm_fwd_cmd, target7):
+        servo_server(kaair_servo_config.yaml: command_in_type=speed_units)는
+        JointJog.velocities 를 rad/s 로 그대로 받아 xarm7_traj_controller 에
+        직접 publish 한다. (목표 - 현재) 오차에 비례한 속도를 보내는 단순
+        P 제어로, 오차가 크더라도 arm_servo_max_vel_rad_s 로 클램프되어
+        급격한 움직임을 방지한다(과거 rate-limit 방식의 속도 버전 대체).
+        """
+        if self._current_arm_pos7 is None:
+            self.get_logger().warn(
+                '현재 arm 조인트 값을 아직 몰라 servo jog 를 보낼 수 없음 (/joint_states 대기 중)',
+                throttle_duration_sec=1.0,
+            )
+            return
+
+        max_vel = max(self._arm_servo_max_vel_rad_s, 1e-6)
+        deadband = max(self._arm_servo_deadband_rad, 0.0)
+
+        velocities = []
+        for cur, tgt in zip(self._current_arm_pos7, target7):
             err = tgt - cur
             if abs(err) <= deadband:
-                out.append(cur)
+                velocities.append(0.0)
                 continue
-            if err > max_step:
-                out.append(cur + max_step)
-            elif err < -max_step:
-                out.append(cur - max_step)
-            else:
-                out.append(tgt)
-        self._last_arm_fwd_cmd = list(out)
-        return out
+            vel = self._arm_servo_kp * err
+            vel = max(-max_vel, min(max_vel, vel))
+            velocities.append(vel)
+
+        jog = JointJog()
+        jog.header.stamp = self.get_clock().now().to_msg()
+        jog.joint_names = list(_ARM_JOINT_NAMES)
+        jog.velocities = velocities
+        jog.duration = 0.0
+        self._servo_joint_pub.publish(jog)
 
     # ── 제어 타이머 콜백 ─────────────────────────────────────────────────────
 
@@ -384,6 +412,38 @@ class MasterController(Node):
         except Exception as e:
             self.get_logger().error(f'/arm/init_set 호출 오류: {e}')
 
+    def _call_start_servo(self):
+        """teleop 진입 시 servo_server 를 SERVO 모드로 전환한다."""
+        if not self._servo_start_client.wait_for_service(timeout_sec=0.5):
+            self.get_logger().warn(
+                'servo_server/start_servo 서비스가 아직 없습니다 (servo_node 기동 여부 확인).',
+                throttle_duration_sec=2.0,
+            )
+            return
+        fut = self._servo_start_client.call_async(Trigger.Request())
+        fut.add_done_callback(self._on_servo_trigger_done)
+
+    def _call_pause_servo(self):
+        """teleop 종료 시 servo_server 를 일시정지(PLANNING 모드 복귀)한다."""
+        if not self._servo_pause_client.wait_for_service(timeout_sec=0.5):
+            self.get_logger().warn(
+                'servo_server/pause_servo 서비스가 아직 없습니다 (servo_node 기동 여부 확인).',
+                throttle_duration_sec=2.0,
+            )
+            return
+        fut = self._servo_pause_client.call_async(Trigger.Request())
+        fut.add_done_callback(self._on_servo_trigger_done)
+
+    def _on_servo_trigger_done(self, fut):
+        try:
+            res = fut.result()
+            if res.success:
+                self.get_logger().info(f'Servo trigger: {res.message}')
+            else:
+                self.get_logger().warn(f'Servo trigger 실패: {res.message}')
+        except Exception as e:
+            self.get_logger().error(f'Servo trigger 호출 오류: {e}')
+
     def _publish_arm_preset_traj(self, pose: list[float], label: str):
         if self._current_mode != 'normal':
             self.get_logger().warn(
@@ -468,15 +528,14 @@ class MasterController(Node):
         if self._axis3_forward_state is requested_forward:
             return
         self._axis3_forward_state = requested_forward
-        # forward 재진입 시 이전 세션 명령 잔상(front 등)으로 튀지 않게
-        # 실제 arm 현재값으로 rate-limit 기준을 재시드한다.
+        # arm 은 항상 xarm7_traj_controller 를 유지하므로(재시드 불필요),
+        # servo_server 의 start/pause 만 토글한다. P 제어 특성상 진입 시
+        # 오차가 크면 arm_servo_max_vel_rad_s 로 자연히 속도가 제한된다.
         if requested_forward:
-            if self._current_arm_pos7 is not None:
-                self._last_arm_fwd_cmd = list(self._current_arm_pos7)
-            else:
-                self._last_arm_fwd_cmd = None
+            self._call_start_servo()
         else:
-            self._last_arm_fwd_cmd = None
+            self._call_pause_servo()
+        # tool(gripper) 은 여전히 forward/normal 컨트롤러 전환이 필요하다.
         self._call_switch_arm_mode(data=requested_forward)
 
     def on_button_pressed(self, index):

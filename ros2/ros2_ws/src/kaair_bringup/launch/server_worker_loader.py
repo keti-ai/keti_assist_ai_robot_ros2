@@ -117,12 +117,9 @@ def launch_setup(context, *args, **kwargs):
                 name="head_move_server",
                 output="screen",
             ),
-            Node(
-                package="kaair_bringup",
-                executable="controller_mode_switcher",
-                name="controller_mode_switcher",
-                output="screen",
-            )
+            # controller_mode_switcher 는 kaair_controller/launch/control_manager.py
+            # 모듈이 body 컨트롤러 ready 시점에 spawn한다(중복 노드 이름 방지를
+            # 위해 여기서는 만들지 않는다).
         ]
     )
 

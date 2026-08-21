@@ -1,47 +1,20 @@
 """
-kaair_moveit_servo.launch.py
+kaair_moveit_bringup.launch.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-kaair_moveit.launch.py 의 2-CM 구조에 MoveIt Servo 를 추가한 완전한 환경.
+kaair_moveit_config/launch/kaair_moveit_servo.launch.py 와 동일한 구성에
+서버 워커(팔/리프트/헤드 액션 서버, xarm_bridge 등)와 비전(헤드/핸드 카메라)을
+추가한 완전한 bringup.
 
   ┌─────────────────────────────────────────────────────────────────────┐
-  │  [kaair_moveit.launch.py 동일 구성]                                  │
+  │  [kaair_moveit_servo.launch.py 와 동일 구성]                        │
   │  RSP · joint_state_merger · static_TF · RViz                       │
-  │  /arm/controller_manager  (xarm7_traj_controller ACTIVE)           │
-  │  /body/controller_manager (lift/head/tool_controller ACTIVE)       │
-  │  move_group (tool_spawner 종료 후 기동)                             │
+  │  control_manager 모듈: /arm, /body controller_manager + 스포너들    │
+  │  move_group + servo_module (moveit_servo)                          │
   ├─────────────────────────────────────────────────────────────────────┤
   │  [추가 구성]                                                         │
-  │  servo_server  (standalone servo_node_main)                         │
-  │    moveit_servo::servo_node_main                                    │
-  │      입력:  /servo_server/delta_twist_cmds  (TwistStamped)         │
-  │             /servo_server/delta_joint_cmds  (JointJog)             │
-  │      출력:  /arm/xarm7_traj_controller/joint_trajectory            │
-  │    서비스:  /servo_server/start_servo   (Trigger)                  │
-  │             /servo_server/pause_servo   (Trigger)                  │
-  │             /servo_server/unpause_servo (Trigger)                  │
-  │             /servo_server/stop_servo    (Trigger)                  │
-  ├─────────────────────────────────────────────────────────────────────┤
-  │  moveit_servo_mode_switcher                                         │
-  │    ~/switch_servo_mode_cmd (Bool)  /  ~/switch_servo_mode (SetBool)│
-  │    true  → start_servo   (SERVO 모드)                              │
-  │    false → pause_servo   (PLANNING 모드, 기본값)                    │
-  │    ~/mode (String latched): "planning" | "servo"                   │
+  │  server_worker_loader.py : xarm_bridge, arm/lift/head 액션서버 등   │
+  │  vision_runner.launch.py : 헤드(Femto)/핸드(RealSense) 카메라       │
   └─────────────────────────────────────────────────────────────────────┘
-
-모드 전환 개념
-  PLANNING 모드 (기본):
-    move_group 이 FollowJointTrajectory action 으로 arm 을 제어.
-    servo_server 는 paused 상태 (명령을 받아도 출력하지 않음).
-
-  SERVO 모드:
-    servo_server 가 /arm/xarm7_traj_controller/joint_trajectory 에 직접 publish.
-    move_group 도 계속 실행되지만 servo 명령이 traj controller 를 선점.
-    incoming_command_timeout 이후 자동 halting → PLANNING 재개 가능.
-
-robot_variant 인자:
-  (제거됨) spec YAML 의 mobile_bridge.type 으로 URDF/SRDF 자동 선택
-    clobot/clober → kaair_clober.urdf.xacro + kaair_clober.srdf
-    slamtec         → kaair.urdf.xacro + kaair.srdf
 
 Launch 인자
   use_fake_hardware  true | false  (default: false)
@@ -51,7 +24,6 @@ Launch 인자
 
 import os
 import sys
-import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
@@ -60,14 +32,12 @@ from launch.actions import (
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.event_handlers import OnProcessExit, OnProcessStart
-from launch.substitutions import Command, LaunchConfiguration
+from launch.substitutions import LaunchConfiguration
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
-from launch_ros.parameter_descriptions import ParameterValue
 from moveit_configs_utils import MoveItConfigsBuilder
 
-_bringup_launch_dir = os.path.join(
-    get_package_share_directory('kaair_bringup'), 'launch')
+_bringup_launch_dir = os.path.dirname(os.path.abspath(__file__))
 if _bringup_launch_dir not in sys.path:
     sys.path.insert(0, _bringup_launch_dir)
 from robot_spec_utils import (  # noqa: E402
@@ -76,11 +46,17 @@ from robot_spec_utils import (  # noqa: E402
     resolve_moveit_urdf_paths,
 )
 
+_controller_launch_dir = os.path.join(
+    get_package_share_directory('kaair_controller'), 'launch')
+if _controller_launch_dir not in sys.path:
+    sys.path.insert(0, _controller_launch_dir)
+from control_manager import build_control_manager  # noqa: E402
 
-def _load_yaml(package_name: str, relative_path: str) -> dict:
-    pkg = get_package_share_directory(package_name)
-    with open(os.path.join(pkg, relative_path), 'r') as f:
-        return yaml.safe_load(f)
+_moveit_launch_dir = os.path.join(
+    get_package_share_directory('kaair_moveit_config'), 'launch')
+if _moveit_launch_dir not in sys.path:
+    sys.path.insert(0, _moveit_launch_dir)
+from servo_module import build_moveit_servo  # noqa: E402
 
 
 def launch_setup(context, *args, **kwargs):
@@ -102,34 +78,6 @@ def launch_setup(context, *args, **kwargs):
     print(
         f'[kaair_moveit_bringup] mobile_bridge.type={get_mobile_bridge_type(spec_data)!r} '
         f'→ {os.path.basename(kaair_xacro)} ← {spec_path}'
-    )
-
-    # ── Controller YAML ────────────────────────────────────────────────────
-    arm_ctrl_yaml  = os.path.join(ctrl_pkg, 'config', 'arm_controllers.yaml')
-    body_ctrl_yaml = os.path.join(ctrl_pkg, 'config', 'body_controllers.yaml')
-
-    # ── xacro 경로 (mobile_bridge.type 로 선택) ───────────────────────────
-    arm_hw_xacro  = os.path.join(moveit_pkg, 'config', 'arm_hw.urdf.xacro')
-    body_hw_xacro = os.path.join(moveit_pkg, 'config', 'body_hw.urdf.xacro')
-
-    # ── robot_description 생성 헬퍼 ────────────────────────────────────────
-    def make_description(xacro_path, extra=''):
-        cmd = (
-            f'xacro {xacro_path}'
-            f' use_fake_hardware:={use_fake_str}'
-            f' hw_spec_file:={hw_spec_file}'
-        )
-        if extra:
-            cmd += ' ' + extra
-        return {'robot_description': ParameterValue(Command(cmd), value_type=str)}
-
-    arm_description  = make_description(
-        arm_hw_xacro,
-        f'initial_positions_file:={initial_positions_file}',
-    )
-    body_description = make_description(
-        body_hw_xacro,
-        f'initial_positions_file:={initial_positions_file}',
     )
 
     # ── MoveIt 설정 빌드 ───────────────────────────────────────────────────
@@ -156,12 +104,19 @@ def launch_setup(context, *args, **kwargs):
         .to_moveit_configs()
     )
 
-    # ── MoveIt Servo 설정 ─────────────────────────────────────────────────
-    servo_yaml = _load_yaml('kaair_moveit_config', 'config/kaair_servo_config.yaml')
-    servo_params = {'moveit_servo': servo_yaml}
+    # ── ros2_control/MoveIt >= Jazzy 파라미터 스키마 보정 (kaair_moveit.launch.py 참고) ──
+    if os.environ.get('ROS_DISTRO') == 'jazzy':
+        _pilz_cfg = moveit_config.planning_pipelines.get('pilz_industrial_motion_planner')
+        if _pilz_cfg and 'planning_plugin' in _pilz_cfg:
+            _pilz_cfg['planning_plugins'] = [_pilz_cfg.pop('planning_plugin')]
+            _pilz_cfg['request_adapters'] = [
+                'default_planning_request_adapters/ValidateWorkspaceBounds',
+                'default_planning_request_adapters/CheckStartStateBounds',
+                'default_planning_request_adapters/CheckStartStateCollision',
+            ]
 
     # ════════════════════════════════════════════════════════════════════════
-    # 노드 정의 (kaair_moveit.launch.py 와 동일한 기반 구성)
+    # 노드 정의
     # ════════════════════════════════════════════════════════════════════════
 
     # [A] move_group
@@ -180,20 +135,13 @@ def launch_setup(context, *args, **kwargs):
         parameters=[moveit_config.robot_description],
     )
 
-    # [C] joint_state_publisher (merger)
-    with open(initial_positions_file, 'r') as _f:
-        _initial_pos = yaml.safe_load(_f).get('initial_positions', {})
-
-    merger_node = Node(
-        package='joint_state_publisher',
-        executable='joint_state_publisher',
-        name='joint_state_merger',
-        parameters=[{
-            'source_list': ['/arm/joint_states', '/body/joint_states'],
-            'rate': 50,
-            'initial_positions': _initial_pos,
-        }],
-        remappings=[('robot_description', '/robot_description')],
+    # [C] arm/body Controller Manager (모듈화)
+    cm = build_control_manager(
+        use_fake_str=use_fake_str,
+        hw_spec_file=hw_spec_file,
+        initial_positions_file=initial_positions_file,
+        ctrl_pkg=ctrl_pkg,
+        moveit_pkg=moveit_pkg,
     )
 
     # [D] Static TF
@@ -219,158 +167,27 @@ def launch_setup(context, *args, **kwargs):
         condition=IfCondition(use_gui),
     )
 
-    # ── arm Controller Manager ────────────────────────────────────────────
-    arm_cm_node = Node(
-        package='controller_manager',
-        executable='ros2_control_node',
-        namespace='arm',
-        parameters=[arm_description, arm_ctrl_yaml],
-        output='both',
+    # [F] MoveIt Servo (모듈화, move_group 기동 후 시작)
+    servo = build_moveit_servo(
+        moveit_config=moveit_config,
+        move_group_node=move_group_node,
     )
-    arm_jsb_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['joint_state_broadcaster',
-                   '--controller-manager', '/arm/controller_manager'],
-    )
-    arm_ctrl_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['xarm7_traj_controller',
-                   '--controller-manager', '/arm/controller_manager'],
-    )
-
-
-    # ── body Controller Manager ───────────────────────────────────────────
-    body_cm_node = Node(
-        package='controller_manager',
-        executable='ros2_control_node',
-        namespace='body',
-        parameters=[body_description, body_ctrl_yaml],
-        output='both',
-    )
-    body_jsb_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['joint_state_broadcaster',
-                   '--controller-manager', '/body/controller_manager'],
-    )
-    lift_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['lift_controller',
-                   '--controller-manager', '/body/controller_manager'],
-    )
-    head_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['head_controller',
-                   '--controller-manager', '/body/controller_manager'],
-    )
-    tool_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['tool_controller',
-                   '--controller-manager', '/body/controller_manager'],
-    )
-    tool_fwd_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['tool_forward_controller',
-                   '--controller-manager', '/body/controller_manager',
-                   '--inactive'],
-    )
-
-
-    # ════════════════════════════════════════════════════════════════════════
-    # [추가] MoveIt Servo 관련 노드
-    # ════════════════════════════════════════════════════════════════════════
-
-    # [F] servo_node_main (standalone)
-    #   ComposableNodeContainer 대신 독립 프로세스로 실행.
-    #   move_group 기동 후 시작해 planning scene monitor 를 secondary 로 attach.
-    #   is_primary_planning_scene_monitor: false (servo config 에 설정됨).
-    #
-    #   서비스:
-    #     /servo_server/start_servo   → SERVO 모드 시작
-    #     /servo_server/pause_servo   → 일시정지 (PLANNING 모드 복귀)
-    #     /servo_server/unpause_servo → 일시정지에서 재개
-    #     /servo_server/stop_servo    → 완전 중지 (재시작 불가)
-    servo_node = Node(
-        package='moveit_servo',
-        executable='servo_node_main',
-        name='servo_server',
-        output='screen',
-        parameters=[
-            servo_params,
-            moveit_config.robot_description,
-            moveit_config.robot_description_semantic,
-            moveit_config.robot_description_kinematics,
-        ],
-    )
-
-
-    # ════════════════════════════════════════════════════════════════════════
-    # 이벤트 체인
-    # ════════════════════════════════════════════════════════════════════════
-    #
-    # RSP 기동 → merger + static_TF + RViz
-    #
-    # arm:  arm_cm_node → arm_jsb_spawner → arm_ctrl_spawner + xarm7_fwd_spawner
-    # body: body_cm_node → body_jsb_spawner → lift/head/tool + fwd spawners
-    #
-    # tool_spawner 종료 (body HW 전체 준비 완료)
-    #   → move_group + ctrl_mode_switcher 동시 기동
-    #
-    # move_group 기동
-    #   → servo_container + servo_mode_switcher 기동
-    #     (planning scene monitor 구독 가능 시점)
 
     return [
-        # ── 기반 인프라 ────────────────────────────────────────────────────
         rsp_node,
         RegisterEventHandler(OnProcessStart(
             target_action=rsp_node,
-            on_start=[merger_node, static_tf_node, rviz_node],
+            on_start=[cm['merger_node'], static_tf_node, rviz_node],
         )),
 
-        # ── arm CM 이벤트 체인 ─────────────────────────────────────────────
-        arm_cm_node,
-        RegisterEventHandler(OnProcessStart(
-            target_action=arm_cm_node,
-            on_start=[arm_jsb_spawner],
-        )),
-        RegisterEventHandler(OnProcessStart(
-            target_action=arm_jsb_spawner,
-            on_start=[arm_ctrl_spawner],
-        )),
+        *cm['always_on_actions'],
 
-        # ── body CM 이벤트 체인 ────────────────────────────────────────────
-        body_cm_node,
-        RegisterEventHandler(OnProcessStart(
-            target_action=body_cm_node,
-            on_start=[body_jsb_spawner],
-        )),
-        RegisterEventHandler(OnProcessStart(
-            target_action=body_jsb_spawner,
-            on_start=[
-                lift_spawner,
-                head_spawner,
-                tool_spawner, tool_fwd_spawner,
-            ],
-        )),
-
-        # ── tool_spawner 종료 → move_group + controller_mode_switcher ──────
         RegisterEventHandler(OnProcessExit(
-            target_action=tool_spawner,
+            target_action=cm['controllers_ready_action'],
             on_exit=[move_group_node],
         )),
 
-        # ── move_group 기동 → servo_node + servo_mode_switcher ─────────────
-        RegisterEventHandler(OnProcessStart(
-            target_action=move_group_node,
-            on_start=[servo_node],
-        )),
+        *servo['actions'],
 
         # ── 추가 서비스 / 비전 ──────────────────────────────────────────────
         IncludeLaunchDescription(

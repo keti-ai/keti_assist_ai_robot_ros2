@@ -12,9 +12,12 @@ arm / lift / head / tool 4 개 컨트롤러를 전환하는 노드.
 │            tool_controller         (GripperActionController)          │
 ├──────────────────────────────────────────────────────────────────────┤
 │  FORWARD 모드 (토픽 기반 실시간 제어)                                  │
-│    /arm  : xarm7_forward_controller  (ForwardCommandController)       │
-│              → /arm/xarm7_forward_controller/commands                 │
-│                  std_msgs/Float64MultiArray  [j1..j7]                 │
+│    /arm  : xarm7_traj_controller 그대로 유지 (전환 없음).             │
+│              MoveIt Servo(servo_server) 가 이 컨트롤러에 직접         │
+│              publish 하므로 컨트롤러 전환이 필요 없다.                │
+│              teleop 진입/종료는 servo_server 의                      │
+│              ~/start_servo, ~/pause_servo (Trigger) 로 한다           │
+│              (master_controller 가 호출).                             │
 │    /body : lift_forward_controller   (ForwardCommandController)       │
 │              → /body/lift_forward_controller/commands                 │
 │                  std_msgs/Float64MultiArray  [lift_joint]             │
@@ -24,6 +27,9 @@ arm / lift / head / tool 4 개 컨트롤러를 전환하는 노드.
 │            tool_forward_controller   (ForwardCommandController)       │
 │              → /body/tool_forward_controller/commands                 │
 │                  std_msgs/Float64MultiArray  [virtual_gripper_joint]  │
+│                                                                        │
+│  ~/switch_arm_mode_cmd 는 이름은 유지하지만 이제 TOOL 컨트롤러만      │
+│  전환한다(arm 은 항상 xarm7_traj_controller).                        │
 └──────────────────────────────────────────────────────────────────────┘
 
 ▸ 토픽 (권장)
@@ -76,9 +82,8 @@ _LATCHED_QOS = QoSProfile(
 )
 
 # ── 컨트롤러 이름 정의 ────────────────────────────────────────────────────
-_ARM_NORMAL  = ['xarm7_traj_controller']
-_ARM_FWD     = ['xarm7_forward_controller']
-
+# arm 은 MoveIt Servo 가 xarm7_traj_controller 에 직접 publish 하므로
+# 더 이상 전환하지 않는다 (xarm7_forward_controller 는 사용하지 않음).
 _BODY_NORMAL = ['lift_controller', 'head_controller']
 _BODY_FWD    = ['lift_forward_controller', 'head_forward_controller']
 _TOOL_NORMAL = ['tool_controller']
@@ -109,11 +114,9 @@ class ControllerModeSwitcher(Node):
         self._cbg         = ReentrantCallbackGroup()
 
         # ── switch_controller 클라이언트 ─────────────────────────────────
-        self._arm_switch_cli = self.create_client(
-            SwitchController,
-            f'{arm_cm}/switch_controller',
-            callback_group=self._cbg,
-        )
+        # arm CM 은 더 이상 컨트롤러를 전환하지 않지만(MoveIt Servo 가
+        # xarm7_traj_controller 에 직접 publish), arm_cm_ns 파라미터는
+        # 하위 호환을 위해 남겨둔다.
         self._body_switch_cli = self.create_client(
             SwitchController,
             f'{body_cm}/switch_controller',
@@ -253,44 +256,46 @@ class ControllerModeSwitcher(Node):
             self._switch_lock.release()
 
     def _do_arm_switch(self, use_forward: bool) -> tuple[bool, str]:
+        """TOOL(gripper) 컨트롤러만 전환한다.
+
+        arm 은 MoveIt Servo 가 xarm7_traj_controller 에 직접 publish 하므로
+        (항상 traj_controller 유지) 더 이상 전환할 필요가 없다. 이름은
+        하위 호환을 위해 _arm_mode/_do_arm_switch 로 유지하지만 실제로는
+        TOOL 만 전환한다.
+        """
         target_mode = 'forward' if use_forward else 'normal'
 
         with self._lock:
             if self._arm_mode == target_mode:
-                return True, f'Arm already in {target_mode} mode.'
+                return True, f'Arm/tool already in {target_mode} mode.'
 
         if not self._arm_switch_lock.acquire(blocking=False):
-            msg = f'Arm switch already in progress, ignoring [{target_mode}] request.'
+            msg = f'Arm/tool switch already in progress, ignoring [{target_mode}] request.'
             self.get_logger().warning(msg)
             return False, msg
 
         try:
             if use_forward:
-                arm_activate, arm_deactivate = _ARM_FWD, _ARM_NORMAL
                 tool_activate, tool_deactivate = _TOOL_FWD, _TOOL_NORMAL
             else:
-                arm_activate, arm_deactivate = _ARM_NORMAL, _ARM_FWD
                 tool_activate, tool_deactivate = _TOOL_NORMAL, _TOOL_FWD
 
             self.get_logger().info(
-                f'Switching ARM+TOOL to [{target_mode}] mode: '
-                f'arm {arm_deactivate} → {arm_activate} | '
-                f'tool {tool_deactivate} → {tool_activate}'
+                f'Switching TOOL to [{target_mode}] mode: '
+                f'tool {tool_deactivate} → {tool_activate} '
+                f'(arm 은 xarm7_traj_controller 유지 — MoveIt Servo 가 직접 publish)'
             )
 
-            arm_ok, arm_msg = self._call_switch_sync(
-                self._arm_switch_cli, arm_activate, arm_deactivate, 'arm'
-            )
             tool_ok, tool_msg = self._call_switch_sync(
                 self._body_switch_cli, tool_activate, tool_deactivate, 'tool(body)'
             )
 
-            if arm_ok and tool_ok:
+            if tool_ok:
                 with self._lock:
                     self._arm_mode = target_mode
             else:
-                self.get_logger().error(f'Arm/tool switch failed: {arm_msg} | {tool_msg}')
-            return (arm_ok and tool_ok), f'{arm_msg} | {tool_msg}'
+                self.get_logger().error(f'Tool switch failed: {tool_msg}')
+            return tool_ok, tool_msg
         finally:
             self._arm_switch_lock.release()
 

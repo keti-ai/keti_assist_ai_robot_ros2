@@ -37,6 +37,13 @@
   <exec_depend>action_msgs</exec_depend>
 
   <exec_depend>kaair_description</exec_depend>
+  <exec_depend>kaair_controller</exec_depend>
+  <!-- kaair_moveit_config 는 exec_depend 로 선언하지 않는다: 그 패키지가 이미
+       kaair_bringup 에 의존하므로 순환 의존이 되어 colcon 빌드 순서를 정할
+       수 없다. kaair_moveit_bringup.launch.py 등에서 servo_module.py 를
+       sys.path 로 런타임 import 하는 것은 (kaair_moveit_config 가 이미
+       kaair_controller 의 config 를 선언 없이 참조하던 것과 동일하게)
+       빌드 그래프에는 실리지 않는 암묵적 런타임 의존이다. -->
 
 
   <test_depend>ament_lint_auto</test_depend>

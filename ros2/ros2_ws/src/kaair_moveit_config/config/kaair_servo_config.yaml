@@ -31,6 +31,11 @@ publish_joint_velocities: true    # traj controller 가 속도 프로파일을 �
 publish_joint_accelerations: false
 
 publish_period: 0.034             # ~30 Hz
+# moveit_servo(Jazzy, 2.12.x)는 publish_period < max_expected_latency/3 을
+# 강제 검증한다(Humble 은 이 파라미터 자체가 없어 무시됨). 명시하지 않으면
+# Jazzy 기본값(0.1s)이 적용되어 위 publish_period(0.034s)가 기준을 살짝
+# 넘겨 "Got invalid parameters" 로 servo_node 가 죽는다.
+max_expected_latency: 0.15
 low_latency_mode: false
 
 # ── 스무딩 플러그인 (Humble 필수) ────────────────────────────────────────────

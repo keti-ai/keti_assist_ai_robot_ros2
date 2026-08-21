@@ -1,6 +1,18 @@
+"""
+vla_moveit_bringup.launch.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+kaair_moveit.launch.py 와 동일한 기반 구성에 서버 워커(팔/리프트/헤드 액션
+서버, xarm_bridge 등)와 비전(헤드/핸드 카메라)을 추가한 VLA(vision-language
+-action) 전용 bringup. servo_module 은 사용하지 않는다(기존과 동일).
+
+Launch 인자
+  use_fake_hardware  true | false  (default: false)
+  use_gui            true | false  (default: true)
+  spec               kaair_specs_*.yaml  (default: kaair_specs_01.yaml)
+"""
+
 import os
 import sys
-import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import (
@@ -9,10 +21,9 @@ from launch.actions import (
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.event_handlers import OnProcessExit, OnProcessStart
-from launch.substitutions import Command, LaunchConfiguration
+from launch.substitutions import LaunchConfiguration
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
-from launch_ros.parameter_descriptions import ParameterValue
 from moveit_configs_utils import MoveItConfigsBuilder
 
 _bringup_launch_dir = os.path.dirname(os.path.abspath(__file__))
@@ -24,10 +35,11 @@ from robot_spec_utils import (  # noqa: E402
     resolve_moveit_urdf_paths,
 )
 
-def _load_yaml(package_name: str, relative_path: str) -> dict:
-    pkg = get_package_share_directory(package_name)
-    with open(os.path.join(pkg, relative_path), 'r') as f:
-        return yaml.safe_load(f)
+_controller_launch_dir = os.path.join(
+    get_package_share_directory('kaair_controller'), 'launch')
+if _controller_launch_dir not in sys.path:
+    sys.path.insert(0, _controller_launch_dir)
+from control_manager import build_control_manager  # noqa: E402
 
 
 def launch_setup(context, *args, **kwargs):
@@ -50,35 +62,6 @@ def launch_setup(context, *args, **kwargs):
         f'[vla_moveit_bringup] mobile_bridge.type={get_mobile_bridge_type(spec_data)!r} '
         f'→ {os.path.basename(kaair_xacro)} ← {spec_path}'
     )
-
-    # ── Controller YAML ────────────────────────────────────────────────────
-    arm_ctrl_yaml  = os.path.join(ctrl_pkg, 'config', 'arm_controllers.yaml')
-    body_ctrl_yaml = os.path.join(ctrl_pkg, 'config', 'body_controllers.yaml')
-
-    # ── xacro 경로 (robot_variant 로 선택) ────────────────────────────────
-    arm_hw_xacro  = os.path.join(moveit_pkg, 'config', 'arm_hw.urdf.xacro')
-    body_hw_xacro = os.path.join(moveit_pkg, 'config', 'body_hw.urdf.xacro')
-
-    # ── robot_description 생성 헬퍼 ────────────────────────────────────────
-    def make_description(xacro_path, extra=''):
-        cmd = (
-            f'xacro {xacro_path}'
-            f' use_fake_hardware:={use_fake_str}'
-            f' hw_spec_file:={hw_spec_file}'
-        )
-        if extra:
-            cmd += ' ' + extra
-        return {'robot_description': ParameterValue(Command(cmd), value_type=str)}
-
-    arm_description  = make_description(
-        arm_hw_xacro,
-        f'initial_positions_file:={initial_positions_file}',
-    )
-    body_description = make_description(
-        body_hw_xacro,
-        f'initial_positions_file:={initial_positions_file}',
-    )
-
 
     # ── MoveIt 설정 빌드 ───────────────────────────────────────────────────
     moveit_config = (
@@ -104,6 +87,17 @@ def launch_setup(context, *args, **kwargs):
         .to_moveit_configs()
     )
 
+    # ── ros2_control/MoveIt >= Jazzy 파라미터 스키마 보정 (kaair_moveit.launch.py 참고) ──
+    if os.environ.get('ROS_DISTRO') == 'jazzy':
+        _pilz_cfg = moveit_config.planning_pipelines.get('pilz_industrial_motion_planner')
+        if _pilz_cfg and 'planning_plugin' in _pilz_cfg:
+            _pilz_cfg['planning_plugins'] = [_pilz_cfg.pop('planning_plugin')]
+            _pilz_cfg['request_adapters'] = [
+                'default_planning_request_adapters/ValidateWorkspaceBounds',
+                'default_planning_request_adapters/CheckStartStateBounds',
+                'default_planning_request_adapters/CheckStartStateCollision',
+            ]
+
     # ════════════════════════════════════════════════════════════════════════
     # 노드 정의 (kaair_moveit.launch.py 와 동일한 기반 구성)
     # ════════════════════════════════════════════════════════════════════════
@@ -124,20 +118,13 @@ def launch_setup(context, *args, **kwargs):
         parameters=[moveit_config.robot_description],
     )
 
-    # [C] joint_state_publisher (merger)
-    with open(initial_positions_file, 'r') as _f:
-        _initial_pos = yaml.safe_load(_f).get('initial_positions', {})
-
-    merger_node = Node(
-        package='joint_state_publisher',
-        executable='joint_state_publisher',
-        name='joint_state_merger',
-        parameters=[{
-            'source_list': ['/arm/joint_states', '/body/joint_states'],
-            'rate': 50,
-            'initial_positions': _initial_pos,
-        }],
-        remappings=[('robot_description', '/robot_description')],
+    # [C] arm/body Controller Manager (모듈화)
+    cm = build_control_manager(
+        use_fake_str=use_fake_str,
+        hw_spec_file=hw_spec_file,
+        initial_positions_file=initial_positions_file,
+        ctrl_pkg=ctrl_pkg,
+        moveit_pkg=moveit_pkg,
     )
 
     # [D] Static TF
@@ -163,116 +150,20 @@ def launch_setup(context, *args, **kwargs):
         condition=IfCondition(use_gui),
     )
 
-    # ── arm Controller Manager ────────────────────────────────────────────
-    arm_cm_node = Node(
-        package='controller_manager',
-        executable='ros2_control_node',
-        namespace='arm',
-        parameters=[arm_description, arm_ctrl_yaml],
-        output='both',
-    )
-    arm_jsb_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['joint_state_broadcaster',
-                   '--controller-manager', '/arm/controller_manager'],
-    )
-    arm_ctrl_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['xarm7_traj_controller',
-                   '--controller-manager', '/arm/controller_manager'],
-    )
-    xarm7_fwd_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=[
-            'xarm7_forward_controller',
-            '--controller-manager', '/arm/controller_manager',
-            '--inactive',
-        ],
-    )
-
-    # ── body Controller Manager ───────────────────────────────────────────
-    body_cm_node = Node(
-        package='controller_manager',
-        executable='ros2_control_node',
-        namespace='body',
-        parameters=[body_description, body_ctrl_yaml],
-        output='both',
-    )
-    body_jsb_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['joint_state_broadcaster',
-                   '--controller-manager', '/body/controller_manager'],
-    )
-    lift_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['lift_controller',
-                   '--controller-manager', '/body/controller_manager'],
-    )
-    head_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['head_controller',
-                   '--controller-manager', '/body/controller_manager'],
-    )
-    tool_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['tool_controller',
-                   '--controller-manager', '/body/controller_manager'],
-    )
-    tool_fwd_spawner = Node(
-        package='controller_manager',
-        executable='spawner',
-        arguments=['tool_forward_controller',
-                   '--controller-manager', '/body/controller_manager',
-                   '--inactive'],
-    )
-
     return [
         # ── 기반 인프라 ────────────────────────────────────────────────────
         rsp_node,
         RegisterEventHandler(OnProcessStart(
             target_action=rsp_node,
-            on_start=[merger_node, static_tf_node, rviz_node],
+            on_start=[cm['merger_node'], static_tf_node, rviz_node],
         )),
 
-        # ── arm CM 이벤트 체인 ─────────────────────────────────────────────
-        arm_cm_node,
-        RegisterEventHandler(OnProcessStart(
-            target_action=arm_cm_node,
-            on_start=[arm_jsb_spawner],
-        )),
-        RegisterEventHandler(OnProcessStart(
-            target_action=arm_jsb_spawner,
-            on_start=[arm_ctrl_spawner, xarm7_fwd_spawner],
-        )),
+        *cm['always_on_actions'],
 
-        # ── body CM 이벤트 체인 ────────────────────────────────────────────
-        body_cm_node,
-        RegisterEventHandler(OnProcessStart(
-            target_action=body_cm_node,
-            on_start=[body_jsb_spawner],
-        )),
-        RegisterEventHandler(OnProcessStart(
-            target_action=body_jsb_spawner,
-            on_start=[
-                lift_spawner,
-                head_spawner,
-                tool_spawner, tool_fwd_spawner,
-            ],
-        )),
-
-        # ── tool_spawner 종료 → move_group + controller_mode_switcher ──────
         RegisterEventHandler(OnProcessExit(
-            target_action=tool_spawner,
+            target_action=cm['controllers_ready_action'],
             on_exit=[move_group_node],
         )),
-
 
         # ── 추가 서비스 / 비전 ──────────────────────────────────────────────
         IncludeLaunchDescription(
