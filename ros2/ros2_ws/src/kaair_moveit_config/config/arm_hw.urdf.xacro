@@ -47,6 +47,14 @@
     (UFRobotFakeSystemHardware = GenericSystem without initial_value),
     arm.ros2_control.xacro 에서 직접 GenericSystem 블록을 정의하고
     initial_value 를 삽입한다.
+
+    real 모드(xacro:xarm_device)는 xarm7_robot_macro.xacro 를 통해
+    joint1~7 의 실제 kinematic <joint> 를 함께 생성하지만, 이 fake 블록은
+    <ros2_control> 인터페이스만 정의한다. ros2_control >= 4.x (Jazzy~) 의
+    hardware_interface 는 <ros2_control> 이 참조하는 각 joint 가 URDF
+    kinematic 트리에도 존재할 것을 요구하므로("Joint 'X' not found in
+    URDF" 로 초기화 실패), 아래 최소 kinematic stub 체인을 함께 둔다.
+    (Humble/ros2_control 2.x 는 이 검증이 없어 stub 없이도 동작했었다.)
   -->
   <xacro:if value="$(arg use_fake_hardware)">
     <xacro:include
@@ -54,6 +62,57 @@
     <xacro:arm_ros2_control
       name="ArmFakeSystem"
       initial_positions_file="$(arg initial_positions_file)"/>
+
+    <link name="arm_hw_stub_link1"/>
+    <link name="arm_hw_stub_link2"/>
+    <link name="arm_hw_stub_link3"/>
+    <link name="arm_hw_stub_link4"/>
+    <link name="arm_hw_stub_link5"/>
+    <link name="arm_hw_stub_link6"/>
+    <link name="arm_hw_stub_link7"/>
+
+    <joint name="joint1" type="revolute">
+      <parent link="arm_hw_base"/>
+      <child link="arm_hw_stub_link1"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="${-pi*0.99}" upper="${pi*0.99}" effort="50" velocity="3.14"/>
+    </joint>
+    <joint name="joint2" type="revolute">
+      <parent link="arm_hw_stub_link1"/>
+      <child link="arm_hw_stub_link2"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="-2.18" upper="2.18" effort="50" velocity="3.14"/>
+    </joint>
+    <joint name="joint3" type="revolute">
+      <parent link="arm_hw_stub_link2"/>
+      <child link="arm_hw_stub_link3"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="${-pi*0.99}" upper="${pi*0.99}" effort="30" velocity="3.14"/>
+    </joint>
+    <joint name="joint4" type="revolute">
+      <parent link="arm_hw_stub_link3"/>
+      <child link="arm_hw_stub_link4"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="-0.11" upper="${pi*0.99}" effort="30" velocity="3.14"/>
+    </joint>
+    <joint name="joint5" type="revolute">
+      <parent link="arm_hw_stub_link4"/>
+      <child link="arm_hw_stub_link5"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="${-pi*0.99}" upper="${pi*0.99}" effort="20" velocity="3.14"/>
+    </joint>
+    <joint name="joint6" type="revolute">
+      <parent link="arm_hw_stub_link5"/>
+      <child link="arm_hw_stub_link6"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="-1.75" upper="${pi*0.99}" effort="20" velocity="3.14"/>
+    </joint>
+    <joint name="joint7" type="revolute">
+      <parent link="arm_hw_stub_link6"/>
+      <child link="arm_hw_stub_link7"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="${-pi*0.99}" upper="${pi*0.99}" effort="20" velocity="3.14"/>
+    </joint>
   </xacro:if>
 
 </robot>

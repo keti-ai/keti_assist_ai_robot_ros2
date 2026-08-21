@@ -64,4 +64,45 @@
       initial_positions_file="$(arg initial_positions_file)"/>
   </xacro:if>
 
+  <!-- ── kinematic stub (real/fake 공통) ────────────────────────────────
+    lift/head/tool 의 real, fake ros2_control 매크로 모두 <ros2_control>
+    인터페이스만 정의하고 kinematic <joint> 는 정의하지 않는다.
+    ros2_control >= 4.x (Jazzy~) 의 hardware_interface 는 <ros2_control>
+    이 참조하는 각 joint 가 URDF kinematic 트리에도 존재할 것을 요구하므로
+    ("Joint 'X' not found in URDF" 로 초기화 실패), 아래 최소 stub 체인을
+    real/fake 공통으로 둔다. 값은 kaair_description 의 실제 kinematic
+    URDF(lift/head/tool .urdf.xacro)의 <limit> 과 동일하게 맞춘다.
+    (Humble/ros2_control 2.x 는 이 검증이 없어 stub 없이도 동작했었다.)
+  -->
+  <link name="body_hw_stub_lift"/>
+  <link name="body_hw_stub_head1"/>
+  <link name="body_hw_stub_head2"/>
+  <link name="body_hw_stub_tool"/>
+
+  <joint name="lift_joint" type="prismatic">
+    <parent link="body_hw_base"/>
+    <child link="body_hw_stub_lift"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${hw_specs['lift']['min_h']}" upper="${hw_specs['lift']['max_h']}"
+           effort="700" velocity="0.2"/>
+  </joint>
+  <joint name="head_joint1" type="revolute">
+    <parent link="body_hw_base"/>
+    <child link="body_hw_stub_head1"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.58" upper="1.58" effort="30" velocity="3.0"/>
+  </joint>
+  <joint name="head_joint2" type="revolute">
+    <parent link="body_hw_stub_head1"/>
+    <child link="body_hw_stub_head2"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="-1.58" upper="1.58" effort="30" velocity="3.0"/>
+  </joint>
+  <joint name="virtual_gripper_joint" type="prismatic">
+    <parent link="body_hw_base"/>
+    <child link="body_hw_stub_tool"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="0" upper="0.1" effort="50" velocity="0.05"/>
+  </joint>
+
 </robot>

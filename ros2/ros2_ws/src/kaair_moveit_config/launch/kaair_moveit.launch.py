@@ -164,6 +164,30 @@ def launch_setup(context, *args, **kwargs):
         .to_moveit_configs()
     )
 
+    # ── ros2_control/MoveIt >= Jazzy 파라미터 스키마 보정 ─────────────────────
+    # MoveIt 2.12(Jazzy 계열)의 PlanningPipeline 리팩터링(moveit/moveit2#2429)
+    # 으로 파이프라인 설정 스키마가 바뀌었다:
+    #   planning_plugin(문자열) → planning_plugins(리스트)
+    #   request_adapters: 공백구분 문자열 → 리스트, 플러그인 네임스페이스도
+    #     default_planner_request_adapters/* → default_planning_request_adapters/*
+    # 로 변경되었다. config/pilz_industrial_motion_planner_planning.yaml 은
+    # Humble(moveit_ros_planning 2.5.x)이 요구하는 구(舊) 스키마를 그대로
+    # 유지하고, Jazzy 에서만 이 자리에서 새 스키마로 패치한다. 구 스키마를
+    # 그대로 Jazzy 에 주면 'expected [string_array] got [string]' 예외로
+    # move_group 이 죽고, 반대로 새 스키마를 Humble 에 주면 동일하게 타입
+    # 예외로 죽으므로, 설정 파일 자체를 Humble 스키마로 고정해두고 Jazzy
+    # 실행 시점에만 여기서 변환하는 방식으로 두 배포판에서 launch 파일과
+    # yaml 원본을 그대로 공유한다.
+    if os.environ.get('ROS_DISTRO') == 'jazzy':
+        _pilz_cfg = moveit_config.planning_pipelines.get('pilz_industrial_motion_planner')
+        if _pilz_cfg and 'planning_plugin' in _pilz_cfg:
+            _pilz_cfg['planning_plugins'] = [_pilz_cfg.pop('planning_plugin')]
+            _pilz_cfg['request_adapters'] = [
+                'default_planning_request_adapters/ValidateWorkspaceBounds',
+                'default_planning_request_adapters/CheckStartStateBounds',
+                'default_planning_request_adapters/CheckStartStateCollision',
+            ]
+
     # ════════════════════════════════════════════════════════════════════════
     # 노드 정의
     # ════════════════════════════════════════════════════════════════════════
@@ -183,6 +207,47 @@ def launch_setup(context, *args, **kwargs):
         executable='robot_state_publisher',
         output='both',
         parameters=[moveit_config.robot_description],
+    )
+
+    # [B'] arm/body 전용 Robot State Publisher
+    #   ros2_control 4.x(Jazzy~) 부터 controller_manager 에 robot_description 을
+    #   파라미터로 직접 넘기는 방식이 완전히 제거되어, robot_description
+    #   토픽(robot_state_publisher 가 transient_local 로 발행)을 통해서만
+    #   초기화된다. Humble(ros2_control 2.x)에서는 파라미터 직접 전달이
+    #   deprecated 경고와 함께 동작했지만, 토픽 방식은 두 배포판 모두에서
+    #   정상 동작하는 공통 경로이므로 이 방식으로 통일한다.
+    #
+    #   단, controller_manager 가 구독하는 토픽 경로가 배포판마다 다르다
+    #   (실제 로그로 확인됨):
+    #     Humble (ros2_control 2.x) : '~/robot_description'
+    #       → private 네임스페이스, 즉 '/arm/controller_manager/robot_description'
+    #     Jazzy  (ros2_control 4.x) : 'robot_description' (네임스페이스 상대)
+    #       → '/arm/robot_description'
+    #   robot_state_publisher 의 기본 발행 토픽('<ns>/robot_description')은
+    #   Jazzy 쪽 규칙과만 일치하므로, Humble 에서는 명시적으로 remap 해
+    #   controller_manager 의 실제 구독 경로에 맞춘다.
+    if os.environ.get('ROS_DISTRO') == 'humble':
+        _arm_rd_topic = '/arm/controller_manager/robot_description'
+        _body_rd_topic = '/body/controller_manager/robot_description'
+    else:
+        _arm_rd_topic = '/arm/robot_description'
+        _body_rd_topic = '/body/robot_description'
+
+    arm_rsp_node = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        namespace='arm',
+        output='both',
+        parameters=[arm_description],
+        remappings=[('robot_description', _arm_rd_topic)],
+    )
+    body_rsp_node = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        namespace='body',
+        output='both',
+        parameters=[body_description],
+        remappings=[('robot_description', _body_rd_topic)],
     )
 
     # [C] joint_state_publisher (merger)
@@ -228,13 +293,13 @@ def launch_setup(context, *args, **kwargs):
     # ════════════════════════════════════════════════════════════════════════
     # arm Controller Manager (namespace: /arm)
     # ════════════════════════════════════════════════════════════════════════
-    arm_cm_params = [arm_description, arm_ctrl_yaml]
-
+    # robot_description 은 arm_rsp_node 가 '/arm/robot_description' 토픽으로
+    # 발행하므로 controller_manager 에는 컨트롤러 yaml 만 전달한다.
     arm_cm_node = Node(
         package='controller_manager',
         executable='ros2_control_node',
         namespace='arm',
-        parameters=arm_cm_params,
+        parameters=[arm_ctrl_yaml],
         # 실제 HW 에서 UFRobotSystemHardware 는 실시간성이 필요하므로 nice 레벨 높임
         output='both',
     )
@@ -270,11 +335,13 @@ def launch_setup(context, *args, **kwargs):
     # ════════════════════════════════════════════════════════════════════════
     # body Controller Manager (namespace: /body)
     # ════════════════════════════════════════════════════════════════════════
+    # robot_description 은 body_rsp_node 가 '/body/robot_description' 토픽으로
+    # 발행하므로 controller_manager 에는 컨트롤러 yaml 만 전달한다.
     body_cm_node = Node(
         package='controller_manager',
         executable='ros2_control_node',
         namespace='body',
-        parameters=[body_description, body_ctrl_yaml],
+        parameters=[body_ctrl_yaml],
         output='both',
     )
 
@@ -365,6 +432,10 @@ def launch_setup(context, *args, **kwargs):
             target_action=rsp_node,
             on_start=[merger_node, static_tf_node, rviz_node],
         )),
+
+        # arm/body robot_description 발행 (controller_manager 가 구독)
+        arm_rsp_node,
+        body_rsp_node,
 
         # arm Controller Manager
         arm_cm_node,
