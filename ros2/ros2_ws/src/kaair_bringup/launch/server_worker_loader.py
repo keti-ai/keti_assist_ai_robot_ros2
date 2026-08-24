@@ -117,9 +117,32 @@ def launch_setup(context, *args, **kwargs):
                 name="head_move_server",
                 output="screen",
             ),
-            # controller_mode_switcher 는 kaair_controller/launch/control_manager.py
-            # 모듈이 body 컨트롤러 ready 시점에 spawn한다(중복 노드 이름 방지를
-            # 위해 여기서는 만들지 않는다).
+            Node(
+                package="kaair_bringup",
+                executable="controller_mode_switcher",
+                name="controller_mode_switcher",
+                output="screen",
+            ),
+            # servo on/off 상태를 RViz 우측 하단에 텍스트로 표시.
+            # 3d_master_controller(SpaceMouse)는 3D 마우스가 연결됐을 때만
+            # 실행되는 노드라 그쪽에서 직접 RViz 로 발행하면 평상시(3D 마우스
+            # 미연결)에는 상태를 알 수 없다. 이 노드는 항상 떠 있으면서
+            # default_text 로 기본값(PLANNING)을 먼저 보여주고, 3d_master_controller
+            # 가 실행 중일 때만 /servo_mode/state_text 로 실제 상태를 갱신받는다.
+            # (범용 String→OverlayText 브리지라 나중에 다른 상태 문자열도
+            #  input_topic/overlay_topic 파라미터만 바꿔 재사용할 수 있다.)
+            Node(
+                package="kaair_bringup",
+                executable="text_status_overlay",
+                name="servo_status_overlay",
+                output="screen",
+                parameters=[{
+                    "input_topic": "/servo_mode/state_text",
+                    "overlay_topic": "/servo_mode/status_overlay",
+                    "default_level": "info",
+                    "default_text": "ARM: PLANNING (config)",
+                }],
+            ),
         ]
     )
 

@@ -9,9 +9,6 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(image_transport REQUIRED)
-find_package(cv_bridge REQUIRED)
-find_package(OpenCV REQUIRED)
 
 # 설치 규칙: config, launch, rviz 폴더 전체를 share/PROJECT_NAME 디렉토리로 복사
 install(DIRECTORY
@@ -32,6 +29,10 @@ ament_target_dependencies(depth_resizer
   sensor_msgs
 )
 
+install(TARGETS
+  depth_resizer
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 # 1. 경로와 이름을 공백이나 줄바꿈으로 나열 (세미콜론 제외)
 set(PYTHON_NODES
@@ -45,6 +46,7 @@ set(PYTHON_NODES
   "kaair_bringup/motion_worker/arm_move_action_server.py"        "arm_move_action_server"
   "kaair_bringup/motion_worker/controller_mode_switcher.py"      "controller_mode_switcher"
   "kaair_bringup/motion_worker/head_move_server.py"              "head_move_server"
+  "kaair_bringup/motion_worker/text_status_overlay.py"           "text_status_overlay"
   "kaair_bringup/master_worker/master_dxl_hw.py"                "master_dxl_hw"
   "kaair_bringup/master_worker/master_controller.py"                "master_controller"
   "kaair_bringup/master_worker/3d_master_controller.py"           "3d_master_controller"

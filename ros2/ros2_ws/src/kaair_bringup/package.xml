@@ -11,9 +11,6 @@
 
   <depend>rclcpp</depend>
   <depend>sensor_msgs</depend>
-  <depend>image_transport</depend>
-  <!-- depth_hole_fill_node의 median hole-filling 처리에 사용 -->
-  <depend>cv_bridge</depend>
   <depend>libopencv-dev</depend>
 
   <exec_depend>rclpy</exec_depend>
@@ -28,7 +25,6 @@
   <!-- depth_pointcloud_publisher: depth 이미지를 PointCloud2로 변환/발행 -->
   <exec_depend>sensor_msgs_py</exec_depend>
 
-  <!-- image_transport 런타임 플러그인: depth_hole_filler 노드가 사용 -->
   <exec_depend>compressed_image_transport</exec_depend>
 
   <exec_depend>control_msgs</exec_depend>
@@ -38,7 +34,7 @@
 
   <exec_depend>kaair_description</exec_depend>
   <exec_depend>kaair_controller</exec_depend>
-  <!-- 3d_master_controller.py: servo 상태를 RViz 우측하단 텍스트 오버레이로 표시 -->
+  <!-- text_status_overlay.py: String 을 RViz 화면 고정 텍스트 오버레이로 표시 -->
   <exec_depend>rviz_2d_overlay_msgs</exec_depend>
 
 
