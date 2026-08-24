@@ -104,6 +104,14 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------
+# 3-5-1. RViz2 2D Overlay 플러그인 (servo 상태 등 화면 고정 텍스트 HUD)
+# ---------------------------------------------------------
+RUN apt-get update && apt-get install -y \
+    ros-$ROS_DISTRO-rviz-2d-overlay-msgs \
+    ros-$ROS_DISTRO-rviz-2d-overlay-plugins \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------
 # 3-6. 하드웨어 SDK (Dynamixel, Modbus, RealSense Binary)
 # ---------------------------------------------------------
 RUN apt-get update && apt-get install -y \

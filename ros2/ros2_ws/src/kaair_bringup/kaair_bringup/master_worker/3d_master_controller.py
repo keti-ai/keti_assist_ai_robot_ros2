@@ -31,12 +31,14 @@ import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
+from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 
 from controller_manager_msgs.srv import SwitchController
 from geometry_msgs.msg import TwistStamped
+from rviz_2d_overlay_msgs.msg import OverlayText
 from sensor_msgs.msg import Joy, JointState
 from std_msgs.msg import Bool as BoolMsg
-from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import ColorRGBA, Float64MultiArray
 from std_srvs.srv import Trigger
 
 # arm_move_action_server.py 등 config(move_group)로 팔을 제어하려는 노드가
@@ -45,6 +47,16 @@ from std_srvs.srv import Trigger
 # servo 뿐 아니라 그리퍼 controller(tool_forward→tool_controller)까지
 # 버튼을 누른 것과 똑같이 복원되고, 내부 상태(_state)도 자연히 일치한다.
 _SERVO_OFF_REQUEST_TOPIC = '/servo_mode/request_off'
+
+# 현재 servo 상태를 RViz 화면에 텍스트로 띄우는 토픽 (rviz_2d_overlay_plugins
+# 의 TextOverlay 디스플레이가 이 토픽을 구독하도록 .rviz 에 등록돼 있다).
+_STATUS_OVERLAY_TOPIC = '/servo_mode/status_overlay'
+# RViz 가 이 노드보다 늦게 뜨더라도 마지막 상태를 바로 받도록 latched QoS 사용
+_LATCHED_QOS = QoSProfile(
+    depth=1,
+    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+    reliability=ReliabilityPolicy.RELIABLE,
+)
 
 _ARM_JOINT_NAMES = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6', 'joint7']
 _VEL_ZERO_THRESHOLD  = 0.005   # rad/s — 이 이하면 정지로 간주
@@ -166,6 +178,9 @@ class SpaceMouseServoController(Node):
         self._tool_pub = self.create_publisher(
             Float64MultiArray, self._tool_topic, 10,
         )
+        self._status_overlay_pub = self.create_publisher(
+            OverlayText, _STATUS_OVERLAY_TOPIC, _LATCHED_QOS,
+        )
         self.create_subscription(
             Joy, 'joy', self._joy_callback, 10, callback_group=self._cbg,
         )
@@ -196,6 +211,38 @@ class SpaceMouseServoController(Node):
             f'stop_to_start={self._stop_to_start_sec}s, '
             f'hold_min={self._hold_min_sec}s'
         )
+        self._publish_status_overlay()  # 초기 상태(PLANNING) 표시
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # RViz 상태 오버레이 (우측 하단 텍스트)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _publish_status_overlay(self):
+        """현재 servo 상태를 rviz_2d_overlay_plugins/TextOverlay 로 표시한다.
+        .rviz 설정에서 이 토픽을 구독하는 TextOverlay 디스플레이를 추가해야
+        실제로 화면에 보인다(Topic: /servo_mode/status_overlay)."""
+        if self._state == _STATE_INACTIVE:
+            text, color = 'ARM: PLANNING (config)', (0.2, 0.9, 0.2)
+        elif self._state == _STATE_HOLD:
+            text, color = 'ARM: SERVO (안정화 중...)', (1.0, 0.65, 0.0)
+        else:  # _STATE_ACTIVE
+            text, color = 'ARM: SERVO ACTIVE (SpaceMouse)', (1.0, 0.15, 0.15)
+
+        msg = OverlayText()
+        msg.action = OverlayText.ADD
+        msg.width = 280
+        msg.height = 40
+        msg.horizontal_distance = 10
+        msg.vertical_distance = 10
+        msg.horizontal_alignment = OverlayText.RIGHT
+        msg.vertical_alignment = OverlayText.BOTTOM
+        msg.bg_color = ColorRGBA(r=0.0, g=0.0, b=0.0, a=0.6)
+        msg.line_width = 2
+        msg.text_size = 14.0
+        msg.font = 'DejaVu Sans Mono'
+        msg.fg_color = ColorRGBA(r=color[0], g=color[1], b=color[2], a=1.0)
+        msg.text = text
+        self._status_overlay_pub.publish(msg)
 
     # ═══════════════════════════════════════════════════════════════════════
     # servo 초기화 시퀀스: stop → delay → start
@@ -269,6 +316,7 @@ class SpaceMouseServoController(Node):
             self._arm_vel_zero  = False   # HOLD 탈출 조건 초기화
             self._stall_reset()           # stall 상태 초기화
             self._state         = _STATE_HOLD
+            self._publish_status_overlay()
             self.get_logger().info(
                 f'Servo started: {res.message}  '
                 f'[HOLD {self._hold_min_sec:.1f}s + arm velocity≈0 대기]'
@@ -282,6 +330,7 @@ class SpaceMouseServoController(Node):
 
     def _do_stop_servo(self, log_label: str = 'stop_servo'):
         self._state = _STATE_INACTIVE
+        self._publish_status_overlay()
         if not self._stop_srv.service_is_ready():
             self.get_logger().warn(f'{log_label}: stop_servo 서비스 미준비.')
             return
@@ -493,6 +542,7 @@ class SpaceMouseServoController(Node):
             vel_ok  = self._arm_vel_zero
             if time_ok and vel_ok:
                 self._state = _STATE_ACTIVE
+                self._publish_status_overlay()
                 self.get_logger().info('Hold released → ACTIVE. SpaceMouse input enabled.')
             else:
                 self._publish_zero_twist()
