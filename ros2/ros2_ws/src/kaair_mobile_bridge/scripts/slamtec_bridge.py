@@ -5,6 +5,7 @@ from rclpy.node import Node
 from rclpy.context import Context
 from rclpy.action import ActionServer, GoalResponse, CancelResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.duration import Duration
 
 from nav_msgs.msg import OccupancyGrid
 from nav2_msgs.action import NavigateToPose
@@ -48,6 +49,7 @@ class SlamwareBridge(Node):
         self.slam_sub_node = Node('slamware_bridge_sub', context=slamware_context)
         self.current_pose = None
         self.active_goal_handle = None
+        self._goal_lock = threading.Lock()
 
         self.latest_battery_state = None
         self._log_throttle_last_time = {}
@@ -59,6 +61,7 @@ class SlamwareBridge(Node):
             'navigate_to_pose',
             execute_callback=self.execute_callback,
             goal_callback=self.goal_callback,
+            handle_accepted_callback=self.handle_accepted_callback,
             cancel_callback=self.cancel_callback,
             callback_group=self.cb_group
         )
@@ -269,6 +272,24 @@ class SlamwareBridge(Node):
         )
         return GoalResponse.ACCEPT
 
+    def handle_accepted_callback(self, goal_handle):
+        # 새 goal이 accept된 시점에 "즉시" 이전 goal을 종결시킨다 (동기적 preempt).
+        # 기존에는 execute_callback의 폴링 루프(최대 0.5s 지연)에서만 이전 goal을
+        # 정리했는데, 그 지연 구간 동안 서버 쪽 액션 상태머신에 두 개의 goal이
+        # 동시에 ACTIVE로 남아 status/feedback을 동시에 publish하는 경우가
+        # 생겼다. RViz2의 Nav2 Goal 툴/패널은 이전 goal handle을 별도 정리 없이
+        # 그냥 덮어쓰기만 하므로(nav2_rviz_plugins upstream 동작), 두 goal이
+        # 겹치는 구간이 있으면 클라이언트 쪽 액션 상태 추적이 꼬여 두 번째 목표
+        # 전송 시 rviz2가 크래시하는 원인이 된다. accept 시점에 동기적으로
+        # 이전 goal을 abort()해 "언제나 활성 goal은 최대 1개"를 보장한다.
+        with self._goal_lock:
+            previous = self.active_goal_handle
+            self.active_goal_handle = goal_handle
+            if previous is not None and previous is not goal_handle and previous.is_active:
+                self._warn('🔄 [Preempt] 새 목표 accept — 이전 목표를 즉시 종료합니다.')
+                previous.abort()
+        goal_handle.execute()
+
     def cancel_callback(self, goal_handle):
         self._info('🛑 Received cancel request')
         return CancelResponse.ACCEPT
@@ -424,7 +445,8 @@ class SlamwareBridge(Node):
     #         time.sleep(LOOP_INTERVAL)
 
     def execute_callback(self, goal_handle):
-        self.active_goal_handle = goal_handle
+        # active_goal_handle은 handle_accepted_callback에서 (동기적으로,
+        # execute() 호출 이전에) 이미 이 goal_handle로 설정되어 있다.
         BLUE  = "\033[94m"
         RESET = "\033[0m"
         goal_pose_dbg = goal_handle.request.pose.pose
@@ -487,11 +509,11 @@ class SlamwareBridge(Node):
         goal_attempt = 1
 
         while True:
-            # [A-1] Preemption 체크
-            if self.active_goal_handle != goal_handle:
-                self._warn('🔄 [Preempt] 새 목표 수신. 기존 감시를 부드럽게 종료합니다.')
-                goal_handle.canceled() 
-                time.sleep(0.1) 
+            # [A-1] Preemption 체크 — 실제 종결(abort)은 handle_accepted_callback에서
+            # 이미 동기적으로 처리됐으므로, 여기서는 터미널 상태를 다시 만들지
+            # 않고(이중 종결 시 InvalidStateTransitionError) 감시만 멈춘다.
+            if not goal_handle.is_active:
+                self._warn('🔄 [Preempt] 새 목표에 의해 선점됨 — 기존 감시를 종료합니다.')
                 return result
 
             # [A-2] 클라이언트 취소 요청 체크
@@ -530,6 +552,16 @@ class SlamwareBridge(Node):
             else:
                 yaw_error = raw_yaw_error
 
+            # NavigateToPose.Feedback 의 모든 필드를 채운다. current_pose를
+            # 비워두면(frame_id="") RViz2 Nav2 플러그인이 이를 TF 변환하려다
+            # tf2::InvalidArgumentException을 던져 크래시할 수 있으므로
+            # (연속 두 번째 목표부터 재현되는 것으로 보고된 RViz2 크래시의
+            # 유력한 원인) 매 주기 실제 로봇 pose로 채운다.
+            feedback_msg.current_pose.header.frame_id = 'slamware_map'
+            feedback_msg.current_pose.header.stamp = now.to_msg()
+            feedback_msg.current_pose.pose = current_snapshot
+            feedback_msg.navigation_time = Duration(seconds=elapsed_total).to_msg()
+            feedback_msg.number_of_recoveries = goal_attempt - 1
             feedback_msg.distance_remaining = dist_to_goal
             goal_handle.publish_feedback(feedback_msg)
 

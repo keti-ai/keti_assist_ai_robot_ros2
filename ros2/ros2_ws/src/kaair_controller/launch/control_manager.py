@@ -107,13 +107,26 @@ def build_control_manager(
 
         # robot_description 은 arm_rsp_node 가 위 토픽으로 발행하므로
         # controller_manager 에는 컨트롤러 yaml 만 전달한다.
+        #
+        # arm_hw.urdf.xacro 는 arm CM 전용 stub 트리(arm_hw_base 루트, 실제
+        # 로봇 트리와 link1~link7 이름이 겹침)라서, tf2_ros 브로드캐스터가
+        # 네임스페이스와 무관하게 항상 절대 경로 '/tf', '/tf_static' 에 쏘는
+        # 특성상 remap 없이는 전체바디 robot_state_publisher 가 발행하는
+        # 진짜 TF 와 같은 frame_id 를 두고 충돌해 (arm_hw_base 는 부모가
+        # 없으므로) RViz 에 "No transform ... to [slamware_map]" 경고가
+        # 뜬다. 이 노드는 robot_description 토픽 발행 용도일 뿐 TF 를 쓰지
+        # 않으므로 자신의 네임스페이스 하위로 격리한다.
         arm_rsp_node = Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',
             namespace='arm',
             output='both',
             parameters=[arm_description],
-            remappings=[('robot_description', arm_rd_topic)],
+            remappings=[
+                ('robot_description', arm_rd_topic),
+                ('/tf', 'tf'),
+                ('/tf_static', 'tf_static'),
+            ],
         )
 
         arm_cm_node = Node(
@@ -180,13 +193,20 @@ def build_control_manager(
             else '/body/robot_description'
         )
 
+        # arm_rsp_node 와 동일한 이유(body_hw.urdf.xacro 의 body_hw_base
+        # stub 트리가 전체바디 TF 와 frame_id 충돌)로 tf/tf_static 을
+        # 네임스페이스 하위로 격리한다.
         body_rsp_node = Node(
             package='robot_state_publisher',
             executable='robot_state_publisher',
             namespace='body',
             output='both',
             parameters=[body_description],
-            remappings=[('robot_description', body_rd_topic)],
+            remappings=[
+                ('robot_description', body_rd_topic),
+                ('/tf', 'tf'),
+                ('/tf_static', 'tf_static'),
+            ],
         )
 
         body_cm_node = Node(
