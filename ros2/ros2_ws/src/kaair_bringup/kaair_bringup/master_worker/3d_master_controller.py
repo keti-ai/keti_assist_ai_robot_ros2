@@ -35,8 +35,16 @@ from rclpy.executors import MultiThreadedExecutor
 from controller_manager_msgs.srv import SwitchController
 from geometry_msgs.msg import TwistStamped
 from sensor_msgs.msg import Joy, JointState
+from std_msgs.msg import Bool as BoolMsg
 from std_msgs.msg import Float64MultiArray
 from std_srvs.srv import Trigger
+
+# arm_move_action_server.py 등 config(move_group)로 팔을 제어하려는 노드가
+# "지금 SERVO 모드면 꺼 달라"고 요청하는 전역 토픽. 물리 버튼을 눌러 OFF
+# 하는 것과 완전히 동일한 시퀀스(_turn_servo_off)를 그대로 실행하므로,
+# servo 뿐 아니라 그리퍼 controller(tool_forward→tool_controller)까지
+# 버튼을 누른 것과 똑같이 복원되고, 내부 상태(_state)도 자연히 일치한다.
+_SERVO_OFF_REQUEST_TOPIC = '/servo_mode/request_off'
 
 _ARM_JOINT_NAMES = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6', 'joint7']
 _VEL_ZERO_THRESHOLD  = 0.005   # rad/s — 이 이하면 정지로 간주
@@ -166,6 +174,12 @@ class SpaceMouseServoController(Node):
             JointState, '/joint_states',
             self._joint_state_callback, 10, callback_group=self._cbg,
         )
+        # config(move_group)로 팔을 제어하려는 노드가 "지금 SERVO 모드면
+        # 꺼 달라"고 요청하는 토픽 — 물리 버튼 OFF 와 동일한 경로로 처리
+        self.create_subscription(
+            BoolMsg, _SERVO_OFF_REQUEST_TOPIC,
+            self._on_request_config_mode, 10, callback_group=self._cbg,
+        )
 
         # ── 타이머 ──────────────────────────────────────────────────────────
         self._publish_timer = self.create_timer(
@@ -278,6 +292,17 @@ class SpaceMouseServoController(Node):
                 if not f.exception() else str(f.exception())
             )
         )
+
+    def _on_request_config_mode(self, msg: BoolMsg):
+        """arm_move_action_server.py 등 config(move_group)로 팔을 제어하려는
+        노드가 보내는 요청. 이미 OFF(INACTIVE) 면 할 일이 없고, SERVO 모드
+        (HOLD/ACTIVE) 라면 물리 버튼을 눌러 끈 것과 동일하게 처리한다."""
+        if not msg.data:
+            return
+        if self._state == _STATE_INACTIVE:
+            return  # 이미 config/PLANNING 모드 — 할 일 없음
+
+        self._turn_servo_off('External request (e.g. arm_move_action_server)')
 
     def destroy_node(self):
         """종료 시:
@@ -427,16 +452,22 @@ class SpaceMouseServoController(Node):
             self._do_stop_then_start()
         else:
             # ── SERVO OFF ───────────────────────────────────────────────
-            self.get_logger().info(
-                'Button servo_toggle: SERVO OFF '
-                f'({self._tool_fwd_ctrl} → {self._tool_orig_ctrl})'
-            )
-            self._do_stop_servo('servo_toggle OFF')
-            self._switch_controllers_async(
-                activate=[self._tool_orig_ctrl],
-                deactivate=[self._tool_fwd_ctrl],
-                label='servo_toggle OFF: restore tool_controller',
-            )
+            self._turn_servo_off('Button servo_toggle')
+
+    def _turn_servo_off(self, log_label: str):
+        """servo stop + tool_forward_controller → tool_controller 복원.
+        물리 버튼(OFF)과 외부 요청(request_config_mode) 이 공유하는 단일
+        경로 — 둘 중 어느 쪽이 호출하든 완전히 동일한 시퀀스로 처리된다."""
+        self.get_logger().info(
+            f'{log_label}: SERVO OFF '
+            f'({self._tool_fwd_ctrl} → {self._tool_orig_ctrl})'
+        )
+        self._do_stop_servo(f'{log_label}: SERVO OFF')
+        self._switch_controllers_async(
+            activate=[self._tool_orig_ctrl],
+            deactivate=[self._tool_fwd_ctrl],
+            label=f'{log_label}: restore tool_controller',
+        )
 
     def _do_stop_then_start(self):
         """stop_servo → delay → start_servo 시퀀스 (버튼 토글용)."""

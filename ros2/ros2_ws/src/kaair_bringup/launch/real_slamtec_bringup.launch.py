@@ -1,8 +1,12 @@
 """
 real_slamtec_bringup.launch.py
 
-kaair_moveit.launch.py 와 동일한 2-Controller-Manager + MoveIt 구조를 사용한다.
-가상 TF(slamware_map → base_footprint)는 실제 SLAMTEC/맵 TF 를 쓰므로 포함하지 않는다.
+kaair_moveit_bringup.launch.py 와 동일한 2-Controller-Manager + MoveIt +
+MoveIt Servo 구조를 사용한다. 제어(controller/servo) 측면은 완전히 동일하고,
+차이는 오직 모바일 관련 부분뿐이다:
+  - 가상 TF(slamware_map → base_footprint)는 실제 SLAMTEC/맵 TF 를 쓰므로
+    포함하지 않는다(static_tf_node 없음).
+  - RViz 설정 파일이 slamtec_moveit.rviz 로 다르다.
 
 헤드·핸드 카메라(vision_runner) 및 server_worker_loader 는 기존과 동일하게 포함한다.
 """
@@ -32,6 +36,12 @@ _ctrl_launch_dir = os.path.join(
 if _ctrl_launch_dir not in sys.path:
     sys.path.insert(0, _ctrl_launch_dir)
 from control_managers import build_control_managers  # noqa: E402
+
+
+def _load_yaml(package_name: str, relative_path: str) -> dict:
+    pkg = get_package_share_directory(package_name)
+    with open(os.path.join(pkg, relative_path), 'r') as f:
+        return yaml.safe_load(f)
 
 
 def launch_setup(context, *args, **kwargs):
@@ -96,7 +106,9 @@ def launch_setup(context, *args, **kwargs):
         .to_moveit_configs()
     )
 
-
+    # ── MoveIt Servo 설정 ─────────────────────────────────────────────────
+    servo_yaml = _load_yaml('kaair_moveit_config', 'config/kaair_servo_config.yaml')
+    servo_params = {'moveit_servo': servo_yaml}
 
     move_group_node = Node(
         package='moveit_ros_move_group',
@@ -140,6 +152,29 @@ def launch_setup(context, *args, **kwargs):
             moveit_config.robot_description_kinematics,
         ],
         condition=IfCondition(use_gui),
+    )
+
+    # ── MoveIt Servo (standalone servo_node_main) ─────────────────────────
+    #   ComposableNodeContainer 대신 독립 프로세스로 실행.
+    #   move_group 기동 후 시작해 planning scene monitor 를 secondary 로 attach.
+    #   is_primary_planning_scene_monitor: false (servo config 에 설정됨).
+    #
+    #   서비스:
+    #     /servo_server/start_servo   → SERVO 모드 시작
+    #     /servo_server/pause_servo   → 일시정지 (PLANNING 모드 복귀)
+    #     /servo_server/unpause_servo → 일시정지에서 재개
+    #     /servo_server/stop_servo    → 완전 중지 (재시작 불가)
+    servo_node = Node(
+        package='moveit_servo',
+        executable='servo_node_main',
+        name='servo_server',
+        output='screen',
+        parameters=[
+            servo_params,
+            moveit_config.robot_description,
+            moveit_config.robot_description_semantic,
+            moveit_config.robot_description_kinematics,
+        ],
     )
 
     # ── arm/body Controller Manager (+ lift_initializer 게이트) ───────────
@@ -206,13 +241,14 @@ def launch_setup(context, *args, **kwargs):
             on_exit=[move_group_node],
         )),
 
+        # move_group 기동 → servo_node + RViz
         # RViz 는 move_group 기동 후에 띄운다: MotionPlanning 디스플레이가
         # move_group 서비스/액션에 곧바로 연결되지 않으면 처음에 경고가 뜨고
         # 체크박스를 껐다 켜야 정상화되는 문제가 있어, move_group 이 이미 뜬
         # 뒤에 RViz 를 시작해 그 문제를 피한다.
         RegisterEventHandler(OnProcessStart(
             target_action=move_group_node,
-            on_start=[rviz_node],
+            on_start=[servo_node, rviz_node],
         )),
     ]
 

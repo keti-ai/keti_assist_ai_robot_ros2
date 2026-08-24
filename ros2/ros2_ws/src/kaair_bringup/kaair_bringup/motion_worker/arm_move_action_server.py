@@ -34,6 +34,8 @@ from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import JointState
 from shape_msgs.msg import SolidPrimitive
+from std_msgs.msg import Bool
+from std_srvs.srv import Trigger
 
 from moveit_msgs.action import ExecuteTrajectory, MoveGroup
 from moveit_msgs.msg import (
@@ -94,6 +96,25 @@ ACTION_ARM_MOVE = "kaair_worker/arm_moveJ"
 ACTION_MOVEL = "kaair_worker/arm_moveL"
 ACTION_MOVET = "kaair_worker/arm_moveT"
 ACTION_ARM_TASK = "kaair_worker/arm_task"
+
+# 이 서버는 move_group(Pilz PTP/LIN, ExecuteTrajectory)로 팔을 제어하므로,
+# MoveIt Servo 가 켜져(SERVO 모드) /arm/xarm7_traj_controller/joint_trajectory 를
+# 직접 선점하고 있으면 move_group 명령이 씹힌다.
+#
+# 3d_master_controller.py(SpaceMouse) 가 물리 버튼으로 SERVO ON/OFF 를 토글할
+# 때 servo stop + 그리퍼 controller(tool_forward↔tool_controller) 전환까지
+# 함께 처리하므로, 이 서버도 동일한 요청 토픽에 True 를 보내 "버튼을 누른 것과
+# 완전히 같은" OFF 시퀀스를 그대로 태운다 (로직을 따로 복제하지 않는다).
+# 매 이동 실행 전마다 보낸다 — 3d_master 가 이 서버 기동 *이후*에 SERVO 를
+# 켰더라도 다음 이동 요청에서 바로 반영되도록 하기 위함이다.
+SERVO_OFF_REQUEST_TOPIC = "/servo_mode/request_off"
+
+# 위 토픽은 3d_master_controller.py 가 떠 있을 때만 반응한다. 그 노드 자체가
+# 실행 중이 아닌 구성(3d_master 없이 servo_server 만 별도로 켜진 경우 등)에서도
+# move_group 이 막히지 않도록, pause_servo 를 직접(defensive) 함께 호출한다.
+# pause_servo 는 이미 paused 여도 안전한 멱등(idempotent) 호출이다.
+SERVO_NODE_NAME = "servo_server"
+SERVO_PAUSE_SERVICE = f"/{SERVO_NODE_NAME}/pause_servo"
 
 APPROACH_OFFSET_Z = 0.10
 HOME_JOINTS = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -208,6 +229,16 @@ class UnifiedMotionActionServer(Node):
             callback_group=self._cb_group,
         )
 
+        # ── MoveIt Servo → config(PLANNING) 모드 강제 전환 ─────────────────
+        self._servo_off_request_pub = self.create_publisher(
+            Bool, SERVO_OFF_REQUEST_TOPIC, 10,
+        )
+        self._servo_pause_client = self.create_client(
+            Trigger,
+            SERVO_PAUSE_SERVICE,
+            callback_group=self._cb_group,
+        )
+
         self._info(
             f"UnifiedMotionActionServer 시작 (Pilz PTP/LIN): "
             f"{ACTION_ARM_MOVE}, {ACTION_MOVEL}, {ACTION_MOVET}, {ACTION_ARM_TASK}"
@@ -218,6 +249,26 @@ class UnifiedMotionActionServer(Node):
 
     def _err(self, msg):
         self.get_logger().error(f"[{_now()}] {msg}")
+
+    # -------------------------------------------------------------------------
+    # MoveIt Servo → PLANNING(config) 모드 강제 전환
+    # -------------------------------------------------------------------------
+    def _ensure_config_mode(self):
+        """이동을 실제로 실행하기 전마다 호출한다 (기동 시 1회가 아니라
+        매 goal 마다 — 이 서버가 뜬 *이후에* 3d_master 로 SERVO 를 켠 경우도
+        바로 다음 이동 요청에서 반영되도록 하기 위함).
+
+        1. 3d_master_controller.py(버튼) 가 듣는 것과 동일한 요청 토픽에
+           True 를 발행 — 그 노드가 떠 있으면 물리 버튼 OFF 와 완전히
+           동일한 시퀀스(servo stop + 그리퍼 controller 복원)를 실행한다.
+        2. servo_server 에 pause_servo 도 직접(defensive) 호출 — 3d_master
+           가 떠 있지 않은 구성에서도 servo 가 move_group 명령을 선점하지
+           못하도록 한다. pause_servo 는 이미 paused 여도 안전한 멱등 호출.
+        둘 다 fire-and-forget: 결과를 기다리지 않고 바로 이동을 진행한다."""
+        self._servo_off_request_pub.publish(Bool(data=True))
+
+        if self._servo_pause_client.service_is_ready():
+            self._servo_pause_client.call_async(Trigger.Request())
 
     def _cancel_cb(self, _goal_handle):
         self._info("Cancel 요청 수신")
@@ -446,6 +497,7 @@ class UnifiedMotionActionServer(Node):
     # -------------------------------------------------------------------------
     def _execute_move_joint(self, goal_handle):
         with self._motion_lock:
+            self._ensure_config_mode()
             return self._execute_move_joint_body(goal_handle)
 
     def _execute_move_joint_body(self, goal_handle):
@@ -786,6 +838,7 @@ class UnifiedMotionActionServer(Node):
     # -------------------------------------------------------------------------
     def _execute_move_linear(self, goal_handle):
         with self._motion_lock:
+            self._ensure_config_mode()
             return self._execute_move_linear_body(goal_handle)
 
     def _execute_move_linear_body(self, goal_handle):
@@ -862,6 +915,7 @@ class UnifiedMotionActionServer(Node):
     # -------------------------------------------------------------------------
     def _execute_move_tool(self, goal_handle):
         with self._motion_lock:
+            self._ensure_config_mode()
             return self._execute_move_tool_body(goal_handle)
 
     def _execute_move_tool_body(self, goal_handle):
@@ -1075,6 +1129,7 @@ class UnifiedMotionActionServer(Node):
 
     def _execute_arm_task(self, goal_handle):
         with self._motion_lock:
+            self._ensure_config_mode()
             return self._execute_arm_task_body(goal_handle)
 
     def _execute_arm_task_body(self, goal_handle):
