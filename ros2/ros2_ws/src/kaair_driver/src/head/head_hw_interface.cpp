@@ -2,6 +2,7 @@
 #include "hardware_interface/types/hardware_interface_type_values.hpp"
 #include <pluginlib/class_list_macros.hpp>
 #include <sstream>
+#include <limits>
 
 namespace kaair_driver {
 
@@ -23,6 +24,8 @@ CallbackReturn HeadHwInterface::on_init(const hardware_interface::HardwareInfo &
   // 2. 조인트 개수만큼 버퍼 초기화
   hw_states_.resize(info.joints.size(), 0.0);
   hw_commands_.resize(info.joints.size(), 0.0);
+  // NaN: 아직 아무 값도 전송되지 않음 → write() 최초 1회는 항상 전송 대상에 포함됨
+  last_written_cmds_.resize(info.joints.size(), std::numeric_limits<double>::quiet_NaN());
 
   for (const auto & joint : info.joints) {
     dxl_ids_.push_back(std::stoi(joint.parameters.at("id")));
@@ -119,6 +122,8 @@ CallbackReturn HeadHwInterface::on_activate(const rclcpp_lifecycle::State & /*pr
   // 6. 목표 위치를 0.0으로 설정 (동작 시작 시 0.0으로 이동하도록 명령)
   // 조인트가 2개인 경우 [0.0, 0.0]으로 초기화됩니다.
   std::fill(hw_commands_.begin(), hw_commands_.end(), 0.0);
+  // 재활성화 시에도 최초 1회는 무조건 전송되도록 전송 이력을 초기화
+  std::fill(last_written_cmds_.begin(), last_written_cmds_.end(), std::numeric_limits<double>::quiet_NaN());
 
   RCLCPP_INFO(rclcpp::get_logger("HeadHwInterface"), "활성화 완료: 초기 목표 위치 0.0으로 설정됨.");
   return CallbackReturn::SUCCESS;
@@ -182,13 +187,38 @@ hardware_interface::return_type HeadHwInterface::read(const rclcpp::Time & /*tim
 }
 
 hardware_interface::return_type HeadHwInterface::write(const rclcpp::Time & /*time*/, const rclcpp::Duration & /*period*/) {
-  std::vector<double> motor_cmds(hw_commands_.size());
+  // 직전에 보낸 값과 달라진 축만 골라 group sync 에 실어 보낸다.
+  // → 조인트 1개만 명령이 바뀌면 1개 ID만, 2개 다 바뀌면 2개 ID 모두 group sync 로 전송된다.
+  std::vector<uint8_t> changed_ids;
+  std::vector<double> changed_cmds;
+  std::vector<size_t> changed_idx;
+  changed_ids.reserve(hw_commands_.size());
+  changed_cmds.reserve(hw_commands_.size());
+  changed_idx.reserve(hw_commands_.size());
+
   for (size_t i = 0; i < hw_commands_.size(); ++i) {
-    motor_cmds[i] = joint_dir_[i] * hw_commands_[i];
+    const double motor_cmd = joint_dir_[i] * hw_commands_[i];
+    if (motor_cmd != last_written_cmds_[i]) {  // NaN != NaN 이므로 최초 1회는 항상 포함
+      changed_ids.push_back(dxl_ids_[i]);
+      changed_cmds.push_back(motor_cmd);
+      changed_idx.push_back(i);
+    }
   }
-  if (!dxl_hw_->sync_write_radian(dxl_ids_, motor_cmds)) {
+
+  // 바뀐 축이 없으면 보낼 것이 없음
+  if (changed_ids.empty()) {
+    return hardware_interface::return_type::OK;
+  }
+
+  if (!dxl_hw_->sync_write_radian(changed_ids, changed_cmds)) {
     return hardware_interface::return_type::ERROR;
   }
+
+  // 전송에 성공한 축만 전송 이력을 갱신 (실패한 축은 다음 주기에 재시도되도록 남겨둠)
+  for (size_t k = 0; k < changed_idx.size(); ++k) {
+    last_written_cmds_[changed_idx[k]] = changed_cmds[k];
+  }
+
   return hardware_interface::return_type::OK;
 }
 

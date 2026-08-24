@@ -94,3 +94,8 @@ ros2/camera_ws/src/Realsense_ROS2/
 # ==========================================
 ros2/slam_ws/src/slamware_ros_sdk
 ros2/slam_ws/src/slamware_sdk
+
+# ==========================================
+# Claude Code 관련
+# ==========================================
+.claude/

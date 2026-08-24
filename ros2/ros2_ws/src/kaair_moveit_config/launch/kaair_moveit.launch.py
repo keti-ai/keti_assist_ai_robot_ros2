@@ -4,28 +4,42 @@ kaair_moveit.launch.py
 2-Controller-Manager + MoveIt 구조:
 
   ┌─────────────────────────────────────────────────────────────────────┐
-  │  robot_state_publisher                                              │
+  │  robot_state_publisher + joint_state_publisher(merger) + RViz2      │  ← controller 와 무관하게 즉시 기동
   │  └─ kaair.urdf.xacro  (include_ros2_control=false)                 │
   │     → robot.urdf.xacro mode=robot: 전체 kinematics, ros2_control X │
   ├─────────────────────────────────────────────────────────────────────┤
-  │  move_group                                                         │
-  │  └─ 동일 URDF + kaair.srdf + moveit_controllers.yaml               │
-  │     xarm7_traj_controller / lift / head / tool (fake/real 공통)    │
+  │  (실기체) lift_initializer 가 가장 먼저 단독 실행                   │  ← 이 단계만 직렬
+  │  └─ 영점 미확인 시에만 호밍(시간 소요), 확인되면 즉시 스킵          │
   ├─────────────────────────────────────────────────────────────────────┤
-  │  kaair_controller/launch/control_manager.py (모듈)                  │
-  │  └─ /arm/controller_manager, /body/controller_manager,              │
-  │     각 spawner, controller_mode_switcher 를 모두 구성한다.          │
-  │     자세한 노드 구성은 그 파일의 docstring 참고.                    │
+  │  /arm/controller_manager                            ─┐              │
+  │  └─ arm_hw.urdf.xacro                                │  병렬 기동   │
+  │       fake: arm.ros2_control.xacro → mock/GenericSystem │           │
+  │       real: xacro:xarm_device      → UFRobotSystemHardware │        │
+  │     spawner: joint_state_broadcaster                  │             │
+  │             xarm7_traj_controller [ACTIVE]            │             │
+  │             xarm7_forward_controller [INACTIVE]       │             │
+  ├──────────────────────────────────────────────────────┤             │
+  │  /body/controller_manager                             ┘             │
+  │  └─ body_hw.urdf.xacro                                             │
+  │       fake: kaair.ros2_control.xacro → mock/GenericSystem          │
+  │       real: lift/head/tool HW interfaces                            │
+  │     spawner: joint_state_broadcaster                                │
+  │             lift/head/tool_controller       [ACTIVE]               │
+  │             lift/head/tool_forward_controller [INACTIVE]           │
   ├─────────────────────────────────────────────────────────────────────┤
-  │  joint_state_publisher (merger)                                     │
-  │  └─ /arm/joint_states + /body/joint_states → /joint_states         │
-  │     (control_manager 모듈이 만들고, 이 파일이 RSP 시작에 체이닝)   │
+  │  move_group + controller_mode_switcher                              │  ← tool_spawner 종료 후 기동
+  │  └─ move_group: 동일 URDF + kaair.srdf + moveit_controllers.yaml   │
+  │     controller_mode_switcher: ~/switch_mode (SetBool)               │
+  │       true  → FORWARD 모드 (ForwardCommandController, 토픽 제어)    │
+  │       false → NORMAL  모드 (JTC/Action, MoveIt 제어) ← 기본값       │
   └─────────────────────────────────────────────────────────────────────┘
 
 xacro 파일 역할 정리 (kaair_moveit_config/config/)
   kaair.urdf.xacro        RSP + move_group 전용. kinematics only (include_ros2_control=false)
-  arm_hw.urdf.xacro       arm CM 전용. arm ros2_control 블록만 포함 (control_manager 모듈이 사용)
-  body_hw.urdf.xacro      body CM 전용. body ros2_control 블록만 포함 (control_manager 모듈이 사용)
+  arm_hw.urdf.xacro       arm CM 전용. arm ros2_control 블록만 포함
+  body_hw.urdf.xacro      body CM 전용. body ros2_control 블록만 포함
+  arm.ros2_control.xacro  arm fake GenericSystem 매크로 (arm_hw.urdf.xacro 에서 사용)
+  kaair.ros2_control.xacro body fake GenericSystem 매크로 (body_hw.urdf.xacro 에서 사용)
 
 Launch 인자
   use_fake_hardware  true | false  (default: false)
@@ -38,13 +52,15 @@ Launch 인자
 
 import os
 import sys
+import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, RegisterEventHandler
 from launch.event_handlers import OnProcessExit, OnProcessStart
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import Command, LaunchConfiguration
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from moveit_configs_utils import MoveItConfigsBuilder
 
 _bringup_launch_dir = os.path.join(
@@ -57,16 +73,17 @@ from robot_spec_utils import (  # noqa: E402
     resolve_moveit_urdf_paths,
 )
 
-_controller_launch_dir = os.path.join(
+_ctrl_launch_dir = os.path.join(
     get_package_share_directory('kaair_controller'), 'launch')
-if _controller_launch_dir not in sys.path:
-    sys.path.insert(0, _controller_launch_dir)
-from control_manager import build_control_manager  # noqa: E402
+if _ctrl_launch_dir not in sys.path:
+    sys.path.insert(0, _ctrl_launch_dir)
+from control_managers import build_control_managers  # noqa: E402
 
 
 def launch_setup(context, *args, **kwargs):
     # ── 런타임 인자 resolve ────────────────────────────────────────────────
     use_fake_str = LaunchConfiguration('use_fake_hardware').perform(context)
+    use_fake     = use_fake_str.lower() in ('true', '1', 'yes')
     spec_str     = LaunchConfiguration('spec').perform(context)
     use_gui      = LaunchConfiguration('use_gui')
 
@@ -83,6 +100,39 @@ def launch_setup(context, *args, **kwargs):
     print(
         f'[kaair_moveit] mobile_bridge.type={get_mobile_bridge_type(spec_data)!r} '
         f'→ {os.path.basename(kaair_xacro)} ← {spec_path}'
+    )
+
+    # ── Controller YAML ────────────────────────────────────────────────────
+    # fake/real 공통. HW 구분은 URDF xacro 플러그인으로만 처리.
+    # 컨트롤러 이름(xarm7_traj_controller)은 fake/real 동일하다.
+    arm_ctrl_yaml  = os.path.join(ctrl_pkg, 'config', 'arm_controllers.yaml')
+    body_ctrl_yaml = os.path.join(ctrl_pkg, 'config', 'body_controllers.yaml')
+
+    # ── xacro 경로 ─────────────────────────────────────────────────────────
+    arm_hw_xacro  = os.path.join(moveit_pkg, 'config', 'arm_hw.urdf.xacro')
+    body_hw_xacro = os.path.join(moveit_pkg, 'config', 'body_hw.urdf.xacro')
+
+    # ── robot_description 생성 ─────────────────────────────────────────────
+
+    def make_description(xacro_path, extra=''):
+        cmd = (
+            f'xacro {xacro_path}'
+            f' use_fake_hardware:={use_fake_str}'
+            f' hw_spec_file:={hw_spec_file}'
+        )
+        if extra:
+            cmd += ' ' + extra
+        return {'robot_description': ParameterValue(Command(cmd), value_type=str)}
+
+    # arm CM: arm <ros2_control> 전용 (initial_positions 로 초기 자세 설정)
+    arm_description  = make_description(
+        arm_hw_xacro,
+        f'initial_positions_file:={initial_positions_file}',
+    )
+    # body CM: body <ros2_control> 전용
+    body_description = make_description(
+        body_hw_xacro,
+        f'initial_positions_file:={initial_positions_file}',
     )
 
     # ── MoveIt 설정 빌드 ───────────────────────────────────────────────────
@@ -115,30 +165,6 @@ def launch_setup(context, *args, **kwargs):
         .to_moveit_configs()
     )
 
-    # ── ros2_control/MoveIt >= Jazzy 파라미터 스키마 보정 ─────────────────────
-    # MoveIt 2.12(Jazzy 계열)의 PlanningPipeline 리팩터링(moveit/moveit2#2429)
-    # 으로 파이프라인 설정 스키마가 바뀌었다:
-    #   planning_plugin(문자열) → planning_plugins(리스트)
-    #   request_adapters: 공백구분 문자열 → 리스트, 플러그인 네임스페이스도
-    #     default_planner_request_adapters/* → default_planning_request_adapters/*
-    # 로 변경되었다. config/pilz_industrial_motion_planner_planning.yaml 은
-    # Humble(moveit_ros_planning 2.5.x)이 요구하는 구(舊) 스키마를 그대로
-    # 유지하고, Jazzy 에서만 이 자리에서 새 스키마로 패치한다. 구 스키마를
-    # 그대로 Jazzy 에 주면 'expected [string_array] got [string]' 예외로
-    # move_group 이 죽고, 반대로 새 스키마를 Humble 에 주면 동일하게 타입
-    # 예외로 죽으므로, 설정 파일 자체를 Humble 스키마로 고정해두고 Jazzy
-    # 실행 시점에만 여기서 변환하는 방식으로 두 배포판에서 launch 파일과
-    # yaml 원본을 그대로 공유한다.
-    if os.environ.get('ROS_DISTRO') == 'jazzy':
-        _pilz_cfg = moveit_config.planning_pipelines.get('pilz_industrial_motion_planner')
-        if _pilz_cfg and 'planning_plugin' in _pilz_cfg:
-            _pilz_cfg['planning_plugins'] = [_pilz_cfg.pop('planning_plugin')]
-            _pilz_cfg['request_adapters'] = [
-                'default_planning_request_adapters/ValidateWorkspaceBounds',
-                'default_planning_request_adapters/CheckStartStateBounds',
-                'default_planning_request_adapters/CheckStartStateCollision',
-            ]
-
     # ════════════════════════════════════════════════════════════════════════
     # 노드 정의
     # ════════════════════════════════════════════════════════════════════════
@@ -151,6 +177,7 @@ def launch_setup(context, *args, **kwargs):
         parameters=[moveit_config.to_dict()],
     )
 
+
     # [B] Robot State Publisher ─ kaair.urdf.xacro (kinematics only)
     rsp_node = Node(
         package='robot_state_publisher',
@@ -159,13 +186,21 @@ def launch_setup(context, *args, **kwargs):
         parameters=[moveit_config.robot_description],
     )
 
-    # [C] arm/body Controller Manager (모듈화)
-    cm = build_control_manager(
-        use_fake_str=use_fake_str,
-        hw_spec_file=hw_spec_file,
-        initial_positions_file=initial_positions_file,
-        ctrl_pkg=ctrl_pkg,
-        moveit_pkg=moveit_pkg,
+    # [C] joint_state_publisher (merger)
+    # /arm/joint_states + /body/joint_states → /joint_states
+    with open(initial_positions_file, 'r') as _f:
+        _initial_pos = yaml.safe_load(_f).get('initial_positions', {})
+
+    merger_node = Node(
+        package='joint_state_publisher',
+        executable='joint_state_publisher',
+        name='joint_state_merger',
+        parameters=[{
+            'source_list': ['/arm/joint_states', '/body/joint_states'],
+            'rate': 50,
+            'initial_positions': _initial_pos,
+        }],
+        remappings=[('robot_description', '/robot_description')],
     )
 
     # [D] Static TF: slamware_map → base_footprint
@@ -192,31 +227,75 @@ def launch_setup(context, *args, **kwargs):
     )
 
     # ════════════════════════════════════════════════════════════════════════
+    # arm/body Controller Manager (+ lift_initializer 게이트)
+    # ════════════════════════════════════════════════════════════════════════
+    # control_managers.build_control_managers() 가 arm/body CM, 그 스포너,
+    # 그리고 (실기체 + lift 사용 시) lift_initializer → arm/body CM 체인까지
+    # 전부 생성한다. kaair_controller/launch/robot_control.launch.py 와
+    # 동일한 로직을 공유한다.
+    cm_actions, cm_handles = build_control_managers(
+        arm_description=arm_description,
+        body_description=body_description,
+        arm_ctrl_yaml=arm_ctrl_yaml,
+        body_ctrl_yaml=body_ctrl_yaml,
+        use_fake_hardware=use_fake,
+        body_active_controllers=['lift_controller', 'head_controller', 'tool_controller'],
+        body_forward_controllers=['lift_forward_controller', 'head_forward_controller', 'tool_forward_controller'],
+        arm_forward_controller='xarm7_forward_controller',
+    )
+    tool_spawner = cm_handles['body_active_spawners']['tool_controller']
+
+    # ── 컨트롤러 모드 전환 노드 ───────────────────────────────────────────
+    # tool_spawner 종료(모든 정규 컨트롤러 활성화 완료) 후 기동
+    ctrl_mode_switcher_node = Node(
+        package='kaair_bringup',
+        executable='controller_mode_switcher',
+        name='controller_mode_switcher',
+        output='screen',
+    )
+
+    # ════════════════════════════════════════════════════════════════════════
     # 이벤트 체인
     # ════════════════════════════════════════════════════════════════════════
     #
-    # RSP 기동 → merger + static_TF + RViz (robot_description 발행 보장)
+    # RSP 는 controller 와 무관하므로 즉시 기동 → merger + static_TF
     #
-    # control_manager 모듈 내부의 arm/body 이벤트 체인은 모듈 안에서 이미
-    # 구성되어 있다 (cm['always_on_actions']). 이 파일은 그 결과물이 모두
-    # 준비된 시점(cm['controllers_ready_action'] 종료)에 move_group 만
-    # 얹으면 된다.
+    # arm/body CM 및 (실기체일 때) lift_initializer → arm/body CM 게이팅은
+    # build_control_managers() 내부에서 처리된다 (lift_initializer 만 직렬,
+    # 이후 arm/body CM 은 병렬).
+    #
+    # move_group:
+    #   tool_spawner 종료(= body HW 전체 활성화 완료) → move_group 기동
+    #   arm 쪽(네트워크 연결)은 body(USB) 보다 빠르게 완료되므로
+    #   tool_spawner exit 을 전체 HW 준비 완료의 트리거로 사용한다.
+    #
+    # RViz 는 move_group 기동 후에 띄운다: MotionPlanning 디스플레이가
+    # move_group 서비스/액션에 곧바로 연결되지 않으면 처음에 경고가 뜨고
+    # 체크박스를 껐다 켜야 정상화되는 문제가 있어, move_group 이 이미 뜬
+    # 뒤에 RViz 를 시작해 그 문제를 피한다.
 
     return [
         # TF / 상태 발행 인프라
         rsp_node,
         RegisterEventHandler(OnProcessStart(
             target_action=rsp_node,
-            on_start=[cm['merger_node'], static_tf_node, rviz_node],
+            on_start=[merger_node, static_tf_node],
         )),
 
-        # arm/body Controller Manager (모듈에서 생성된 액션 전부)
-        *cm['always_on_actions'],
+        # arm/body Controller Manager (+ lift_initializer 게이트)
+        *cm_actions,
 
-        # 컨트롤러 준비 완료 = 전체 HW 활성화 완료 → move_group 기동
+        # tool_spawner 종료 = body HW 전체 준비 완료
+        #   → move_group + controller_mode_switcher 동시 기동
         RegisterEventHandler(OnProcessExit(
-            target_action=cm['controllers_ready_action'],
-            on_exit=[move_group_node],
+            target_action=tool_spawner,
+            on_exit=[move_group_node, ctrl_mode_switcher_node],
+        )),
+
+        # move_group 기동 후 RViz 시작 (MotionPlanning 연결 경고 방지)
+        RegisterEventHandler(OnProcessStart(
+            target_action=move_group_node,
+            on_start=[rviz_node],
         )),
     ]
 

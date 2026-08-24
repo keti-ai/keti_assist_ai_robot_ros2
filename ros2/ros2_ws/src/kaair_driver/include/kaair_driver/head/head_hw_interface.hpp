@@ -36,6 +36,10 @@ namespace kaair_driver {
     std::vector<double> hw_commands_;
     std::vector<double> hw_states_;
 
+    /** 직전 write()에서 모터로 실제 전송한 값 (모터 방향 반영 후). NaN = 아직 전송된 적 없음(최초 1회 강제 전송).
+     *  write() 는 이 값과 다른 축만 골라 group sync 에 실어 보낸다 → 1축만 바뀌면 1축만, 2축 다 바뀌면 2축 모두 전송. */
+    std::vector<double> last_written_cmds_;
+
     /** 조인트 공간 ↔ 모터(엔코더) 공간: q_joint = direction * q_motor (URDF 축과 설치 방향 불일치 보정) */
     std::vector<double> joint_dir_;
 

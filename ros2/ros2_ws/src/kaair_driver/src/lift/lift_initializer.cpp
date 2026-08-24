@@ -40,13 +40,16 @@ int main() {
     // std::this_thread::sleep_for(std::chrono::milliseconds(100));
     // =====================================================================
 
+    // 🌟 이미 영점(homing)이 잡혀 있으면 재호밍 없이 즉시 종료.
+    // (launch 파일에서 매 기동마다 이 노드를 먼저 실행하므로, 이미 초기화된
+    //  상태라면 여기서 빠르게 빠져나와 곧바로 controller_manager 를 올린다.)
     uint8_t init_state = 0;
-    // 🌟 read_init_set_ok가 true/false를 리턴하도록 수정된 버전에 맞게 조건문 간소화
-    // if (driver.read_init_set_ok(init_state)) {
-    //     std::cout << "[INFO] 이미 영점이 잡혀 있습니다.  (상태: " << (int)init_state << ")" << std::endl;
-    //     driver.disconnect();
-    //     return 0;
-    // }
+    if (driver.read_init_set_ok(init_state) && init_state >= 1) {
+        std::cout << "[INFO] 이미 영점이 잡혀 있습니다. (상태: " << (int)init_state
+                   << ") 호밍을 건너뜁니다." << std::endl;
+        driver.disconnect();
+        return 0;
+    }
 
     std::cout << "[INFO] 호밍 시퀀스를 시작합니다. 센서를 향해 이동합니다..." << std::endl;
 
