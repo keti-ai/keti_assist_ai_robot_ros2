@@ -11,6 +11,8 @@ find_package(rclpy REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(nav2_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(kaair_msgs REQUIRED)
 
 install(DIRECTORY
@@ -22,6 +24,7 @@ install(DIRECTORY
 # 1. 경로와 이름을 공백이나 줄바꿈으로 나열 (세미콜론 제외)
 set(PYTHON_NODES
   "scripts/slamtec_bridge.py"               "slamtec_bridge_node"
+  "scripts/clobot_bridge.py"               "clobot_bridge_node"
   "scripts/slam_save_map.py"               "save_map"
   "scripts/slam_load_map.py"               "load_map"
   # "추가경로" "추가이름"

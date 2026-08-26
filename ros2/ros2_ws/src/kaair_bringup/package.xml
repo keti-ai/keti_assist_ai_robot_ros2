@@ -34,6 +34,7 @@
 
   <exec_depend>kaair_description</exec_depend>
   <exec_depend>kaair_controller</exec_depend>
+  <exec_depend>kaair_mobile_bridge</exec_depend>
   <!-- text_status_overlay.py: String 을 RViz 화면 고정 텍스트 오버레이로 표시 -->
   <exec_depend>rviz_2d_overlay_msgs</exec_depend>
 
