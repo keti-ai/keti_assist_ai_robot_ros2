@@ -9,8 +9,12 @@
     <!--JOINTS: When a joint is specified, the child link of that joint (which will always exist) is automatically included-->
     <!--CHAINS: When a chain is specified, all the links along the chain (including endpoints) are included in the group. Additionally, all the joints that are parents to included links are also included. This means that joints along the chain and the parent joint of the base link are included in the group-->
     <!--SUBGROUPS: Groups can also be formed by referencing to already defined group names-->
+    <!-- tip_link를 그리퍼 끝단(tool_tcp_link)까지 확장. link_eef~tool_tcp_link 사이는
+         전부 고정 조인트라 활성 관절(joint1~7)은 이전과 동일하며, IK/Cartesian 기준점만
+         tool_tcp_link로 바뀐다 (kaair_bringup의 arm_move_action_server.py가 이미
+         EEF_LINK="tool_tcp_link"로 명시적 IK를 요청해온 것과 동일한 지점). -->
     <group name="arm">
-        <chain base_link="arm_base" tip_link="link_eef"/>
+        <chain base_link="arm_base" tip_link="tool_tcp_link"/>
     </group>
     <group name="lift">
         <chain base_link="lift_base_link" tip_link="lift_link"/>

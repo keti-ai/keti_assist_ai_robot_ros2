@@ -60,10 +60,15 @@ butterworth_filter_coeff: 0.5
 is_primary_planning_scene_monitor: false
 
 # ── 그룹 / 프레임 ────────────────────────────────────────────────────────────
-# kaair SRDF group: "arm"  <chain base_link="arm_base" tip_link="link_eef"/>
+# moveit_servo(Humble, 2.5.x)는 Jacobian을 ee_frame_name이 아니라
+# move_group_name 그룹의 SRDF chain tip_link 기준으로 계산한다
+# (source: moveit_ros/moveit_servo/src/servo_calcs.cpp, getJacobian(joint_model_group_)).
+# → kaair.srdf/kaair_clober.srdf의 "arm" 그룹 tip_link 자체를 그리퍼 끝단(tool_tcp_link)으로
+#   설정해두었으므로 회전이 tool_tcp_link 기준으로 피벗한다.
+# kaair SRDF group: "arm"  <chain base_link="arm_base" tip_link="tool_tcp_link"/>
 move_group_name: arm
 planning_frame: link_base         # arm 베이스 프레임 (xArm7 내부 기준 프레임)
-ee_frame_name: tool_tcp_link           # 엔드 이펙터
+ee_frame_name: tool_tcp_link           # 엔드 이펙터 (move_group_name 그룹의 tip_link와 일치시킴)
 robot_link_command_frame: link_base
 
 # ── 토픽 ────────────────────────────────────────────────────────────────────

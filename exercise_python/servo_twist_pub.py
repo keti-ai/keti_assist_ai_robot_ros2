@@ -14,7 +14,7 @@ TwistStamped 를 주기적으로 publish 한다.
 인자:
     --lx, --ly, --lz    선속도 (m/s)
     --rx, --ry, --rz    각속도 (rad/s)
-    --frame             기준 프레임  (기본: link_base)
+    --frame             기준 프레임  (기본: tool_tcp_link)
     --duration          발행 시간 [초]  (기본: 5.0 / 0 = 무한)
     --rate              발행 주기 [Hz]  (기본: 30)
 """
@@ -36,6 +36,7 @@ class ServoTwistPub(Node):
         self._duration = duration   # 0 = 무한
         self._period   = 1.0 / rate
         self._count    = 0
+        self.done      = False
 
         self._pub = self.create_publisher(
             TwistStamped,
@@ -57,7 +58,7 @@ class ServoTwistPub(Node):
         if self._duration > 0 and self._count * self._period >= self._duration:
             self.get_logger().info(f'{self._duration}s 완료. 종료합니다.')
             self._timer.cancel()
-            rclpy.shutdown()
+            self.done = True
             return
 
         msg = TwistStamped()
@@ -82,7 +83,7 @@ def main():
     parser.add_argument('--rx',       type=float, default=0.0)
     parser.add_argument('--ry',       type=float, default=0.0)
     parser.add_argument('--rz',       type=float, default=0.0)
-    parser.add_argument('--frame',    type=str,   default='link_eef')
+    parser.add_argument('--frame',    type=str,   default='tool_tcp_link')
     parser.add_argument('--duration', type=float, default=5.0)
     parser.add_argument('--rate',     type=float, default=30.0)
     args = parser.parse_args()
@@ -96,7 +97,8 @@ def main():
         rate=args.rate,
     )
     try:
-        rclpy.spin(node)
+        while rclpy.ok() and not node.done:
+            rclpy.spin_once(node, timeout_sec=0.1)
     except KeyboardInterrupt:
         pass
     finally:
