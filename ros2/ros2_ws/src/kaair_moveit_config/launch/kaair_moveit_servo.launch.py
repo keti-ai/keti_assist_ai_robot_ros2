@@ -11,8 +11,8 @@ kaair_moveit.launch.py 의 2-CM 구조에 MoveIt Servo 를 추가한 완전한 �
   │  move_group (controller 체인 완전 종료 후 기동)                             │
   ├─────────────────────────────────────────────────────────────────────┤
   │  [추가 구성]                                                         │
-  │  servo_server  (standalone servo_node_main)                         │
-  │    moveit_servo::servo_node_main                                    │
+  │  servo_server  (standalone servo_node_main/servo_node)               │
+  │    moveit_servo::servo_node_main (Humble) / servo_node (Jazzy)      │
   │      입력:  /servo_server/delta_twist_cmds  (TwistStamped)         │
   │             /servo_server/delta_joint_cmds  (JointJog)             │
   │      출력:  /arm/xarm7_traj_controller/joint_trajectory            │
@@ -77,6 +77,14 @@ _ctrl_launch_dir = os.path.join(
 if _ctrl_launch_dir not in sys.path:
     sys.path.insert(0, _ctrl_launch_dir)
 from control_managers import build_control_managers  # noqa: E402
+
+_this_launch_dir = os.path.dirname(os.path.abspath(__file__))
+if _this_launch_dir not in sys.path:
+    sys.path.insert(0, _this_launch_dir)
+from moveit_pipeline_compat import (  # noqa: E402
+    fix_planning_pipelines_for_jazzy,
+    is_humble,
+)
 
 
 def _load_yaml(package_name: str, relative_path: str) -> dict:
@@ -158,6 +166,11 @@ def launch_setup(context, *args, **kwargs):
         .sensors_3d(file_path='config/sensors_3d.yaml')
         .to_moveit_configs()
     )
+    if not is_humble():
+        # Jazzy 의 PlanningPipeline 은 planning_plugin(str)/request_adapters(str)
+        # 대신 planning_plugins(list)/request_adapters(list) 를 요구한다.
+        # (config/*_planning.yaml 자체는 Humble 포맷 그대로 유지)
+        fix_planning_pipelines_for_jazzy(moveit_config)
 
     # ── MoveIt Servo 설정 ─────────────────────────────────────────────────
     servo_yaml = _load_yaml('kaair_moveit_config', 'config/kaair_servo_config.yaml')
@@ -241,19 +254,25 @@ def launch_setup(context, *args, **kwargs):
     # [추가] MoveIt Servo 관련 노드
     # ════════════════════════════════════════════════════════════════════════
 
-    # [F] servo_node_main (standalone)
+    # [F] servo_node (standalone)
     #   ComposableNodeContainer 대신 독립 프로세스로 실행.
     #   move_group 기동 후 시작해 planning scene monitor 를 secondary 로 attach.
     #   is_primary_planning_scene_monitor: false (servo config 에 설정됨).
+    #
+    #   실행 파일 이름이 배포판마다 다르다:
+    #     Humble (moveit_servo 2.5.x)  → servo_node_main
+    #     Jazzy  (moveit_servo 2.12.x) → servo_node
+    #   (파라미터/토픽/서비스 인터페이스는 두 배포판에서 동일하다.)
     #
     #   서비스:
     #     /servo_server/start_servo   → SERVO 모드 시작
     #     /servo_server/pause_servo   → 일시정지 (PLANNING 모드 복귀)
     #     /servo_server/unpause_servo → 일시정지에서 재개
     #     /servo_server/stop_servo    → 완전 중지 (재시작 불가)
+    servo_executable = 'servo_node_main' if os.environ.get('ROS_DISTRO') == 'humble' else 'servo_node'
     servo_node = Node(
         package='moveit_servo',
-        executable='servo_node_main',
+        executable=servo_executable,
         name='servo_server',
         output='screen',
         parameters=[

@@ -59,8 +59,13 @@ fi
 #      ros2/xarm_ws/src/xarm_ros2
 #      ros2/camera_ws/src/OrbbecSDK_ROS2
 #      ros2/camera_ws/src/Realsense_ROS2
+#      ros2/ros2_ws/src/third_party/rviz_2d_overlay_plugins (jazzy 전용 —
+#        apt 의 ros-jazzy-rviz-2d-overlay-plugins 바이너리가 깨져 있어
+#        (undefined vtable symbol) 소스 빌드로 대체. ros2_ws 를 colcon build
+#        할 때 나머지 kaair 패키지들과 함께 자동으로 빌드된다.
+#        docker/Dockerfile 3-5-1 절 참고. humble 은 apt 패키지 그대로 사용)
 # -----------------------------------------------------------------------------
-mkdir -p "$XARM_WS/src" "$CAMERA_WS/src"
+mkdir -p "$XARM_WS/src" "$CAMERA_WS/src" "$ROS2_ROOT/ros2_ws/src/third_party"
 
 echo "============================================================"
 echo "📦 Import third-party packages"
@@ -69,6 +74,9 @@ echo "ROS Distro  : $ROS_DISTRO"
 echo "Repos file  : $REPOS_FILE"
 echo "xarm        : $XARM_WS/src/xarm_ros2"
 echo "camera      : $CAMERA_WS/src/{OrbbecSDK_ROS2,Realsense_ROS2}"
+if [ "$ROS_DISTRO" = "jazzy" ]; then
+    echo "rviz overlay: $ROS2_ROOT/ros2_ws/src/third_party/rviz_2d_overlay_plugins"
+fi
 echo "============================================================"
 
 vcs import --recursive --skip-existing "$PROJECT_ROOT" < "$REPOS_FILE"
@@ -78,3 +86,6 @@ echo "✅ Import completed (xarm_ros2 branch: $ROS_DISTRO)"
 echo "   colcon build 는 각 워크스페이스에서 실행하세요:"
 echo "     cd $XARM_WS && colcon build --symlink-install"
 echo "     cd $CAMERA_WS && colcon build --symlink-install"
+if [ "$ROS_DISTRO" = "jazzy" ]; then
+    echo "     cd $ROS2_ROOT/ros2_ws && colcon build --symlink-install   # rviz_2d_overlay_plugins 포함"
+fi

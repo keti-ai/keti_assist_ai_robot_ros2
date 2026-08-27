@@ -11,3 +11,7 @@ repositories:
     type: git
     url: https://github.com/realsenseai/realsense-ros.git
     version: ros2-master
+  ros2/ros2_ws/src/third_party/rviz_2d_overlay_plugins:
+    type: git
+    url: https://github.com/teamspatzenhirn/rviz_2d_overlay_plugins.git
+    version: main

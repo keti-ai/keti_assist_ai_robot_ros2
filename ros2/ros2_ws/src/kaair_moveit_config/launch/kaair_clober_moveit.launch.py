@@ -70,6 +70,14 @@ if _ctrl_launch_dir not in sys.path:
     sys.path.insert(0, _ctrl_launch_dir)
 from control_managers import build_control_managers  # noqa: E402
 
+_this_launch_dir = os.path.dirname(os.path.abspath(__file__))
+if _this_launch_dir not in sys.path:
+    sys.path.insert(0, _this_launch_dir)
+from moveit_pipeline_compat import (  # noqa: E402
+    fix_planning_pipelines_for_jazzy,
+    is_humble,
+)
+
 
 def launch_setup(context, *args, **kwargs):
     # ── 런타임 인자 resolve ────────────────────────────────────────────────
@@ -139,6 +147,11 @@ def launch_setup(context, *args, **kwargs):
         .sensors_3d(file_path='config/sensors_3d.yaml')
         .to_moveit_configs()
     )
+    if not is_humble():
+        # Jazzy 의 PlanningPipeline 은 planning_plugin(str)/request_adapters(str)
+        # 대신 planning_plugins(list)/request_adapters(list) 를 요구한다.
+        # (config/*_planning.yaml 자체는 Humble 포맷 그대로 유지)
+        fix_planning_pipelines_for_jazzy(moveit_config)
 
     # ════════════════════════════════════════════════════════════════════════
     # 노드 정의
