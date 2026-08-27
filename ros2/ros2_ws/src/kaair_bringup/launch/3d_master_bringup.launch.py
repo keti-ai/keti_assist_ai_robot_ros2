@@ -33,6 +33,20 @@ def generate_launch_description():
                               description='노드 시작 시 활성화할 tool forward controller 이름'),
         DeclareLaunchArgument('tool_original_controller', default_value='tool_controller',
                               description='노드 종료 시 복원할 원래 tool controller 이름'),
+        # SpaceMouse 축 인덱스
+        DeclareLaunchArgument('axis_tx', default_value='0'),
+        DeclareLaunchArgument('axis_ty', default_value='2'),
+        DeclareLaunchArgument('axis_tz', default_value='1'),
+        DeclareLaunchArgument('axis_rx', default_value='3'),
+        DeclareLaunchArgument('axis_ry', default_value='5'),
+        DeclareLaunchArgument('axis_rz', default_value='4'),
+        # 축 방향 반전 (+1 or -1)
+        DeclareLaunchArgument('sign_tx', default_value='1'),
+        DeclareLaunchArgument('sign_ty', default_value='1'),
+        DeclareLaunchArgument('sign_tz', default_value='1'),
+        DeclareLaunchArgument('sign_rx', default_value='1'),
+        DeclareLaunchArgument('sign_ry', default_value='1'),
+        DeclareLaunchArgument('sign_rz', default_value='1'),
     ]
 
     joy_node = Node(
@@ -70,11 +84,19 @@ def generate_launch_description():
             'publish_hz':  50.0,
             'deadband':    0.05,
             # SpaceMouse 축 인덱스 (필요시 조정)
-            'axis_tx': 0, 'axis_ty': 2, 'axis_tz': 1,
-            'axis_rx': 3, 'axis_ry': 5, 'axis_rz': 4,
+            'axis_tx': LaunchConfiguration('axis_tx'),
+            'axis_ty': LaunchConfiguration('axis_ty'),
+            'axis_tz': LaunchConfiguration('axis_tz'),
+            'axis_rx': LaunchConfiguration('axis_rx'),
+            'axis_ry': LaunchConfiguration('axis_ry'),
+            'axis_rz': LaunchConfiguration('axis_rz'),
             # 방향 반전 (+1 or -1)
-            'sign_tx': 1, 'sign_ty': 1, 'sign_tz': 1,
-            'sign_rx': 1, 'sign_ry': 1, 'sign_rz': 1,
+            'sign_tx': LaunchConfiguration('sign_tx'),
+            'sign_ty': LaunchConfiguration('sign_ty'),
+            'sign_tz': LaunchConfiguration('sign_tz'),
+            'sign_rx': LaunchConfiguration('sign_rx'),
+            'sign_ry': LaunchConfiguration('sign_ry'),
+            'sign_rz': LaunchConfiguration('sign_rz'),
         }],
     )
 
