@@ -32,6 +32,17 @@
   <exec_depend>builtin_interfaces</exec_depend>
   <exec_depend>action_msgs</exec_depend>
 
+  <!-- server_worker_loader.py: ufactory_driver(xarm_driver_node) 실행 및
+       generate_robot_api_params 로 config/common/kaair_xarm7_param.yaml 적용 -->
+  <exec_depend>xarm_api</exec_depend>
+  <exec_depend>uf_ros_lib</exec_depend>
+  <!-- xarm_bridge.py: /arm/init_set 이 드라이버 서비스를 호출할 때 쓰는 srv 타입 -->
+  <exec_depend>xarm_msgs</exec_depend>
+
+  <!-- eef_state_publisher.py: robot_description 을 파싱해 KDL 체인/야코비안 구성 -->
+  <exec_depend>urdfdom_py</exec_depend>
+  <exec_depend>python_orocos_kdl_vendor</exec_depend>
+
   <exec_depend>kaair_description</exec_depend>
   <exec_depend>kaair_controller</exec_depend>
   <exec_depend>kaair_mobile_bridge</exec_depend>

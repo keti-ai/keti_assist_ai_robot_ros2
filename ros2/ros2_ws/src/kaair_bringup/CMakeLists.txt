@@ -42,6 +42,7 @@ set(PYTHON_NODES
   "kaair_bringup/server_worker/depth_pointcloud_publisher.py"         "depth_pointcloud_publisher"
   "kaair_bringup/server_worker/pyorbbec_camera_publisher.py"          "pyorbbec_camera_publisher"
   "kaair_bringup/server_worker/xarm_bridge.py"                   "xarm_bridge"
+  "kaair_bringup/server_worker/eef_state_publisher.py"           "eef_state_publisher"
   "kaair_bringup/motion_worker/lift_move_action_server.py"       "lift_move_action_server"
   "kaair_bringup/motion_worker/arm_move_action_server.py"        "arm_move_action_server"
   "kaair_bringup/motion_worker/controller_mode_switcher.py"      "controller_mode_switcher"
