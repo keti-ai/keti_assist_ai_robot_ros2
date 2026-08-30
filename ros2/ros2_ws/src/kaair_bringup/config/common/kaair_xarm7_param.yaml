@@ -4,7 +4,7 @@ ufactory_driver:
   ros__parameters:
     joint_names: ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6', 'joint7']
     joint_states:
-      rate: 100
+      rate: 50
       flags: -1
     xarm_gripper:
       joint_names: ['drive_joint', 'left_finger_joint', 'left_inner_knuckle_joint', 'right_outer_knuckle_joint', 'right_finger_joint', 'right_inner_knuckle_joint']
