@@ -75,6 +75,12 @@ public:
     expected_h_ = this->declare_parameter<int>("expected_height", 720);
     expected_w_ = this->declare_parameter<int>("expected_width", 1280);
 
+    // compressedDepth 구독/재발행 경로 on/off. 카메라 드라이버 쪽 compressedDepth
+    // 퍼블리셔에 RELIABLE 구독자가 붙으면(이 노드 포함) 다른 스트림(RGB 등)에
+    // 지연을 유발할 수 있어, 실제로 필요할 때만 켜서 쓸 수 있게 파라미터화한다.
+    enable_compressed_depth_ = this->declare_parameter<bool>(
+      "enable_compressed_depth", true);
+
     // RELIABLE QoS로 고정 (구독/발행 모두). 상대측(카메라 드라이버/구독자)의
     // QoS 도 RELIABLE 이어야 실제로 연결된다.
     auto qos = rclcpp::QoS(rclcpp::KeepLast(5)).reliable();
@@ -82,8 +88,6 @@ public:
     // raw / compressedDepth 각각 별도 콜백 그룹 -> main()의 MultiThreadedExecutor
     // 에서 서로 다른 스레드로 처리된다.
     raw_cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    compressed_cb_group_ =
-      this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
     // ---- raw 경로 ----
     raw_pub_ = this->create_publisher<Image>(output_topic_, qos);
@@ -95,25 +99,32 @@ public:
       std::bind(&DepthResizeNode::rawImageCallback, this, std::placeholders::_1),
       raw_sub_opts);
 
-    // ---- compressedDepth 경로 (디코드/인코드 없이 그대로 통과) ----
+    // ---- compressedDepth 경로 (디코드/인코드 없이 그대로 통과, 파라미터로 on/off) ----
     const std::string compressed_input_topic = input_topic_ + "/compressedDepth";
     const std::string compressed_output_topic = output_topic_ + "/compressedDepth";
 
-    compressed_pub_ = this->create_publisher<CompressedImage>(compressed_output_topic, qos);
+    if (enable_compressed_depth_) {
+      compressed_cb_group_ =
+        this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
-    rclcpp::SubscriptionOptions compressed_sub_opts;
-    compressed_sub_opts.callback_group = compressed_cb_group_;
-    compressed_sub_ = this->create_subscription<CompressedImage>(
-      compressed_input_topic, qos,
-      std::bind(&DepthResizeNode::compressedDepthCallback, this, std::placeholders::_1),
-      compressed_sub_opts);
+      compressed_pub_ = this->create_publisher<CompressedImage>(compressed_output_topic, qos);
+
+      rclcpp::SubscriptionOptions compressed_sub_opts;
+      compressed_sub_opts.callback_group = compressed_cb_group_;
+      compressed_sub_ = this->create_subscription<CompressedImage>(
+        compressed_input_topic, qos,
+        std::bind(&DepthResizeNode::compressedDepthCallback, this, std::placeholders::_1),
+        compressed_sub_opts);
+    }
 
     RCLCPP_INFO(
       this->get_logger(),
-      "depth_resize_node: [raw] %s -> %s, [compressedDepth] %s -> %s, expect %dx%d "
+      "depth_resize_node: [raw] %s -> %s, [compressedDepth] %s, expect %dx%d "
       "(해상도 불일치 시 drop)",
       input_topic_.c_str(), output_topic_.c_str(),
-      compressed_input_topic.c_str(), compressed_output_topic.c_str(),
+      enable_compressed_depth_
+        ? (compressed_input_topic + " -> " + compressed_output_topic).c_str()
+        : "disabled",
       expected_w_, expected_h_);
   }
 
@@ -190,6 +201,7 @@ private:
 
   std::string input_topic_, output_topic_;
   int expected_h_{0}, expected_w_{0};
+  bool enable_compressed_depth_{true};
 
   rclcpp::CallbackGroup::SharedPtr raw_cb_group_;
   rclcpp::CallbackGroup::SharedPtr compressed_cb_group_;

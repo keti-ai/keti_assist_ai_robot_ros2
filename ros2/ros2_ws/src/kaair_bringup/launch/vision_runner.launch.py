@@ -4,6 +4,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
 import os
 
@@ -19,8 +20,16 @@ def generate_launch_description():
         description="핸드 카메라 사용 여부"
     )
 
+    enable_depth_compressed_arg = DeclareLaunchArgument(
+        "enable_depth_compressed", default_value="false",
+        description="depth_resizer의 compressedDepth 구독/재발행 여부. "
+                     "compressedDepth 구독자가 카메라 드라이버 쪽에 부하를 줘 "
+                     "RGB 등 다른 스트림 지연을 유발할 때 false로 끈다."
+    )
+
     use_head_camera = LaunchConfiguration("use_head_camera")
     use_hand_camera = LaunchConfiguration("use_hand_camera")
+    enable_depth_compressed = LaunchConfiguration("enable_depth_compressed")
 
     # Include launch files
     head_package_dir = get_package_share_directory('orbbec_camera')
@@ -57,6 +66,7 @@ def generate_launch_description():
             'output_topic': '/femto/depth/aligned',
             'expected_height': 720,
             'expected_width': 1280,
+            'enable_compressed_depth': ParameterValue(enable_depth_compressed, value_type=bool),
         }],
     )
 
@@ -80,6 +90,7 @@ def generate_launch_description():
     ld = LaunchDescription([
         use_head_camera_arg,
         use_hand_camera_arg,
+        enable_depth_compressed_arg,
         TimerAction(period=0.0, actions=[GroupAction([hand_launch_include])]),
         TimerAction(period=2.0, actions=[GroupAction([head_launch_include])]),
         # femto 카메라 드라이버가 완전히 올라와 토픽을 publish하기 시작할 시간을
