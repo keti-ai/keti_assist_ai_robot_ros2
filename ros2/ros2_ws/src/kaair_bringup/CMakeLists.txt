@@ -9,6 +9,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 # 설치 규칙: config, launch, rviz 폴더 전체를 share/PROJECT_NAME 디렉토리로 복사
 install(DIRECTORY
@@ -31,6 +32,23 @@ ament_target_dependencies(depth_resizer
 
 install(TARGETS
   depth_resizer
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# ---- C++ 노드: azure_bridge_node ----
+# azure_kinect_container_humble(ROS_DOMAIN_ID=25)에서 K4A wrapper로 도는
+# azure_kinect_ros_driver node의 raw 토픽 + body tracking 결과를, 이 워크스페이스가
+# 있는 도메인(기본 10)으로 리네임/frame_id 교정해서 재발행한다. is_azure 모드에서
+# femto_bolt.launch.py(네이티브 헤드 카메라)와 depth_resizer를 대체한다.
+add_executable(azure_bridge_node src/azure_bridge_node.cpp)
+ament_target_dependencies(azure_bridge_node
+  rclcpp
+  sensor_msgs
+  visualization_msgs
+)
+
+install(TARGETS
+  azure_bridge_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
