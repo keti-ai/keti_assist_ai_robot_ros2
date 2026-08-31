@@ -40,7 +40,7 @@ def generate_launch_description():
     )
 
     enable_depth_compressed_arg = DeclareLaunchArgument(
-        "enable_depth_compressed", default_value="false",
+        "enable_depth_compressed", default_value="true",
         description="depth_resizer의 compressedDepth 구독/재발행 여부. "
                      "compressedDepth 구독자가 카메라 드라이버 쪽에 부하를 줘 "
                      "RGB 등 다른 스트림 지연을 유발할 때 false로 끈다."

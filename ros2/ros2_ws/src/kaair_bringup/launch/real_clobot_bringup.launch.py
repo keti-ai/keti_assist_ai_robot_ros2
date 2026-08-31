@@ -240,6 +240,7 @@ def launch_setup(context, *args, **kwargs):
 
     use_head_camera = LaunchConfiguration('use_head_camera')
     use_hand_camera = LaunchConfiguration('use_hand_camera')
+    use_azure = LaunchConfiguration('use_azure')
 
     vision_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
@@ -250,6 +251,7 @@ def launch_setup(context, *args, **kwargs):
         launch_arguments={
             'use_head_camera': use_head_camera,
             'use_hand_camera': use_hand_camera,
+            'use_azure': use_azure,
         }.items(),
     )
 
@@ -306,6 +308,13 @@ def generate_launch_description():
             'use_hand_camera',
             default_value='true',
             description='핸드 카메라 사용 여부',
+        ),
+        DeclareLaunchArgument(
+            'use_azure',
+            default_value='false',
+            description='true면 vision_runner.launch.py 쪽에서 네이티브 헤드 카메라 '
+                        '대신 azure_bridge_node(azure_kinect_container_humble 도메인 '
+                        '브리지)로 femto/body_* 토픽을 대체한다.',
         ),
         DeclareLaunchArgument(
             'use_fake_hardware',
