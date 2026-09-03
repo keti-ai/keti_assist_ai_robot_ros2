@@ -157,12 +157,18 @@ def build_control_managers(
             arm_cm_kwargs['prefix'] = arm_cm_prefix
         arm_cm_node = Node(**arm_cm_kwargs)
 
+        # 실물 arm hardware plugin(UFRobotSystemHardware)의 on_init()이 xArm
+        # 컨트롤러 박스로 블로킹 TCP connect 를 수행하기 때문에, controller_manager
+        # 서비스가 뜨기까지 네트워크 상태에 따라 수 초~십수 초가 걸릴 수 있다.
+        # spawner 기본 타임아웃(수 초)으로는 이 지연을 못 버티고 실패할 수 있어
+        # 넉넉하게 늘려서 spawner 자체의 폴링 재시도가 흡수하게 한다.
         arm_jsb_spawner = Node(
             package='controller_manager',
             executable='spawner',
             arguments=[
                 'joint_state_broadcaster',
                 '--controller-manager', '/arm/controller_manager',
+                '--controller-manager-timeout', '30',
             ],
         )
         arm_ctrl_spawner = Node(
@@ -171,6 +177,7 @@ def build_control_managers(
             arguments=[
                 'xarm7_traj_controller',
                 '--controller-manager', '/arm/controller_manager',
+                '--controller-manager-timeout', '30',
             ],
         )
 
@@ -184,6 +191,7 @@ def build_control_managers(
                 arguments=[
                     arm_forward_controller,
                     '--controller-manager', '/arm/controller_manager',
+                    '--controller-manager-timeout', '30',
                     '--inactive',
                 ],
             )
@@ -239,6 +247,7 @@ def build_control_managers(
             arguments=[
                 'joint_state_broadcaster',
                 '--controller-manager', '/body/controller_manager',
+                '--controller-manager-timeout', '30',
             ],
         )
 
@@ -246,7 +255,11 @@ def build_control_managers(
             ctrl_name: Node(
                 package='controller_manager',
                 executable='spawner',
-                arguments=[ctrl_name, '--controller-manager', '/body/controller_manager'],
+                arguments=[
+                    ctrl_name,
+                    '--controller-manager', '/body/controller_manager',
+                    '--controller-manager-timeout', '30',
+                ],
             )
             for ctrl_name in body_active_controllers
         }
@@ -258,6 +271,7 @@ def build_control_managers(
                 arguments=[
                     ctrl_name,
                     '--controller-manager', '/body/controller_manager',
+                    '--controller-manager-timeout', '30',
                     '--inactive',
                 ],
             )
