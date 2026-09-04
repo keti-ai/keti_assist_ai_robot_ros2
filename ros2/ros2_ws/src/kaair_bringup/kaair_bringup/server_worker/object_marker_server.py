@@ -952,8 +952,8 @@ class ObjectMarkerServer(Node):
             p.z = float(z)
             marker.points.append(p)
 
-        marker.scale.x = 0.08
-        marker.scale.y = 0.08
+        marker.scale.x = 0.01
+        marker.scale.y = 0.01
         marker.lifetime = Duration(seconds=0.6).to_msg()
 
         marker.color.a = 1.0
