@@ -46,11 +46,25 @@ def generate_launch_description():
                      "RGB 등 다른 스트림 지연을 유발할 때 false로 끈다."
     )
 
+    # realsense2_camera_node는 color_qos/depth_qos 파라미터를 런타임에 동적으로
+    # 선언하기 때문에 rs_launch.py의 launch_arguments로는 값이 전달되지 않는다
+    # (rs_launch.py가 인식하는 launch 인자 목록에 없어서 무시됨). 대신
+    # rs_launch.py가 지원하는 config_file 인자를 통해 파라미터 yaml을 그대로
+    # 노드에 병합시켜 적용한다.
+    hand_camera_qos_arg = DeclareLaunchArgument(
+        "hand_camera_qos", default_value="best_effort",
+        choices=["reliable", "best_effort"],
+        description="핸드 카메라(realsense) color/depth 이미지 스트림 QoS. "
+                     "best_effort면 SENSOR_DATA(best effort) 프로파일을, "
+                     "reliable이면 realsense2_camera 기본값(SYSTEM_DEFAULT, reliable)을 사용한다."
+    )
+
     use_head_camera = LaunchConfiguration("use_head_camera")
     use_hand_camera = LaunchConfiguration("use_hand_camera")
     use_azure = LaunchConfiguration("use_azure")
     azure_main_domain_id = LaunchConfiguration("azure_main_domain_id")
     enable_depth_compressed = LaunchConfiguration("enable_depth_compressed")
+    hand_camera_qos = LaunchConfiguration("hand_camera_qos")
 
     # use_head_camera가 true여도 use_azure가 true면 네이티브 헤드 카메라 쪽은 끈다
     # (azure_bridge_node가 그 자리를 대체하므로 같은 물리 카메라를 두 번 열지 않는다).
@@ -115,6 +129,18 @@ def generate_launch_description():
     hand_package_dir = get_package_share_directory('realsense2_camera')
     hand_launch_dir = os.path.join(hand_package_dir, 'launch')
 
+    # color_qos/depth_qos는 rs_launch.py의 launch 인자로 노출되어 있지 않아
+    # launch_arguments로 직접 넘겨도 무시된다. rs_launch.py가 그대로 노드 파라미터로
+    # 병합해주는 config_file 인자를 통해 best_effort일 때만 SENSOR_DATA(best effort)
+    # yaml을 얹고, reliable이면 config_file을 비워 realsense2_camera 기본값(reliable)을 쓴다.
+    hand_camera_qos_config_file = os.path.join(
+        get_package_share_directory('kaair_bringup'),
+        'config', 'common', 'realsense_hand_qos_best_effort.yaml'
+    )
+    hand_camera_config_file = PythonExpression([
+        "'", hand_camera_qos_config_file, "' if '", hand_camera_qos, "' == 'best_effort' else \"''\""
+    ])
+
     hand_launch_include = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(hand_launch_dir, 'rs_launch.py')
@@ -124,6 +150,7 @@ def generate_launch_description():
             'pointcloud.enable': 'true',
             'publish_tf': 'false',
             'output': 'own_log',
+            'config_file': hand_camera_config_file,
         }.items(),
         condition=IfCondition(use_hand_camera),
     )
@@ -135,6 +162,7 @@ def generate_launch_description():
         use_azure_arg,
         azure_main_domain_id_arg,
         enable_depth_compressed_arg,
+        hand_camera_qos_arg,
         TimerAction(period=0.0, actions=[GroupAction([hand_launch_include])]),
         TimerAction(period=0.0, actions=[GroupAction([azure_bridge_node])]),
         TimerAction(period=2.0, actions=[GroupAction([head_launch_include])]),

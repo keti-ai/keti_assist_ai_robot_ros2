@@ -1,0 +1,7 @@
+# rs_launch.py's config_file은 realsense2_camera_node의 파라미터를 그대로 병합해서
+# 넘겨준다 (ros__parameters 래핑 없이 평평한 key: value). color_qos/depth_qos는
+# realsense2_camera가 런타임에 동적으로 선언하는 파라미터라 rs_launch.py의
+# configurable_parameters 목록에는 없지만, config_file로 넘기면 정상 적용된다.
+# 값은 SENSOR_DATA(best effort) 또는 SYSTEM_DEFAULT(reliable, 기본값) 중 하나.
+color_qos: SENSOR_DATA
+depth_qos: SENSOR_DATA
