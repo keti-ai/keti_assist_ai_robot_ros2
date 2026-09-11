@@ -52,7 +52,7 @@ def generate_launch_description():
     # rs_launch.py가 지원하는 config_file 인자를 통해 파라미터 yaml을 그대로
     # 노드에 병합시켜 적용한다.
     hand_camera_qos_arg = DeclareLaunchArgument(
-        "hand_camera_qos", default_value="best_effort",
+        "hand_camera_qos", default_value="reliable",
         choices=["reliable", "best_effort"],
         description="핸드 카메라(realsense) color/depth 이미지 스트림 QoS. "
                      "best_effort면 SENSOR_DATA(best effort) 프로파일을, "
