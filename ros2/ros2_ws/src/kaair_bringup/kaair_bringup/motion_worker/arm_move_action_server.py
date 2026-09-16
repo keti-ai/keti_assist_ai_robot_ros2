@@ -31,6 +31,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
 
 from action_msgs.msg import GoalStatus
+from action_msgs.srv import CancelGoal
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import JointState
 from shape_msgs.msg import SolidPrimitive
@@ -54,12 +55,14 @@ from tf2_ros import Buffer, TransformListener
 from kaair_msgs.action import MoveJoint, MoveLinear, MoveTool, ArmTask
 
 # ── ANSI 색상 유틸 ─────────────────────────────────────────────────────────
-_BLUE = "\033[94m"
-_RED  = "\033[91m"
-_RST  = "\033[0m"
+_BLUE   = "\033[94m"
+_RED    = "\033[91m"
+_YELLOW = "\033[93m"
+_RST    = "\033[0m"
 
-def _blue(s: str) -> str: return f"{_BLUE}{s}{_RST}"
-def _red(s: str)  -> str: return f"{_RED}{s}{_RST}"
+def _blue(s: str)   -> str: return f"{_BLUE}{s}{_RST}"
+def _red(s: str)    -> str: return f"{_RED}{s}{_RST}"
+def _yellow(s: str) -> str: return f"{_YELLOW}{s}{_RST}"
 
 # rcutils의 {time} 토큰은 epoch 초 단위라 직관적이지 않으므로, 로그 메시지 앞에
 # 사람이 읽기 쉬운 시:분:초.밀리초 형태의 시스템 시간을 직접 붙인다.
@@ -96,6 +99,16 @@ ACTION_ARM_MOVE = "kaair_worker/arm_moveJ"
 ACTION_MOVEL = "kaair_worker/arm_moveL"
 ACTION_MOVET = "kaair_worker/arm_moveT"
 ACTION_ARM_TASK = "kaair_worker/arm_task"
+
+# MoveGroup/ExecuteTrajectory action의 cancel_goal_async()는 이 MoveIt 빌드에서
+# Pilz PTP/LIN 등으로 plan+execute 진행 중인 goal에 대해 실제로 거부되는 것을
+# 실측으로 확인했다(move_group이 goals_canceling=[] 로 응답하며 preempt 자체를
+# 무시함). 따라서 취소 시 실제 정지를 보장하려면, 최종 실행 대상인 로우레벨
+# FollowJointTrajectory 컨트롤러의 cancel_goal 서비스를 이 노드가 직접 호출해야
+# 한다 (lift_move_action_server.py / head_move_server.py가 애초에 MoveGroup을
+# 거치지 않고 이 컨트롤러에 직접 goal을 보내는 것과 같은 이유).
+ARM_TRAJ_CONTROLLER_ACTION = "/arm/xarm7_traj_controller/follow_joint_trajectory"
+ARM_TRAJ_CONTROLLER_CANCEL_SERVICE = f"{ARM_TRAJ_CONTROLLER_ACTION}/_action/cancel_goal"
 
 # 이 서버는 move_group(Pilz PTP/LIN, ExecuteTrajectory)로 팔을 제어하므로,
 # MoveIt Servo 가 켜져(SERVO 모드) /arm/xarm7_traj_controller/joint_trajectory 를
@@ -193,6 +206,14 @@ class UnifiedMotionActionServer(Node):
             callback_group=self._cb_group,
         )
 
+        # MoveGroup/ExecuteTrajectory cancel이 실제로 반영되지 않는 경우를 대비해,
+        # 취소 시 로우레벨 컨트롤러를 직접 멈추기 위한 서비스 클라이언트.
+        self._arm_traj_cancel_client = self.create_client(
+            CancelGoal,
+            ARM_TRAJ_CONTROLLER_CANCEL_SERVICE,
+            callback_group=self._cb_group,
+        )
+
         self._srv_move_joint = ActionServer(
             self,
             MoveJoint,
@@ -271,7 +292,7 @@ class UnifiedMotionActionServer(Node):
             self._servo_pause_client.call_async(Trigger.Request())
 
     def _cancel_cb(self, _goal_handle):
-        self._info("Cancel 요청 수신")
+        self._info(_yellow("Cancel 요청 수신"))
         return CancelResponse.ACCEPT
 
     def _on_joint_state(self, msg: JointState):
@@ -435,6 +456,68 @@ class UnifiedMotionActionServer(Node):
             acceleration_scale,
         )
 
+    def _force_stop_arm_controller(self):
+        """로우레벨 /arm/xarm7_traj_controller FollowJointTrajectory goal을
+        직접 취소해 실제(시뮬레이션 포함) 팔 동작을 멈춘다.
+
+        실측 확인: 이 MoveIt 빌드는 Pilz PTP/LIN으로 plan+execute 중인
+        MoveGroup/ExecuteTrajectory goal의 cancel_goal_async()를 거부한다
+        (move_group이 goals_canceling=[] 로 응답, preempt 자체를 무시하고
+        끝까지 실행함). 그래서 MoveGroup 레벨 취소만으로는 절대 멈추지 않고,
+        최종 실행 대상인 이 컨트롤러를 직접 취소해야만 실제로 멈춘다."""
+        if not self._arm_traj_cancel_client.service_is_ready():
+            self._err(_red(
+                f"arm 컨트롤러 취소 서비스({ARM_TRAJ_CONTROLLER_CANCEL_SERVICE})에 "
+                f"연결할 수 없음 — 실제 정지 실패 가능"
+            ))
+            return
+
+        future = self._arm_traj_cancel_client.call_async(CancelGoal.Request())
+        deadline = time.time() + 2.0
+        while not future.done() and time.time() < deadline:
+            time.sleep(0.02)
+
+        if not future.done():
+            self._err(_red("arm 컨트롤러 취소 응답 없음(2s) — 실제 정지 실패 가능"))
+            return
+
+        n_canceling = len(future.result().goals_canceling)
+        if n_canceling == 0:
+            self._err(_red("arm 컨트롤러에 취소할 활성 goal이 없었음 (goals_canceling=0)"))
+        else:
+            self._info(_yellow(f"arm 컨트롤러 직접 정지 완료 (goals_canceling={n_canceling})"))
+
+    def _cancel_underlying_goal(self, handle, label):
+        """MoveGroup/ExecuteTrajectory 쪽 goal handle에 cancel_goal_async를
+        걸어 시도하되, 이 MoveIt 빌드에서는 응답이 오지 않는 것으로 실측
+        확인했으므로 여기에 의존해 실제 정지를 기다리지 않는다. 실제 정지는
+        _force_stop_arm_controller()가 로우레벨 컨트롤러를 직접 취소해서
+        보장하며, 이 함수는 그걸 먼저 호출한 뒤 짧게만 응답을 확인한다."""
+        self._force_stop_arm_controller()
+
+        self._info(_yellow(f"{label} 취소 요청 전달 (cancel_goal_async)"))
+        cancel_future = handle.cancel_goal_async()
+        cdeadline = time.time() + 2.0
+        while not cancel_future.done() and time.time() < cdeadline:
+            time.sleep(0.02)
+
+        if not cancel_future.done():
+            self._info(_yellow(
+                f"{label} 취소 응답 없음(2s, 이 MoveIt 빌드의 알려진 제약) — "
+                f"로우레벨 컨트롤러 직접 정지로 대체됨"
+            ))
+            return
+
+        response = cancel_future.result()
+        n_canceling = len(response.goals_canceling) if response else 0
+        if n_canceling == 0:
+            self._info(_yellow(
+                f"{label} 취소 요청이 거부됨 (goals_canceling=0, 알려진 제약) — "
+                f"로우레벨 컨트롤러 직접 정지로 대체됨"
+            ))
+        else:
+            self._info(_yellow(f"{label} 취소 수락됨 (goals_canceling={n_canceling})"))
+
     def _call_move_group_goal(
         self,
         moveit_goal,
@@ -453,10 +536,16 @@ class UnifiedMotionActionServer(Node):
                 feedback.current_joints = self._current_joints
             goal_handle.publish_feedback(feedback)
 
+        # accept 대기 중에 취소가 들어와도 여기서 바로 return 하지 않는다.
+        # 이 시점엔 mg_handle이 아직 없어 취소를 걸 대상이 없기 때문에,
+        # 여기서 리턴해버리면 뒤에 accept된 MoveGroup goal은 아무도 취소하지
+        # 않아 끝까지 실행된다 (겉으로는 취소된 것처럼 보이지만 실제로는
+        # 팔이 계속 움직이는 버그의 원인).
         deadline = time.time() + 10.0
+        cancel_during_accept = False
         while not send_future.done():
             if goal_handle.is_cancel_requested:
-                return None, "Cancelled"
+                cancel_during_accept = True
             if time.time() > deadline:
                 return False, "MoveGroup goal 수락 대기 타임아웃"
             time.sleep(0.02)
@@ -465,15 +554,16 @@ class UnifiedMotionActionServer(Node):
         if mg_handle is None or not mg_handle.accepted:
             return False, "MoveGroup goal 거절됨"
 
+        if cancel_during_accept or goal_handle.is_cancel_requested:
+            self._cancel_underlying_goal(mg_handle, "MoveGroup")
+            return None, "Cancelled"
+
         result_future = mg_handle.get_result_async()
         sleep_interval = 1.0 / FEEDBACK_HZ
 
         while not result_future.done():
             if goal_handle.is_cancel_requested:
-                cancel_future = mg_handle.cancel_goal_async()
-                cdeadline = time.time() + 5.0
-                while not cancel_future.done() and time.time() < cdeadline:
-                    time.sleep(0.02)
+                self._cancel_underlying_goal(mg_handle, "MoveGroup")
                 return None, "Cancelled"
 
             if feedback is not None:
@@ -536,6 +626,7 @@ class UnifiedMotionActionServer(Node):
             result.success = False
             result.message = "Planning 중 취소됨"
             result.final_joints = self._current_joints
+            self._info(_yellow(f"[MoveJoint] {result.message}"))
             goal_handle.canceled()
             return result
 
@@ -554,6 +645,14 @@ class UnifiedMotionActionServer(Node):
             goal_handle.succeed()
             return result
 
+        if goal_handle.is_cancel_requested:
+            result.success = False
+            result.message = "Planning 완료 후 취소됨"
+            result.final_joints = self._current_joints
+            self._info(_yellow(f"[MoveJoint] {result.message}"))
+            goal_handle.canceled()
+            return result
+
         moveit_goal = self._build_pilz_joint_goal(
             target_joints, False, velocity_scale, acceleration_scale
         )
@@ -565,6 +664,7 @@ class UnifiedMotionActionServer(Node):
         if ok is None:
             result.success = False
             result.message = "이동 중 취소됨"
+            self._info(_yellow(f"[MoveJoint] {result.message}"))
             goal_handle.canceled()
         elif ok:
             result.success = True
@@ -678,6 +778,8 @@ class UnifiedMotionActionServer(Node):
             return False, f"Planning 실패: {msg}"
         if plan_only:
             return True, "Planning 성공"
+        if goal_handle.is_cancel_requested:
+            return None, "Planning 완료 후 취소됨"
 
         moveit_goal = self._build_pilz_pose_goal(
             target_pose, frame_id, False, velocity_scale, acceleration_scale
@@ -781,6 +883,12 @@ class UnifiedMotionActionServer(Node):
         if plan_only:
             return True, f"Planning 성공 (fraction={response.fraction:.3f})"
 
+        # Planning 성공 후 실제 실행 goal을 보내기 전, 그 사이에 취소 요청이
+        # 들어왔는지 확인한다. 이 체크가 없으면 Planning과 Moving 사이의
+        # 취소 요청이 그냥 무시되고 실제 이동이 시작된다.
+        if goal_handle.is_cancel_requested:
+            return None, "Planning 완료 후 취소됨"
+
         if not self._execute_trajectory_client.wait_for_server(timeout_sec=3.0):
             return False, "ExecuteTrajectory 액션 서버에 연결할 수 없음"
 
@@ -795,9 +903,10 @@ class UnifiedMotionActionServer(Node):
 
         send_future = self._execute_trajectory_client.send_goal_async(exec_goal)
         deadline = time.time() + 10.0
+        cancel_during_accept = False
         while not send_future.done():
             if goal_handle.is_cancel_requested:
-                return None, "Cancelled"
+                cancel_during_accept = True
             if time.time() > deadline:
                 return False, "ExecuteTrajectory goal 수락 대기 타임아웃"
             time.sleep(0.02)
@@ -806,15 +915,16 @@ class UnifiedMotionActionServer(Node):
         if exec_handle is None or not exec_handle.accepted:
             return False, "ExecuteTrajectory goal 거절됨"
 
+        if cancel_during_accept or goal_handle.is_cancel_requested:
+            self._cancel_underlying_goal(exec_handle, "ExecuteTrajectory")
+            return None, "Cancelled"
+
         result_future = exec_handle.get_result_async()
         sleep_interval = 1.0 / FEEDBACK_HZ
 
         while not result_future.done():
             if goal_handle.is_cancel_requested:
-                cancel_future = exec_handle.cancel_goal_async()
-                cdeadline = time.time() + 5.0
-                while not cancel_future.done() and time.time() < cdeadline:
-                    time.sleep(0.02)
+                self._cancel_underlying_goal(exec_handle, "ExecuteTrajectory")
                 return None, "Cancelled"
 
             if feedback is not None:
@@ -893,6 +1003,7 @@ class UnifiedMotionActionServer(Node):
         if ok is None:
             result.success = False
             result.message = msg
+            self._info(_yellow(f"[MoveLinear] {result.message}"))
             goal_handle.canceled()
         elif ok:
             result.success = True
@@ -966,6 +1077,7 @@ class UnifiedMotionActionServer(Node):
         if ok is None:
             result.success = False
             result.message = msg
+            self._info(_yellow(f"[MoveTool] {result.message}"))
             goal_handle.canceled()
         elif ok:
             result.success = True
@@ -1004,6 +1116,8 @@ class UnifiedMotionActionServer(Node):
             return False, f"Planning 실패: {msg}"
         if plan_only:
             return True, "Planning 성공"
+        if goal_handle.is_cancel_requested:
+            return None, "Planning 완료 후 취소됨"
 
         moveit_goal = self._build_pilz_joint_goal(
             target_joints, False, velocity_scale, acceleration_scale
@@ -1183,6 +1297,7 @@ class UnifiedMotionActionServer(Node):
             if ok is None:
                 result.success = False
                 result.message = f"Step {i + 1} ({step_name}) 취소됨"
+                self._info(_yellow(f"[ArmTask] {result.message}"))
                 goal_handle.canceled()
                 return result
 
