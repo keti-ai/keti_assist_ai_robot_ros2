@@ -218,6 +218,14 @@ def launch_setup(context, *args, **kwargs):
         ],
     )
 
+    # ── ti_rader static TF (base_footprint 기준, Z축 90도 회전) ────────────
+    ti_rader_tf_node = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='base_footprint_to_ti_rader_tf',
+        arguments=['0', '0', '0', '1.5707963267948966', '0', '0', 'base_footprint', 'ti_rader'],
+    )
+
     # ── arm/body Controller Manager (+ lift_initializer 게이트) ───────────
     # control_managers.build_control_managers() 가 arm/body CM, 그 스포너,
     # 그리고 (실기체 + lift 사용 시) lift_initializer → arm/body CM 체인까지
@@ -271,6 +279,7 @@ def launch_setup(context, *args, **kwargs):
         vision_launch,
         server_worker_loader_node,
         clobot_bridge_node,
+        ti_rader_tf_node,
         RegisterEventHandler(OnProcessStart(
             target_action=rsp_node,
             on_start=[merger_node],

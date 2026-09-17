@@ -64,7 +64,7 @@ MAX_BATTERY_VOLTAGE = 29.2        # 완충 추정 전압 (7cell, 충전기 outpu
 MOVE_CMD_ACTION_TYPE = 'move_cmd_node/action/MoveCmd'
 MOVE_CMD_SHIFT = 1    # command_type: 전후진 (goal=거리[m], 부호로 방향)
 MOVE_CMD_ROTATE = 2   # command_type: 상대 회전 (goal=각도[rad])
-MOVE_CMD_LINEAR_SPEED = 0.7   # m/s
+MOVE_CMD_LINEAR_SPEED = 0.4   # m/s
 MOVE_CMD_ANGULAR_SPEED = 1.0  # rad/s
 MOVE_CMD_MIN_TIMEOUT_SEC = 5.0    # 로봇에 넘기는 timeout_time의 하한
 MOVE_CMD_WAIT_MARGIN_SEC = 3.0    # 서비스 쪽 대기 시간 = 로봇 timeout_time + 여유
