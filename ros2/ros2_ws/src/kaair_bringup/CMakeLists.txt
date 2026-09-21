@@ -69,6 +69,7 @@ set(PYTHON_NODES
   "kaair_bringup/master_worker/master_dxl_hw.py"                "master_dxl_hw"
   "kaair_bringup/master_worker/master_controller.py"                "master_controller"
   "kaair_bringup/master_worker/3d_master_controller.py"           "3d_master_controller"
+  "kaair_bringup/diagnostics/bringup_doctor.py"                  "bringup_doctor"
   # "추가경로" "추가이름"
 )
 

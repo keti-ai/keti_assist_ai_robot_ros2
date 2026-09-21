@@ -31,6 +31,9 @@
   <exec_depend>trajectory_msgs</exec_depend>
   <exec_depend>builtin_interfaces</exec_depend>
   <exec_depend>action_msgs</exec_depend>
+  <!-- bringup_doctor.py: list_controllers 호출, 메시지 타입 동적 로드 -->
+  <exec_depend>controller_manager_msgs</exec_depend>
+  <exec_depend>rosidl_runtime_py</exec_depend>
 
   <!-- server_worker_loader.py: ufactory_driver(xarm_driver_node) 실행 및
        generate_robot_api_params 로 config/common/kaair_xarm7_param.yaml 적용 -->
