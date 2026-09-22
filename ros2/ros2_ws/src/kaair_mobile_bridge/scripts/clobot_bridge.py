@@ -56,7 +56,7 @@ BASE_FRAME_ID = 'base_footprint'  # 로봇 베이스 프레임 (양쪽 동일)
 MAP_REPUBLISH_PERIOD_SEC = 2.0    # 캐싱된 /map을 호스트 도메인에 재발행하는 주기
 GOAL_TIMEOUT_SEC = 180.0          # navigate_to_pose 목표 완료 대기 타임아웃
 BATTERY_LOG_PERIOD_SEC = 5.0      # 배터리 상태를 터미널에 로깅하는 주기
-MAX_BATTERY_VOLTAGE = 29.2        # 완충 추정 전압 (7cell, 충전기 output 28.8V 기준 실측 추정치)
+MAX_BATTERY_VOLTAGE = 28.8        # 완충 추정 전압 (7cell, 충전기 output 28.8V 기준 실측 추정치)
 
 # move_cmd_node/action/MoveCmd — 로봇 PC 자체 액션(전후진/상대회전만 지원).
 # 절대각도 회전(mobile/absolute_rotate)은 TF에서 얻은 현재 yaw와 목표각의 차이를
@@ -594,7 +594,7 @@ class ClobotWebsocketBridge(Node):
 
 def main():
     parser = argparse.ArgumentParser(description='Clobot rosbridge/websocket bridge')
-    parser.add_argument('--robot-host', default='192.168.11.200',
+    parser.add_argument('--robot-host', default='192.168.0.104',
                          help='로봇 PC의 rosbridge_server 주소')
     parser.add_argument('--robot-port', type=int, default=9090,
                          help='rosbridge_server websocket 포트 (기본 9090)')

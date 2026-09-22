@@ -144,7 +144,7 @@ class BringupDoctor(Node):
         p('use_hand_camera', True)
         p('use_azure', False)
         p('use_xarm_driver', True)
-        p('robot_host', '192.168.11.200')   # real_clobot_bringup 기본값
+        p('robot_host', '192.168.0.104')   # real_clobot_bringup 기본값
         p('robot_port', 9090)
         p('xarm_hw_ns', 'xarm')
         p('map_frame', 'slamware_map')

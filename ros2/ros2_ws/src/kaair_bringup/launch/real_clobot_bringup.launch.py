@@ -342,7 +342,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'robot_host',
-            default_value='192.168.11.200',
+            default_value='192.168.0.104',
             description='Clobot 로봇 PC의 rosbridge_server 주소',
         ),
         DeclareLaunchArgument(
