@@ -58,17 +58,21 @@ GOAL_TIMEOUT_SEC = 180.0          # navigate_to_pose 목표 완료 대기 타임
 BATTERY_LOG_PERIOD_SEC = 5.0      # 배터리 상태를 터미널에 로깅하는 주기
 MAX_BATTERY_VOLTAGE = 28.8        # 완충 추정 전압 (7cell, 충전기 output 28.8V 기준 실측 추정치)
 
-# move_cmd_node/action/MoveCmd — 로봇 PC 자체 액션(전후진/상대회전만 지원).
-# 절대각도 회전(mobile/absolute_rotate)은 TF에서 얻은 현재 yaw와 목표각의 차이를
-# 최소 회전 방향으로 정규화해 상대회전으로 변환하는 방식으로 브리지에서 구현한다.
+# move_cmd_node/action/MoveCmd — 로봇 PC 자체 액션(전후진/상대회전/절대회전 지원).
+# 절대각도 회전(mobile/absolute_rotate)은 로봇 쪽 command_type=3(map 기준 절대
+# 회전)을 그대로 사용한다. 브리지가 TF로 현재 yaw를 읽어 상대회전으로 변환하지
+# 않는다 — goal에 목표 각도(map 프레임 기준)를 그대로 실어 보낸다.
 MOVE_CMD_ACTION_TYPE = 'move_cmd_node/action/MoveCmd'
-MOVE_CMD_SHIFT = 1    # command_type: 전후진 (goal=거리[m], 부호로 방향)
-MOVE_CMD_ROTATE = 2   # command_type: 상대 회전 (goal=각도[rad])
+MOVE_CMD_SHIFT = 1             # command_type: 전후진 (goal=거리[m], 부호로 방향)
+MOVE_CMD_ROTATE = 2            # command_type: 상대 회전 (goal=각도[rad])
+MOVE_CMD_ABSOLUTE_ROTATE = 3   # command_type: map 기준 절대 회전 (goal=목표 각도[rad])
 MOVE_CMD_LINEAR_SPEED = 0.4   # m/s
 MOVE_CMD_ANGULAR_SPEED = 1.0  # rad/s
 MOVE_CMD_MIN_TIMEOUT_SEC = 5.0    # 로봇에 넘기는 timeout_time의 하한
 MOVE_CMD_WAIT_MARGIN_SEC = 3.0    # 서비스 쪽 대기 시간 = 로봇 timeout_time + 여유
-ABS_ROTATE_EPSILON_RAD = 0.01     # 이 이하 차이는 "이미 목표 각도"로 보고 회전 생략
+# 절대회전은 목표각과 무관하게 최대 pi[rad]만 돌면 도달하므로, timeout 추정에
+# goal 값 대신 이 값을 사용한다(예: goal=0이어도 실제로는 pi만큼 돌아야 할 수 있음).
+MOVE_CMD_ABSOLUTE_ROTATE_TIMEOUT_ANGLE_RAD = math.pi
 
 # 입력 수신/완료 로그를 한눈에 구분하기 위한 ANSI 색상
 LOG_BLUE = '\033[94m'   # 요청/goal 수신
@@ -158,9 +162,7 @@ class ClobotWebsocketBridge(Node):
             self.service_callback_rotate,
             callback_group=self.cb_group,
         )
-        # move_cmd_node는 상대회전만 지원해서, 절대각도는 현재 TF(slamware_map
-        # 기준 yaw)를 읽어 목표각과의 최소 회전 방향 차이를 구한 뒤 상대회전으로
-        # 변환해서 보낸다.
+        # move_cmd_node의 command_type=3(절대회전)을 그대로 사용한다.
         self.srv_absolute_rotate = self.create_service(
             MobileRotate, 'mobile/absolute_rotate',
             self.service_callback_absolute_rotate,
@@ -412,31 +414,15 @@ class ClobotWebsocketBridge(Node):
 
     def service_callback_absolute_rotate(self, request, response):
         self.get_logger().info(
-            f'{LOG_BLUE}[AbsRotate] 요청 수신 — theta={math.degrees(request.theta):.1f}°, wait={request.wait}{LOG_RESET}')
+            f'{LOG_BLUE}[AbsRotate] 요청 수신 — theta={math.degrees(request.theta):.1f}°(map 기준), '
+            f'wait={request.wait}{LOG_RESET}')
 
-        if self.current_pose is None:
-            self.get_logger().warn('[AbsRotate] 아직 로봇 위치(TF)를 받지 못했습니다.')
-            self._log_move_result('AbsRotate', False)
-            response.successed = False
-            return response
-
-        current_yaw = self._yaw_from_quaternion(self.current_pose.orientation)
-        delta = self._normalize_angle(request.theta - current_yaw)
-
-        if abs(delta) < ABS_ROTATE_EPSILON_RAD:
-            self.get_logger().info(
-                f'[AbsRotate] 이미 목표 각도({math.degrees(request.theta):.1f}°) 근처입니다. 회전 없음')
-            self._log_move_result('AbsRotate', True)
-            response.successed = True
-            return response
-
-        self.get_logger().info(
-            f'[AbsRotate] 현재 {math.degrees(current_yaw):.1f}° -> 목표 '
-            f'{math.degrees(request.theta):.1f}° (최소회전 {math.degrees(delta):+.1f}°)'
-        )
-
+        # command_type=3은 map 기준 절대 회전을 로봇 쪽에서 직접 처리하므로,
+        # 브리지에서 현재 각도를 조회하거나 상대각으로 변환할 필요가 없다.
         def do_move():
-            ok = self._send_move_cmd(MOVE_CMD_ROTATE, delta, MOVE_CMD_ANGULAR_SPEED)
+            ok = self._send_move_cmd(
+                MOVE_CMD_ABSOLUTE_ROTATE, request.theta, MOVE_CMD_ANGULAR_SPEED,
+                timeout_angle=MOVE_CMD_ABSOLUTE_ROTATE_TIMEOUT_ANGLE_RAD)
             self._log_move_result('AbsRotate', ok)
             return ok
 
@@ -452,29 +438,19 @@ class ClobotWebsocketBridge(Node):
         outcome = '완료(성공)' if success else '완료(실패)'
         self.get_logger().info(f'{color}[{label}] {outcome}{LOG_RESET}')
 
-    @staticmethod
-    def _yaw_from_quaternion(q):
-        """쿼터니언에서 Yaw(z축 회전) 값을 추출한다."""
-        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
-        cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-        return math.atan2(siny_cosp, cosy_cosp)
+    def _send_move_cmd(self, command_type, goal_value, speed, timeout_angle=None):
+        """MoveCmd 액션을 보내고 완료(SUCCEEDED/그 외)될 때까지 블로킹한다.
 
-    @staticmethod
-    def _normalize_angle(angle):
-        """각도를 -pi ~ pi 사이로 정규화한다 (최소 회전 방향을 얻기 위함)."""
-        while angle > math.pi:
-            angle -= 2.0 * math.pi
-        while angle < -math.pi:
-            angle += 2.0 * math.pi
-        return angle
-
-    def _send_move_cmd(self, command_type, goal_value, speed):
-        """MoveCmd 액션을 보내고 완료(SUCCEEDED/그 외)될 때까지 블로킹한다."""
+        timeout_angle: timeout 추정에 goal_value 대신 사용할 각도(rad). 절대회전처럼
+        goal_value 자체가 "실제로 돌아야 하는 각도"가 아닌 경우(예: 목표각이 0이어도
+        현재각에 따라 최대 pi[rad]까지 돌 수 있음)에 넘긴다.
+        """
         if not self.ros.is_connected:
             self.get_logger().error('rosbridge(websocket)에 연결돼 있지 않습니다.')
             return False
 
-        timeout_time = max(MOVE_CMD_MIN_TIMEOUT_SEC, abs(goal_value / speed))
+        magnitude = abs(goal_value) if timeout_angle is None else abs(timeout_angle)
+        timeout_time = max(MOVE_CMD_MIN_TIMEOUT_SEC, magnitude / speed)
         # move_cmd_node/action/MoveCmd의 timeout_time은 int32 필드라 float을 보내면
         # rosbridge가 "requires a int32 ... but got a <class 'float'>"로 거부한다.
         goal = Goal({
