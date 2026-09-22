@@ -44,10 +44,22 @@ from kaair_msgs.srv import MobileRotate, MobileShift
 from nav2_msgs.action import NavigateToPose
 from nav_msgs.msg import OccupancyGrid
 from sensor_msgs.msg import LaserScan
+from std_msgs.msg import Bool
 from tf2_ros import TransformBroadcaster
 
 import roslibpy
 from roslibpy import ActionClient, Goal, GoalStatus
+
+# roslibpy(twisted transport)는 원래 내부적으로 twisted.internet.protocol.
+# ReconnectingClientFactory를 써서 웹소켓이 끊기면 무한 재시도한다 — 다만
+# 기본 백오프 상한이 3600초(1시간)라, 여러 번 연속 실패했다면 다음 재시도까지
+# 체감상 "안 붙는다"고 느껴질 만큼 오래 걸릴 수 있다. main()에서 이 상한을
+# 낮춰(WS_RECONNECT_MAX_DELAY_SEC) 재연결 체감 속도를 보장한다.
+# (구버전 roslibpy에서 모듈 경로가 다를 가능성에 대비해 실패해도 죽지 않게 한다.)
+try:
+    from roslibpy.comm.comm_autobahn import AutobahnRosBridgeClientFactory
+except ImportError:
+    AutobahnRosBridgeClientFactory = None
 
 HOST_FRAME_ID = 'slamware_map'   # 호스트(메인) 도메인에서 사용하는 프레임 이름
 ROBOT_FRAME_ID = 'map'           # 로봇(Clobot) 쪽 navigate_to_pose/TF의 map 프레임
@@ -57,6 +69,8 @@ MAP_REPUBLISH_PERIOD_SEC = 2.0    # 캐싱된 /map을 호스트 도메인에 재
 GOAL_TIMEOUT_SEC = 180.0          # navigate_to_pose 목표 완료 대기 타임아웃
 BATTERY_LOG_PERIOD_SEC = 5.0      # 배터리 상태를 터미널에 로깅하는 주기
 MAX_BATTERY_VOLTAGE = 28.8        # 완충 추정 전압 (7cell, 충전기 output 28.8V 기준 실측 추정치)
+WS_RECONNECT_INITIAL_DELAY_SEC = 1.0   # rosbridge 재연결 첫 시도까지의 대기(roslibpy 기본값과 동일)
+WS_RECONNECT_MAX_DELAY_SEC = 10.0      # 재연결 백오프 상한 (roslibpy 기본 3600s → 10s로 단축)
 
 # move_cmd_node/action/MoveCmd — 로봇 PC 자체 액션(전후진/상대회전/절대회전 지원).
 # 절대각도 회전(mobile/absolute_rotate)은 로봇 쪽 command_type=3(map 기준 절대
@@ -66,8 +80,8 @@ MOVE_CMD_ACTION_TYPE = 'move_cmd_node/action/MoveCmd'
 MOVE_CMD_SHIFT = 1             # command_type: 전후진 (goal=거리[m], 부호로 방향)
 MOVE_CMD_ROTATE = 2            # command_type: 상대 회전 (goal=각도[rad])
 MOVE_CMD_ABSOLUTE_ROTATE = 3   # command_type: map 기준 절대 회전 (goal=목표 각도[rad])
-MOVE_CMD_LINEAR_SPEED = 0.4   # m/s
-MOVE_CMD_ANGULAR_SPEED = 1.0  # rad/s
+MOVE_CMD_LINEAR_SPEED = 0.3   # m/s
+MOVE_CMD_ANGULAR_SPEED = 0.7  # rad/s
 MOVE_CMD_MIN_TIMEOUT_SEC = 5.0    # 로봇에 넘기는 timeout_time의 하한
 MOVE_CMD_WAIT_MARGIN_SEC = 3.0    # 서비스 쪽 대기 시간 = 로봇 timeout_time + 여유
 # 절대회전은 목표각과 무관하게 최대 pi[rad]만 돌면 도달하므로, timeout 추정에
@@ -90,6 +104,21 @@ class ClobotWebsocketBridge(Node):
         super().__init__('clobot_bridge')
         self.cb_group = ReentrantCallbackGroup()
         self.ros = ros
+
+        # --- rosbridge(websocket) 연결 상태 모니터링 ---
+        # roslibpy가 끊김/재연결 자체는 알아서 처리하지만(위 WS_RECONNECT_*
+        # 참고), 그 상태를 호스트 도메인에서 확인할 방법이 없었다. latched
+        # Bool 토픽으로 노출해서 `ros2 topic echo ~/rosbridge_connected`나
+        # bringup_doctor 류의 모니터링 도구에서 바로 확인할 수 있게 한다.
+        ws_status_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self._ws_status_pub = self.create_publisher(Bool, '~/rosbridge_connected', ws_status_qos)
+        self._publish_ws_status(self.ros.is_connected)
+        self.ros.on('ready', self._on_ws_ready)
+        self.ros.on('close', self._on_ws_close)
 
         # --- 로봇 현재 위치(TF) 브리지: map -> odom -> base_footprint 합성 ---
         self.tf_broadcaster = TransformBroadcaster(self)
@@ -189,6 +218,23 @@ class ClobotWebsocketBridge(Node):
 
         self.get_logger().info(
             f'clobot_bridge(websocket) started -> ws://{robot_host}:{robot_port}')
+
+    # ------------------------------------------------------------------ #
+    #  rosbridge(websocket) 연결 상태
+    # ------------------------------------------------------------------ #
+    def _on_ws_ready(self, *_args):
+        # 최초 연결 시에도 호출된다(재연결에 한정되지 않음).
+        self.get_logger().info(f'{LOG_GREEN}[WS] rosbridge(websocket) 연결됨.{LOG_RESET}')
+        self._publish_ws_status(True)
+
+    def _on_ws_close(self, *_args):
+        self.get_logger().warn(f'{LOG_RED}[WS] rosbridge(websocket) 연결 끊김 — 재연결 시도 중...{LOG_RESET}')
+        self._publish_ws_status(False)
+
+    def _publish_ws_status(self, connected):
+        msg = Bool()
+        msg.data = bool(connected)
+        self._ws_status_pub.publish(msg)
 
     # ------------------------------------------------------------------ #
     #  TF
@@ -577,6 +623,13 @@ def main():
     args, _ = parser.parse_known_args()
 
     rclpy.init()
+
+    # rosbridge가 죽었다 다시 떠도 체감상 빠르게(최대 WS_RECONNECT_MAX_DELAY_SEC
+    # 이내) 재연결되도록, roslibpy(twisted transport)의 재연결 백오프 상한을
+    # 낮춘다. Ros(...) 인스턴스를 만들기 전에 클래스 단위로 설정해야 한다.
+    if AutobahnRosBridgeClientFactory is not None:
+        AutobahnRosBridgeClientFactory.set_initial_delay(WS_RECONNECT_INITIAL_DELAY_SEC)
+        AutobahnRosBridgeClientFactory.set_max_delay(WS_RECONNECT_MAX_DELAY_SEC)
 
     ros = roslibpy.Ros(host=args.robot_host, port=args.robot_port)
     ros.run()  # non-blocking: roslibpy가 자체 백그라운드 스레드에서 이벤트 루프를 돈다
