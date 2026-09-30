@@ -840,6 +840,8 @@ Visualization Manager:
           Value: true
         link_eef:
           Value: true
+        people:
+          Value: true
         rear_left_ultrasonic:
           Value: true
         rear_right_ultrasonic:
@@ -945,6 +947,8 @@ Visualization Manager:
                 {}
             ti_rader:
               {}
+          people:
+            {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -1025,7 +1029,7 @@ Visualization Manager:
       Enabled: true
       Name: MarkerArray
       Namespaces:
-        debug: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -1037,16 +1041,25 @@ Visualization Manager:
       Enabled: true
       Name: MarkerArray
       Namespaces:
-        track_text: true
-        tracks: true
-        trail: true
-        velocity: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /radar_markers
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: MarkerArray
+      Namespaces:
+        person: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /people_marker
       Value: true
   Enabled: true
   Global Options:
