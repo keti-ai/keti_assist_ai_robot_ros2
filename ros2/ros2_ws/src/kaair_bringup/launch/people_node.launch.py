@@ -14,8 +14,8 @@ TF_FRAME_ID = 'slamware_map'
 TF_CHILD_FRAME_ID = 'people'
 
 POSES = {
-    'spot_a': {'x': 5.2, 'y': 0.8,  'z': 0.0, 'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0},
-    'spot_b': {'x': 3.0, 'y': -1.5, 'z': 0.0, 'roll': 0.0, 'pitch': 0.0, 'yaw': 1.5708},
+    'spot_b': {'x': 5.2, 'y': 0.8,  'z': 0.0, 'roll': 0.0, 'pitch': 0.0, 'yaw': 0.0},
+    'spot_a': {'x': 0.64, 'y': 2.89, 'z': 0.0, 'roll': 0.0, 'pitch': 0.0, 'yaw': 1.57},
 }
 
 MARKER = {
