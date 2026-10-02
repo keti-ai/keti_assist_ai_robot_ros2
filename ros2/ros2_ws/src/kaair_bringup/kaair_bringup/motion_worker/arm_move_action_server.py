@@ -58,11 +58,13 @@ from kaair_msgs.action import MoveJoint, MoveLinear, MoveTool, ArmTask
 _BLUE   = "\033[94m"
 _RED    = "\033[91m"
 _YELLOW = "\033[93m"
+_CYAN   = "\033[96m"
 _RST    = "\033[0m"
 
 def _blue(s: str)   -> str: return f"{_BLUE}{s}{_RST}"
 def _red(s: str)    -> str: return f"{_RED}{s}{_RST}"
 def _yellow(s: str) -> str: return f"{_YELLOW}{s}{_RST}"
+def _cyan(s: str)   -> str: return f"{_CYAN}{s}{_RST}"
 
 # rcutils의 {time} 토큰은 epoch 초 단위라 직관적이지 않으므로, 로그 메시지 앞에
 # 사람이 읽기 쉬운 시:분:초.밀리초 형태의 시스템 시간을 직접 붙인다.
@@ -610,10 +612,10 @@ class UnifiedMotionActionServer(Node):
             self._err(_red(f"[MoveJoint] {result.message}"))
             return result
 
-        self._info(
+        self._info(_cyan(
             f"[MoveJoint/PTP] target_joints={target_joints}, plan_only={plan_only} "
             f"vel_scale={velocity_scale:.2f} acc_scale={acceleration_scale:.2f}"
-        )
+        ))
 
         moveit_goal = self._build_pilz_joint_goal(
             target_joints, True, velocity_scale, acceleration_scale
@@ -972,13 +974,13 @@ class UnifiedMotionActionServer(Node):
 
         base_frame = getattr(goal, "base_frame", "").strip() or DEFAULT_BASE_FRAME
 
-        self._info(
+        self._info(_cyan(
             f"[MoveLinear/LIN] frame={base_frame} "
             f"pos=[{x:.3f},{y:.3f},{z:.3f}] "
             f"quat=[{qx:.3f},{qy:.3f},{qz:.3f},{qw:.3f}] "
             f"is_relative={is_relative} "
             f"vel_scale={velocity_scale:.2f} acc_scale={acceleration_scale:.2f}"
-        )
+        ))
 
         try:
             target_pose = self._make_target_pose_from_base_xyz(
@@ -1049,11 +1051,11 @@ class UnifiedMotionActionServer(Node):
             getattr(goal, "acceleration_scale", 0.0),
         )
 
-        self._info(
+        self._info(_cyan(
             f"[MoveTool/CartesianPath] delta=[{dx:.3f},{dy:.3f},{dz:.3f}] "
             f"quat=[{qx:.3f},{qy:.3f},{qz:.3f},{qw:.3f}] "
             f"vel_scale={velocity_scale:.2f} acc_scale={acceleration_scale:.2f}"
-        )
+        ))
 
         try:
             target_pose = self._make_target_pose_from_tool_delta(
@@ -1267,11 +1269,11 @@ class UnifiedMotionActionServer(Node):
         goal_velocity_scale = float(getattr(goal, "velocity_scale", 0.0))
         goal_acceleration_scale = float(getattr(goal, "acceleration_scale", 0.0))
 
-        self._info(
+        self._info(_cyan(
             f"[ArmTask] task_type={task_type} pos=[{x:.3f},{y:.3f},{z:.3f}] "
             f"goal_vel_scale={goal_velocity_scale:.2f} "
             f"goal_acc_scale={goal_acceleration_scale:.2f}"
-        )
+        ))
 
         try:
             steps = self._build_task_steps(
