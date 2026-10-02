@@ -974,7 +974,9 @@ class UnifiedMotionActionServer(Node):
 
         self._info(
             f"[MoveLinear/LIN] frame={base_frame} "
-            f"pos=[{x:.3f},{y:.3f},{z:.3f}] is_relative={is_relative} "
+            f"pos=[{x:.3f},{y:.3f},{z:.3f}] "
+            f"quat=[{qx:.3f},{qy:.3f},{qz:.3f},{qw:.3f}] "
+            f"is_relative={is_relative} "
             f"vel_scale={velocity_scale:.2f} acc_scale={acceleration_scale:.2f}"
         )
 
@@ -1049,6 +1051,7 @@ class UnifiedMotionActionServer(Node):
 
         self._info(
             f"[MoveTool/CartesianPath] delta=[{dx:.3f},{dy:.3f},{dz:.3f}] "
+            f"quat=[{qx:.3f},{qy:.3f},{qz:.3f},{qw:.3f}] "
             f"vel_scale={velocity_scale:.2f} acc_scale={acceleration_scale:.2f}"
         )
 
