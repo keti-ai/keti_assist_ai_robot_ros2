@@ -1,7 +1,7 @@
 # 리프트 모듈 설정
 lift:
   min_h: 0.1065                # meter
-  max_h: 0.6700                # meter
+  max_h: 0.6750                # meter
   usb_port: "/dev/ttyLM"
   baud_rate: 115200
   offset_position: 0.1015   # meter
