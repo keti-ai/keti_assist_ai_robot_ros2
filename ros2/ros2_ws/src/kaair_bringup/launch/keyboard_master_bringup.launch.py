@@ -2,7 +2,7 @@
 Keyboard → MoveIt Servo 텔레오퍼레이션 런치
 
 키 입력은 이 런치를 실행한 터미널(/dev/tty)에서 직접 읽는다.
-  w/s : +x/-x   a/d : -y/+y   r/f : +z/-z   q/e : -rz/+rz
+  w/s : +x/-x   a/d : -y/+y   r/f : -z/+z   q/e : -rz/+rz
   1   : gripper toggle         2   : servo ON/OFF toggle
   space : stop
 

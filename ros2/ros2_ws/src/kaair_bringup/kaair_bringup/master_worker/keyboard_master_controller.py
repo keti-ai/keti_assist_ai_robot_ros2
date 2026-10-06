@@ -9,7 +9,7 @@ Keyboard → MoveIt Servo delta_twist_cmds 컨트롤러
 키 매핑 (command_frame_id 기준, rx/ry 는 사용하지 않음):
   w / s : +x / -x
   a / d : -y / +y
-  r / f : +z / -z
+  r / f : -z / +z
   q / e : -rz / +rz
   1     : gripper open/close 토글
   2     : servo ON/OFF 토글 (+ tool_controller ↔ tool_forward_controller 전환)
@@ -85,7 +85,7 @@ _STATE_ACTIVE   = 'active'    # 안정화 완료 — 키 입력 publish
 _MOTION_KEYS = {
     'w': ('lx', +1.0), 's': ('lx', -1.0),
     'a': ('ly', -1.0), 'd': ('ly', +1.0),
-    'r': ('lz', +1.0), 'f': ('lz', -1.0),
+    'r': ('lz', -1.0), 'f': ('lz', +1.0),
     'q': ('rz', -1.0), 'e': ('rz', +1.0),
 }
 _KEY_GRIPPER_TOGGLE = '1'
@@ -95,7 +95,7 @@ _KEY_STOP           = ' '
 _HELP_TEXT = """
 ──────────── Keyboard Servo Teleop ────────────
    w/s : +x / -x        q/e : -rz / +rz
-   a/d : -y / +y        r/f : +z  / -z
+   a/d : -y / +y        r/f : -z  / +z
    1   : gripper toggle  2   : servo ON/OFF
    space : stop          Ctrl-C : quit
 ────────────────────────────────────────────────
