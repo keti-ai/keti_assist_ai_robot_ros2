@@ -86,14 +86,14 @@ incoming_command_timeout: 0.2     # 이 시간 내에 새 명령이 없으면 �
 num_outgoing_halt_msgs_to_publish: 4
 
 # ── 특이점 / 조인트 한계 ───────────────────────────────────────────────────
-lower_singularity_threshold:              30.0
-hard_stop_singularity_threshold:          60.0
+lower_singularity_threshold:              17.0
+hard_stop_singularity_threshold:          30.0
 leaving_singularity_threshold_multiplier: 2.0   # Humble 에서 필요 (없으면 deprecation warning)
 joint_limit_margin: 0.1
 
 # ── 충돌 검사 ───────────────────────────────────────────────────────────────
 # Humble 에서 collision_check_type 파라미터는 지원되지 않음 → 제거.
 check_collisions: true
-collision_check_rate: 10.0
-self_collision_proximity_threshold: 0.01
-scene_collision_proximity_threshold: 0.02
+collision_check_rate: 50.0
+self_collision_proximity_threshold: 0.02
+scene_collision_proximity_threshold: 0.05
