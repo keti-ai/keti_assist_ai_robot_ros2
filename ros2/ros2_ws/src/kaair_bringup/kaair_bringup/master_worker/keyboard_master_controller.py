@@ -63,7 +63,19 @@ _LATCHED_QOS = QoSProfile(
 
 _ARM_JOINT_NAMES = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6', 'joint7']
 _VEL_ZERO_THRESHOLD = 0.005   # rad/s — 이 이하면 정지로 간주
-_STALL_DETECT_SEC   = 0.4     # 명령 non-zero 인데 로봇 정지가 이 시간 이상이면 stall
+
+# servo ~/status 코드 → 의미. 타입이 배포판마다 다르다.
+#   Jazzy : moveit_msgs/ServoStatus (code + message)
+#   Humble: std_msgs/Int8 (code 만)
+_HUMBLE_STATUS_TEXT = {
+    -1: 'INVALID',
+    0: 'NO_WARNING',
+    1: 'DECELERATE_FOR_SINGULARITY',
+    2: 'HALT_FOR_SINGULARITY',
+    3: 'DECELERATE_FOR_COLLISION',
+    4: 'HALT_FOR_COLLISION',
+    5: 'JOINT_BOUND',
+}
 
 _STATE_INACTIVE = 'inactive'  # servo 미시작 — 아무것도 publish 안 함
 _STATE_HOLD     = 'hold'      # servo 시작됨 — zero-twist 강제 (안정화 대기)
@@ -103,6 +115,8 @@ class KeyboardServoController(Node):
         self.declare_parameter('angular_speed',        0.3)
         self.declare_parameter('key_first_timeout_sec',  0.6)
         self.declare_parameter('key_repeat_timeout_sec', 0.15)
+        # 명령 non-zero 인데 로봇 정지가 이 시간 이상이면 stall (<= 0 이면 stall 감지 끔)
+        self.declare_parameter('stall_detect_sec',     1.0)
         self.declare_parameter('stop_to_start_sec',    0.4)
         self.declare_parameter('hold_after_start_sec', 1.0)
         # gripper
@@ -124,6 +138,7 @@ class KeyboardServoController(Node):
         self._ang_speed          = float(self.get_parameter('angular_speed').value)
         self._key_first_timeout  = float(self.get_parameter('key_first_timeout_sec').value)
         self._key_repeat_timeout = float(self.get_parameter('key_repeat_timeout_sec').value)
+        self._stall_detect_sec   = float(self.get_parameter('stall_detect_sec').value)
         self._stop_to_start_sec  = float(self.get_parameter('stop_to_start_sec').value)
         self._hold_min_sec       = float(self.get_parameter('hold_after_start_sec').value)
         self._tool_topic         = self.get_parameter('tool_topic').value
@@ -143,6 +158,10 @@ class KeyboardServoController(Node):
         self._delayed_start_timer = None
         self._stall_start_t: float | None = None
         self._stalled: bool = False
+        # servo ~/status 마지막 값 (stall 원인 로그용)
+        self._servo_status_topic = f'/{servo_ns}/status'
+        self._servo_status_text = 'unknown (status 미수신)'
+        self._servo_status_sub = None
 
         # 현재 눌린 motion 키 (터미널 특성상 하나만 유지)
         self._key_lock = threading.Lock()
@@ -183,6 +202,11 @@ class KeyboardServoController(Node):
         self.create_subscription(
             BoolMsg, _SERVO_OFF_REQUEST_TOPIC,
             self._on_request_config_mode, 10, callback_group=self._cbg,
+        )
+
+        # servo status 는 배포판마다 메시지 타입이 달라, 토픽이 보이면 타입을 확인해 구독
+        self._status_probe_timer = self.create_timer(
+            1.0, self._probe_servo_status, callback_group=self._cbg,
         )
 
         # ── 타이머 ──────────────────────────────────────────────────────────
@@ -445,6 +469,41 @@ class KeyboardServoController(Node):
             return False
 
     # ═══════════════════════════════════════════════════════════════════════
+    # servo status 구독 (stall 원인 확인용)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _probe_servo_status(self):
+        types = dict(self.get_topic_names_and_types()).get(self._servo_status_topic)
+        if not types:
+            return
+        self._status_probe_timer.cancel()
+
+        if 'moveit_msgs/msg/ServoStatus' in types:
+            from moveit_msgs.msg import ServoStatus
+            self._servo_status_sub = self.create_subscription(
+                ServoStatus, self._servo_status_topic,
+                lambda m: self._set_servo_status(f'{m.code}: {m.message}'),
+                10, callback_group=self._cbg,
+            )
+        elif 'std_msgs/msg/Int8' in types:
+            from std_msgs.msg import Int8
+            self._servo_status_sub = self.create_subscription(
+                Int8, self._servo_status_topic,
+                lambda m: self._set_servo_status(
+                    f'{m.data}: {_HUMBLE_STATUS_TEXT.get(m.data, "?")}'),
+                10, callback_group=self._cbg,
+            )
+        else:
+            self.get_logger().warn(
+                f'{self._servo_status_topic}: 알 수 없는 타입 {types}, status 구독 생략.'
+            )
+
+    def _set_servo_status(self, text: str):
+        if text != self._servo_status_text:
+            self.get_logger().info(f'servo status → {text}')
+        self._servo_status_text = text
+
+    # ═══════════════════════════════════════════════════════════════════════
     # JointState 콜백
     # ═══════════════════════════════════════════════════════════════════════
 
@@ -500,15 +559,16 @@ class KeyboardServoController(Node):
                 self._publish_zero_twist()
                 self._publish_gripper_cmd()
                 return
-        elif commanding and self._arm_vel_zero:
+        elif commanding and self._arm_vel_zero and self._stall_detect_sec > 0.0:
             if self._stall_start_t is None:
                 self._stall_start_t = now
-            elif now - self._stall_start_t >= _STALL_DETECT_SEC:
+            elif now - self._stall_start_t >= self._stall_detect_sec:
                 self._stalled = True
                 self._stall_start_t = None
                 self.get_logger().warn(
-                    f'Motion stall detected ({_STALL_DETECT_SEC}s): '
-                    '키 명령 차단. 키를 떼면 해제됩니다.'
+                    f'Motion stall detected ({self._stall_detect_sec}s, key={key!r}): '
+                    f'키 명령 차단. 키를 떼면 해제됩니다. '
+                    f'[servo status: {self._servo_status_text}]'
                 )
                 self._publish_zero_twist()
                 self._publish_gripper_cmd()
