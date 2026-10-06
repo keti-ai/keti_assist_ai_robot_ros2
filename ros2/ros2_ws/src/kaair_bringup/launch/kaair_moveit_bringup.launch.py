@@ -166,10 +166,6 @@ def launch_setup(context, *args, **kwargs):
     # ── MoveIt Servo 설정 ─────────────────────────────────────────────────
     servo_yaml = _load_yaml('kaair_moveit_config', 'config/kaair_servo_config.yaml')
     servo_params = {'moveit_servo': servo_yaml}
-    # servo 전용 관절 한계 override (move_group 에는 넘기지 않음).
-    # 자세한 이유는 kaair_moveit_config/config/kaair_servo_joint_limits.yaml 참고.
-    servo_joint_limits = {'robot_description_planning': _load_yaml(
-        'kaair_moveit_config', 'config/kaair_servo_joint_limits.yaml')}
 
     # ════════════════════════════════════════════════════════════════════════
     # 노드 정의 (kaair_moveit.launch.py 와 동일한 기반 구성)
@@ -271,7 +267,6 @@ def launch_setup(context, *args, **kwargs):
             moveit_config.robot_description,
             moveit_config.robot_description_semantic,
             moveit_config.robot_description_kinematics,
-            servo_joint_limits,
         ],
     )
 

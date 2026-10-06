@@ -50,13 +50,6 @@ def build_moveit_servo(*, moveit_config, move_group_node):
     """
     servo_yaml = _load_yaml('kaair_moveit_config', 'config/kaair_servo_config.yaml')
     servo_params = {'moveit_servo': servo_yaml}
-    # servo 전용 관절 한계 override (move_group 에는 넘기지 않는다).
-    # RobotModelLoader 가 robot_description_planning.joint_limits.<joint>.min/max_position
-    # 으로 URDF 한계를 덮어쓴다. 자세한 이유는 yaml 주석 참고.
-    servo_joint_limits = {
-        'robot_description_planning':
-            _load_yaml('kaair_moveit_config', 'config/kaair_servo_joint_limits.yaml'),
-    }
 
     # servo_node_main (standalone)
     #   ComposableNodeContainer 대신 독립 프로세스로 실행.
@@ -79,7 +72,6 @@ def build_moveit_servo(*, moveit_config, move_group_node):
             moveit_config.robot_description,
             moveit_config.robot_description_semantic,
             moveit_config.robot_description_kinematics,
-            servo_joint_limits,
         ],
     )
 
