@@ -161,7 +161,21 @@ MOVEIT_ERROR_MAP = {
 CARTESIAN_PATH_SERVICE = "compute_cartesian_path"
 EXECUTE_TRAJECTORY_ACTION = "execute_trajectory"
 CARTESIAN_MAX_STEP = 0.01
+# 상대 jump 검사(평균 step의 N배)는 waypoint 수가 적으면 잘 걸리지 않으므로 끄고,
+# 아래 절대 jump 임계값(revolute/prismatic, step당)을 사용한다.
 CARTESIAN_JUMP_THRESHOLD = 0.0
+# IK 해 전환(손목 flip, 여유자유도 해 전환, ±2π 감김)으로 인한 단일 step 관절 점프 감지.
+# MoveIt이 점프 지점에서 경로를 자르면 fraction이 떨어져 아래 MIN_FRACTION에서 실패 처리된다.
+# 단, 특이점 근처에서 1cm step마다 조금씩(예: 0.17rad) 연속으로 크게 도는 경우는
+# 이 검사에 걸리지 않으므로 아래 노드 측 joint travel 검사가 필요하다.
+CARTESIAN_REVOLUTE_JUMP_THRESHOLD = 0.3   # rad / step(CARTESIAN_MAX_STEP)
+CARTESIAN_PRISMATIC_JUMP_THRESHOLD = 0.05  # m / step
+# 노드 측 2차 검증: 관절별 누적 이동량(sum |Δq|) 허용치
+#   = BASE + PER_METER * 직선 이동거리 + 요청 회전각
+# 실측(2026-10-14): 정상 이동 28.6cm에서 joint5 1.26rad(≈4.4 rad/m),
+# 손목 flip이 나는 19.1cm 이동에서 최소 3.4rad(35회 샘플, ≈18 rad/m 이상).
+CARTESIAN_JOINT_TRAVEL_BASE = 1.0         # rad
+CARTESIAN_JOINT_TRAVEL_PER_METER = 6.0    # rad / m
 # 요청한 waypoint 중 이 비율 이상을 실제로 따라가지 못하면(장애물/IK 실패 등) 실패 처리
 CARTESIAN_MIN_FRACTION = 0.99
 
@@ -176,6 +190,18 @@ class UnifiedMotionActionServer(Node):
 
         self.declare_parameter("default_velocity_scale", 1.0)
         self.declare_parameter("default_acceleration_scale", 0.40)
+        self.declare_parameter(
+            "cartesian_revolute_jump_threshold", CARTESIAN_REVOLUTE_JUMP_THRESHOLD
+        )
+        self.declare_parameter(
+            "cartesian_prismatic_jump_threshold", CARTESIAN_PRISMATIC_JUMP_THRESHOLD
+        )
+        self.declare_parameter(
+            "cartesian_joint_travel_base", CARTESIAN_JOINT_TRAVEL_BASE
+        )
+        self.declare_parameter(
+            "cartesian_joint_travel_per_meter", CARTESIAN_JOINT_TRAVEL_PER_METER
+        )
 
         self.create_subscription(
             JointState,
@@ -820,7 +846,42 @@ class UnifiedMotionActionServer(Node):
             point.accelerations = [a * effective_scale * effective_scale for a in point.accelerations]
         return effective_scale
 
-    def _compute_cartesian_path(self, target_pose, frame_id, goal_handle):
+    def _max_joint_travel(self, linear_distance, rotation_angle):
+        """직선 tool 이동에서 허용할 관절별 누적 이동량(rad)."""
+        base = float(self.get_parameter("cartesian_joint_travel_base").value)
+        per_m = float(self.get_parameter("cartesian_joint_travel_per_meter").value)
+        return base + per_m * float(linear_distance) + float(rotation_angle)
+
+    def _check_joint_continuity(self, joint_trajectory, max_joint_travel):
+        """compute_cartesian_path 결과를 실행 전에 직접 검증한다.
+        특이점 근처에서는 IK가 step마다 조금씩 연속으로 해를 돌려(손목 flip,
+        joint7 수 회전 등) MoveIt jump 검사와 fraction을 모두 통과하므로,
+        관절별 누적 이동량이 직선 이동에 비해 과도하면 실패 처리한다.
+        (반환 궤적은 TOTG로 시간 재샘플링되어 point 간 Δq는 속도에 의존하므로
+        point 간 step 크기는 판단 기준으로 쓰지 않는다.)"""
+        points = joint_trajectory.points
+        if max_joint_travel is None or len(points) < 2:
+            return True, ""
+
+        names = list(joint_trajectory.joint_names)
+        positions = np.array([p.positions for p in points], dtype=float)
+        travel = np.abs(np.diff(positions, axis=0)).sum(axis=0)
+        joint = int(np.argmax(travel))
+        self._info(
+            f"[CartesianPath] points={len(points)} "
+            f"max_travel={names[joint]}:{travel[joint]:.3f}rad "
+            f"(limit={max_joint_travel:.3f})"
+        )
+        if travel[joint] > max_joint_travel:
+            return False, (
+                f"관절 이동량 과다: {names[joint]} {travel[joint]:.3f} rad > "
+                f"{max_joint_travel:.3f} (특이점 근처 관절 자세 전환/뒤집힘)"
+            )
+        return True, ""
+
+    def _compute_cartesian_path(
+        self, target_pose, frame_id, goal_handle, max_joint_travel=None
+    ):
         if not self._cartesian_path_client.wait_for_service(timeout_sec=3.0):
             return False, "compute_cartesian_path 서비스에 연결할 수 없음"
 
@@ -830,7 +891,17 @@ class UnifiedMotionActionServer(Node):
         req.link_name = EEF_LINK
         req.waypoints = [target_pose]
         req.max_step = CARTESIAN_MAX_STEP
-        req.jump_threshold = CARTESIAN_JUMP_THRESHOLD
+        # distro마다 필드가 다르다(Jazzy는 jump_threshold 제거 가능). 존재할 때만 설정.
+        if hasattr(req, "jump_threshold"):
+            req.jump_threshold = CARTESIAN_JUMP_THRESHOLD
+        if hasattr(req, "revolute_jump_threshold"):
+            req.revolute_jump_threshold = float(
+                self.get_parameter("cartesian_revolute_jump_threshold").value
+            )
+        if hasattr(req, "prismatic_jump_threshold"):
+            req.prismatic_jump_threshold = float(
+                self.get_parameter("cartesian_prismatic_jump_threshold").value
+            )
         req.avoid_collisions = True
 
         future = self._cartesian_path_client.call_async(req)
@@ -851,8 +922,13 @@ class UnifiedMotionActionServer(Node):
         if response.fraction < CARTESIAN_MIN_FRACTION:
             return False, (
                 f"Cartesian 경로 일부만 계산됨 (fraction={response.fraction:.3f}, "
-                f"장애물/IK 한계 등으로 직선 경로를 끝까지 따라갈 수 없음)"
+                f"장애물/IK 한계/관절 점프 등으로 직선 경로를 끝까지 따라갈 수 없음)"
             )
+        ok, reason = self._check_joint_continuity(
+            response.solution.joint_trajectory, max_joint_travel
+        )
+        if not ok:
+            return False, reason
         return True, response
 
     def _execute_cartesian_path_move(
@@ -864,6 +940,7 @@ class UnifiedMotionActionServer(Node):
         acceleration_scale,
         goal_handle,
         feedback=None,
+        max_joint_travel=None,
     ):
         if feedback is not None:
             feedback.status = "Planning"
@@ -871,7 +948,9 @@ class UnifiedMotionActionServer(Node):
                 feedback.current_joints = self._current_joints
             goal_handle.publish_feedback(feedback)
 
-        ok, payload = self._compute_cartesian_path(target_pose, frame_id, goal_handle)
+        ok, payload = self._compute_cartesian_path(
+            target_pose, frame_id, goal_handle, max_joint_travel
+        )
         if ok is None:
             return None, "Planning 중 취소됨"
         if not ok:
@@ -1077,6 +1156,10 @@ class UnifiedMotionActionServer(Node):
             acceleration_scale,
             goal_handle,
             feedback=feedback,
+            max_joint_travel=self._max_joint_travel(
+                np.linalg.norm([dx, dy, dz]),
+                R.from_quat(self._normalize_quaternion(qx, qy, qz, qw)).magnitude(),
+            ),
         )
 
         if ok is None:
