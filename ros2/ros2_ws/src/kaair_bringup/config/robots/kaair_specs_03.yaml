@@ -31,3 +31,12 @@ mobile_bridge:
   domain: 35
   type: "slamtec"
   POI: "kcare_lab.yaml"
+
+# 카메라 마운트 캘리브레이션 오프셋 [x, y, z, roll, pitch, yaw] (meter, rad)
+#   x, y, z         : URDF 기본 마운트 위치에 더해지는 이동량 (부모 링크 좌표계 기준)
+#   roll, pitch, yaw: 카메라 원점을 중심으로, 부모 링크 좌표계 축 기준으로 기본 자세 앞에
+#                     적용되는 회전 (camera = T(xyz) * R(calib rpy) * R(기본 rpy))
+#   femto_calib: Femto Bolt (부모: head_camera_mount)
+#   hand_calib : 핸드 D405  (부모: vision_frame_link)
+femto_calib: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+hand_calib: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
