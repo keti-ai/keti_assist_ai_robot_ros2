@@ -49,6 +49,6 @@ services:
 
     stdin_open: true # docker run -i
     tty: true        # docker run -t
-    working_dir: /workspace
+    working_dir: /remotedir
     command: >
       bash -c "/bin/bash"

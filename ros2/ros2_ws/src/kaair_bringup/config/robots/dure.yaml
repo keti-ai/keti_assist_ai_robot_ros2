@@ -21,7 +21,7 @@ head:
   baud_rate: 115200
 
 arm:
-  robot_ip: "192.168.5.224"
+  robot_ip: "192.168.1.224"
 
 tool:
   usb_port: "/dev/ttyGripper"

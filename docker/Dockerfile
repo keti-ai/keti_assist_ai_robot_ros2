@@ -124,12 +124,34 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------
-# 3-6. 하드웨어 SDK (Dynamixel, Modbus, RealSense Binary)
+# 3-6. 하드웨어 SDK (Dynamixel, Modbus, RealSense)
 # ---------------------------------------------------------
+
 RUN apt-get update && apt-get install -y \
     ros-$ROS_DISTRO-dynamixel-sdk \
     libmodbus-dev \
-    ros-$ROS_DISTRO-librealsense2* \
+    && rm -rf /var/lib/apt/lists/*
+
+# RealSense 공식 APT 저장소 등록
+RUN set -eux; \
+    mkdir -p /etc/apt/keyrings; \
+    curl -fsSL \
+      https://librealsense.realsenseai.com/Debian/librealsenseai.asc \
+      -o /tmp/librealsenseai.asc; \
+    gpg --batch --dearmor \
+      -o /etc/apt/keyrings/librealsenseai.gpg \
+      /tmp/librealsenseai.asc; \
+    chmod 644 /etc/apt/keyrings/librealsenseai.gpg; \
+    echo "deb [signed-by=/etc/apt/keyrings/librealsenseai.gpg] https://librealsense.realsenseai.com/Debian/apt-repo $(lsb_release -cs) main" \
+      > /etc/apt/sources.list.d/librealsense.list; \
+    rm /tmp/librealsenseai.asc
+
+# RealSense SDK 설치
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      librealsense2-dev \
+      librealsense2-utils \
+      librealsense2-udev-rules \
     && rm -rf /var/lib/apt/lists/*
 
 # ==========================================
