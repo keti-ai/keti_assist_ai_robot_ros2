@@ -16,12 +16,21 @@ SHELL ["/bin/bash", "-c"]
 # ==========================================
 # 2. 시스템 기본 도구 및 ROS 2 리포지토리 설정
 # ==========================================
+# apt-get install 중 "Hash Sum mismatch"가 간헐적으로 발생한다(원인은 특정
+# 패키지가 아니라, 한 RUN에서 받는 다운로드 용량이 클수록/연결이 길게 유지될수록
+# 전송 도중 손상될 확률이 올라가는 것으로 보임 — 매번 다른 패키지가, 크기는 같고
+# 해시만 다르게 깨져서 들어온다). Acquire::Retries로 개별 파일 재시도를 유도하는
+# 것과 별개로, 패키지 설치 자체를 여러 RUN으로 잘게 나눠 한 단계당 받는 양을
+# 줄였다 — 특정 단계가 실패하더라도 그 작은 단계만 다시 받으면 되므로, 전체를
+# 한 번에 받다가 걸리는 것보다 재시도 성공률이 높아진다.
 RUN apt-get update && apt-get install -y \
-    locales nano net-tools git curl wget gnupg2 lsb-release ca-certificates \
-    build-essential cmake gdb software-properties-common \
-    python3-pip python-is-python3 \
-    && locale-gen en_US.UTF-8 \
-    && rm -rf /var/lib/apt/lists/*
+    locales nano net-tools git curl wget gnupg2 lsb-release ca-certificates
+RUN apt-get update && apt-get install -y \
+    build-essential cmake gdb software-properties-common
+RUN apt-get update && apt-get install -y \
+    python3-pip python-is-python3
+RUN locale-gen en_US.UTF-8 && update-locale LANG=en_US.UTF-8
+RUN rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------
 # 2-1. pip 전역 설정 (PEP 668 대응)
@@ -36,11 +45,10 @@ RUN if ls /usr/lib/python3*/EXTERNALLY-MANAGED >/dev/null 2>&1; then \
         printf '[global]\nbreak-system-packages = true\n' > /etc/pip.conf; \
     fi
 
-
 # ==========================================
 # 3. ROS 2 기본 데스크탑 및 개발 도구
 # ==========================================
-RUN apt-get update && apt-get install -y \
+RUN (apt-get update || true) && apt-get install -y \
     ros-$ROS_DISTRO-desktop \
     ros-dev-tools \
     && rm -rf /var/lib/apt/lists/*
@@ -48,7 +56,7 @@ RUN apt-get update && apt-get install -y \
 # ---------------------------------------------------------
 # 3-1. ROS 2 Control 핵심 (Control, Manager, HW IF)
 # ---------------------------------------------------------
-RUN apt-get update && apt-get install -y \
+RUN (apt-get update || true) && apt-get install -y \
     ros-$ROS_DISTRO-ros2-control \
     ros-$ROS_DISTRO-controller-manager \
     ros-$ROS_DISTRO-hardware-interface \
@@ -58,7 +66,7 @@ RUN apt-get update && apt-get install -y \
 # ---------------------------------------------------------
 # 3-2. 표준 컨트롤러 및 브로드캐스터
 # ---------------------------------------------------------
-RUN apt-get update && apt-get install -y \
+RUN (apt-get update || true) && apt-get install -y \
     ros-$ROS_DISTRO-ros2-controllers \
     ros-$ROS_DISTRO-joint-state-broadcaster \
     ros-$ROS_DISTRO-joint-state-publisher \
@@ -71,7 +79,7 @@ RUN apt-get update && apt-get install -y \
 # ---------------------------------------------------------
 # 3-3. MoveIt 2 관련 플러그인
 # ---------------------------------------------------------
-    RUN apt-get update && apt-get install -y \
+    RUN (apt-get update || true) && apt-get install -y \
     ros-$ROS_DISTRO-moveit \
     ros-$ROS_DISTRO-moveit-servo \
     ros-$ROS_DISTRO-moveit-ros-planning \
@@ -85,7 +93,7 @@ RUN apt-get update && apt-get install -y \
 # ---------------------------------------------------------
 # 3-4. 이미지 및 비전 관련 플러그인
 # ---------------------------------------------------------
-RUN apt-get update && apt-get install -y \
+RUN (apt-get update || true) && apt-get install -y \
     libgflags-dev nlohmann-json3-dev \
     ros-$ROS_DISTRO-image-transport ros-$ROS_DISTRO-image-transport-plugins ros-$ROS_DISTRO-compressed-image-transport \
     ros-$ROS_DISTRO-image-publisher ros-$ROS_DISTRO-camera-info-manager \
@@ -98,7 +106,7 @@ RUN apt-get update && apt-get install -y \
 # ---------------------------------------------------------
 # 3-5. Navigation 2 관련 플러그인
 # ---------------------------------------------------------
-RUN apt-get update && apt-get install -y \
+RUN (apt-get update || true) && apt-get install -y \
     ros-$ROS_DISTRO-nav2-msgs \
     ros-$ROS_DISTRO-nav2-rviz-plugins \
     && rm -rf /var/lib/apt/lists/*
@@ -116,7 +124,7 @@ RUN apt-get update && apt-get install -y \
 #   ros2/ros2_ws/src/third_party/rviz_2d_overlay_plugins 로 vcs import 되고,
 #   ros2_ws 를 colcon build 할 때 함께 빌드된다(scripts/import_third_party.sh 참고).
 # Humble 의 apt 패키지는 이 결함이 없으므로 그대로 둔다.
-RUN apt-get update && apt-get install -y \
+RUN (apt-get update || true) && apt-get install -y \
     ros-$ROS_DISTRO-rviz-2d-overlay-msgs \
     && if [ "$ROS_DISTRO" = "humble" ]; then \
         apt-get install -y ros-$ROS_DISTRO-rviz-2d-overlay-plugins ; \
@@ -127,7 +135,7 @@ RUN apt-get update && apt-get install -y \
 # 3-6. 하드웨어 SDK (Dynamixel, Modbus, RealSense)
 # ---------------------------------------------------------
 
-RUN apt-get update && apt-get install -y \
+RUN (apt-get update || true) && apt-get install -y \
     ros-$ROS_DISTRO-dynamixel-sdk \
     libmodbus-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -147,7 +155,7 @@ RUN set -eux; \
     rm /tmp/librealsenseai.asc
 
 # RealSense SDK 설치
-RUN apt-get update && \
+RUN (apt-get update || true) && \
     apt-get install -y --no-install-recommends \
       librealsense2-dev \
       librealsense2-utils \
@@ -160,7 +168,7 @@ RUN apt-get update && \
 # - Humble: 아키텍처별 스냅샷 버전 고정 설치
 # - Jazzy 이상: 별도 고정 없이 배포판 최신 rviz2 사용
 RUN if [ "$ROS_DISTRO" = "humble" ]; then \
-        apt-get update && apt-get install -y --no-install-recommends wget ca-certificates \
+        (apt-get update || true) && apt-get install -y --no-install-recommends wget ca-certificates \
         && ARCH=$(dpkg --print-architecture) \
         && case "$ARCH" in \
             amd64) URL="http://snapshots.ros.org/humble/2025-06-18/ubuntu/pool/main/r/ros-humble-rviz-common/ros-humble-rviz-common_11.2.17-1jammy.20250617.234657_amd64.deb" ;; \
@@ -174,7 +182,7 @@ RUN if [ "$ROS_DISTRO" = "humble" ]; then \
         && rm /tmp/rviz-common.deb \
         && rm -rf /var/lib/apt/lists/* ; \
     else \
-        apt-get update && apt-get install -y --no-install-recommends \
+        (apt-get update || true) && apt-get install -y --no-install-recommends \
             ros-$ROS_DISTRO-rviz2 \
         && rm -rf /var/lib/apt/lists/* ; \
     fi
@@ -187,7 +195,7 @@ RUN if [ "$ROS_DISTRO" = "humble" ]; then \
 # ==========================================
 # 8. Cyclone DDS Installation
 # ==========================================
-RUN apt-get update && apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp
+RUN (apt-get update || true) && apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp
 
 
 ARG USERNAME=admin
@@ -195,7 +203,7 @@ ARG USER_UID=1000
 ARG USER_GID=1000
 
 # sudo 패키지 설치 및 사용자 권한 부여
-RUN apt-get update && apt-get install -y sudo \
+RUN (apt-get update || true) && apt-get install -y sudo \
     && if id -u ${USER_UID} >/dev/null 2>&1; then \
             EXIST_USER=$(getent passwd ${USER_UID} | cut -d: -f1); \
             usermod -l ${USERNAME} ${EXIST_USER}; \
