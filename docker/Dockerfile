@@ -6,31 +6,65 @@ ARG ROS_DISTRO=jazzy
 FROM ros:${ROS_DISTRO}-ros-base
 
 ARG ROS_DISTRO
-ARG TARGETARCH
 
 # ROS의 setup.bash는 ${BASH_SOURCE[0]} 등 bash 전용 문법을 사용하므로,
 # 기본 셸(/bin/sh -> dash)이 아닌 bash로 RUN 명령을 실행하도록 지정한다.
 SHELL ["/bin/bash", "-c"]
 
 
+# ---------------------------------------------------------
+# 1-1. apt-get/apt 재시도 래퍼 설치
+# ---------------------------------------------------------
+# apt-get install 중 "Hash Sum mismatch"가 간헐적으로 발생한다(원인은 특정
+# 패키지가 아니라, 한 번에 받는 다운로드 용량이 크고 연결이 길게 유지될수록
+# 전송 도중 데이터가 손상될 확률이 올라가는 것으로 보임 — 매번 다른 패키지가,
+# 크기는 같고 해시만 다르게 깨져서 들어온다). ros-desktop 처럼 패키지 하나가
+# 수백 개의 의존성을 한 번에 끌어오는 단계는 설치 목록을 쪼개서 나눌 수가 없으므로,
+# apt-get/apt 호출 자체를 가로채 실패 시 최대 5회까지 자동으로 재시도하는 래퍼를
+# 깐다. dpkg/apt는 이미 설치된 패키지는 건너뛰므로, 재시도할 때마다 손상됐던
+# 나머지 패키지만 다시 받다가 결국 전체가 성공한다. /usr/local/bin 이 PATH 상
+# /usr/bin 보다 먼저 탐색되므로, 이 아래의 모든 apt-get/apt 호출에 별도 수정
+# 없이 자동으로 적용된다. (외부 파일 의존 없이 Dockerfile 안에서만 해결하기
+# 위해 COPY 대신 printf로 스크립트를 직접 생성한다.)
+RUN printf '%s\n' \
+        '#!/bin/bash' \
+        'set -e' \
+        'name=$(basename "$0")' \
+        'real="/usr/bin/$name"' \
+        'cmd="$1"' \
+        'if [ "$cmd" = "update" ] || [ "$cmd" = "install" ]; then' \
+        '    n=0' \
+        '    until "$real" "$@"; do' \
+        '        n=$((n + 1))' \
+        '        if [ "$n" -ge 5 ]; then' \
+        '            exec "$real" "$@"' \
+        '        fi' \
+        '        echo "[apt-retry] $name $cmd failed (attempt $n/5), retrying..." >&2' \
+        '        sleep 3' \
+        '    done' \
+        'else' \
+        '    exec "$real" "$@"' \
+        'fi' \
+        > /usr/local/bin/apt-get-retry.sh \
+    && chmod +x /usr/local/bin/apt-get-retry.sh \
+    && cp /usr/local/bin/apt-get-retry.sh /usr/local/bin/apt-get \
+    && cp /usr/local/bin/apt-get-retry.sh /usr/local/bin/apt \
+    && chmod +x /usr/local/bin/apt-get /usr/local/bin/apt
+
+
 # ==========================================
 # 2. 시스템 기본 도구 및 ROS 2 리포지토리 설정
 # ==========================================
-# apt-get install 중 "Hash Sum mismatch"가 간헐적으로 발생한다(원인은 특정
-# 패키지가 아니라, 한 RUN에서 받는 다운로드 용량이 클수록/연결이 길게 유지될수록
-# 전송 도중 손상될 확률이 올라가는 것으로 보임 — 매번 다른 패키지가, 크기는 같고
-# 해시만 다르게 깨져서 들어온다). Acquire::Retries로 개별 파일 재시도를 유도하는
-# 것과 별개로, 패키지 설치 자체를 여러 RUN으로 잘게 나눠 한 단계당 받는 양을
-# 줄였다 — 특정 단계가 실패하더라도 그 작은 단계만 다시 받으면 되므로, 전체를
-# 한 번에 받다가 걸리는 것보다 재시도 성공률이 높아진다.
+# 위 1-1의 재시도 래퍼가 ros-desktop 처럼 큰 설치 단계도 통째로 재시도해주므로,
+# 이 단계를 잘게 쪼개서 재시도 단위를 줄여야 할 이유는 더 이상 없다. 하나의
+# RUN으로 합쳐 apt-get update 메타데이터(~40MB)를 여러 번 받지 않게 하고,
+# 같은 레이어 안에서 rm -rf /var/lib/apt/lists/* 로 정리해 이미지 용량도 줄인다.
 RUN apt-get update && apt-get install -y \
-    locales nano net-tools git curl wget gnupg2 lsb-release ca-certificates
-RUN apt-get update && apt-get install -y \
-    build-essential cmake gdb software-properties-common
-RUN apt-get update && apt-get install -y \
-    python3-pip python-is-python3
-RUN locale-gen en_US.UTF-8 && update-locale LANG=en_US.UTF-8
-RUN rm -rf /var/lib/apt/lists/*
+    locales nano net-tools git curl wget gnupg2 lsb-release ca-certificates \
+    build-essential cmake gdb software-properties-common \
+    python3-pip python-is-python3 \
+    && locale-gen en_US.UTF-8 && update-locale LANG=en_US.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------
 # 2-1. pip 전역 설정 (PEP 668 대응)
@@ -79,7 +113,7 @@ RUN (apt-get update || true) && apt-get install -y \
 # ---------------------------------------------------------
 # 3-3. MoveIt 2 관련 플러그인
 # ---------------------------------------------------------
-    RUN (apt-get update || true) && apt-get install -y \
+RUN (apt-get update || true) && apt-get install -y \
     ros-$ROS_DISTRO-moveit \
     ros-$ROS_DISTRO-moveit-servo \
     ros-$ROS_DISTRO-moveit-ros-planning \
@@ -195,7 +229,8 @@ RUN if [ "$ROS_DISTRO" = "humble" ]; then \
 # ==========================================
 # 8. Cyclone DDS Installation
 # ==========================================
-RUN (apt-get update || true) && apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp
+RUN (apt-get update || true) && apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp \
+    && rm -rf /var/lib/apt/lists/*
 
 
 ARG USERNAME=admin
@@ -213,7 +248,8 @@ RUN (apt-get update || true) && apt-get install -y sudo \
             useradd --uid ${USER_UID} --gid ${USER_GID} -m ${USERNAME}; \
         fi \
     && echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} \
-    && chmod 0440 /etc/sudoers.d/${USERNAME}
+    && chmod 0440 /etc/sudoers.d/${USERNAME} \
+    && rm -rf /var/lib/apt/lists/*
 
 
 # 환경 변수·Alias·PS1 설정은 /workspace/.entrypoint.sh 에 모아두고,

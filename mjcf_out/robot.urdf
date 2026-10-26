@@ -1,0 +1,937 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="kaair">
+  <material name="black">
+    <color rgba="0.0 0.0 0.0 1.0" />
+  </material>
+  <material name="white">
+    <color rgba="1.0 1.0 1.0 1.0" />
+  </material>
+  <material name="gray">
+    <color rgba="0.5 0.5 0.5 1.0" />
+  </material>
+  <material name="dark_gray">
+    <color rgba="0.2 0.2 0.2 1.0" />
+  </material>
+  <material name="light_gray">
+    <color rgba="0.8 0.8 0.8 1.0" />
+  </material>
+  <material name="orange">
+    <color rgba="1.0 0.5 0.0 1.0" />
+  </material>
+  <link name="base_footprint"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="slamtec_base_link">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__slamtec__visual__slamtec_base.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="light_gray" />
+    </visual>
+    
+    <collision>
+      <origin rpy="0 0 0" xyz="0.008259 0.0 0.148485" />
+      <geometry>
+        <box size="0.460 0.430 0.409" />
+      </geometry>
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="S2RPLidar_frame">
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__slamtec__visual__S2RPLIDAR.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="black" />
+    </visual>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="robot_base_link"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="left_wheel">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__slamtec__visual__left_wheel.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="black" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <cylinder length="0.041" radius="0.085" />
+      </geometry>
+      <origin rpy="1.5708 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="right_wheel">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__slamtec__visual__right_wheel.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="black" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <cylinder length="0.041" radius="0.085" />
+      </geometry>
+      <origin rpy="1.5708 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="lf_caster">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__slamtec__visual__caster.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="black" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <sphere radius="0.0315" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="rf_caster">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__slamtec__visual__caster.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="black" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <sphere radius="0.0315" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="lb_caster">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__slamtec__visual__caster.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="black" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <sphere radius="0.0315" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="rb_caster">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__slamtec__visual__caster.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="black" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <sphere radius="0.0315" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="footprint_to_base" type="fixed">
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.085" />
+    <parent link="base_footprint" />
+    <child link="slamtec_base_link" />
+  </joint>
+  <joint name="base_to_robot_base" type="fixed">
+    <origin rpy="0 0 0" xyz="-0.014838 0.0 0.352985" />
+    <parent link="slamtec_base_link" />
+    <child link="robot_base_link" />
+  </joint>
+  <joint name="base_to_lidar" type="fixed">
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.127035" />
+    <parent link="slamtec_base_link" />
+    <child link="S2RPLidar_frame" />
+  </joint>
+  <joint name="left_wheel_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.0 0.16885 0.0" />
+    <parent link="slamtec_base_link" />
+    <child link="left_wheel" />
+  </joint>
+  <joint name="right_wheel_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.0 -0.16885 0.0" />
+    <parent link="slamtec_base_link" />
+    <child link="right_wheel" />
+  </joint>
+  <joint name="lf_caster_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.12766 0.09 -0.0535" />
+    <parent link="slamtec_base_link" />
+    <child link="lf_caster" />
+  </joint>
+  <joint name="rf_caster_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.12766 -0.09 -0.0535" />
+    <parent link="slamtec_base_link" />
+    <child link="rf_caster" />
+  </joint>
+  <joint name="lb_caster_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="-0.16034 0.1 -0.0535" />
+    <parent link="slamtec_base_link" />
+    <child link="lb_caster" />
+  </joint>
+  <joint name="rb_caster_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="-0.16034 -0.1 -0.0535" />
+    <parent link="slamtec_base_link" />
+    <child link="rb_caster" />
+  </joint>
+  <link name="lift_base_link">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__lift__visual__lift_base.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="gray" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <mesh filename="kaair_description__meshes__lift__collision__lift_base.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="lift_link">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__lift__visual__lift_link.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="light_gray" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <mesh filename="kaair_description__meshes__lift__collision__lift_link.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="arm_base">
+    <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="lift_joint" type="prismatic">
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
+    <parent link="lift_base_link" />
+    <child link="lift_link" />
+    <axis xyz="0.0 0.0 1.0" />
+    <limit effort="700" lower="0.13" upper="0.7" velocity="0.2" />
+  </joint>
+  <joint name="lift_to_arm_fix_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.2415 0.0 0.0" />
+    <parent link="lift_link" />
+    <child link="arm_base" />
+  </joint>
+  <joint name="lift_to_mobile_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
+    <parent link="robot_base_link" />
+    <child link="lift_base_link" />
+  </joint>
+  <link name="head_base">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__head__visual__head_base.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="white" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <mesh filename="kaair_description__meshes__head__visual__head_base.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="head_link1">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__head__visual__head_link1.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="dark_gray" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <mesh filename="kaair_description__meshes__head__visual__head_link1.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="head_link2">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__head__visual__head_link2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="black" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <mesh filename="kaair_description__meshes__head__visual__head_link2.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="head_link3">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__head__visual__head_link3.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="dark_gray" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <mesh filename="kaair_description__meshes__head__visual__head_link3.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="head_camera_mount">
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="head_fix_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="-0.0557 0.0 0.079" />
+    <parent link="head_base" />
+    <child link="head_link1" />
+  </joint>
+  <joint name="head_joint1" type="revolute">
+    <origin rpy="0 0 0" xyz="0.028 0.0 0.0" />
+    <parent link="head_link1" />
+    <child link="head_link2" />
+    <axis xyz="0.0 0.0 1.0" />
+    <limit effort="30" lower="-1.58" upper="1.58" velocity="3.0" />
+  </joint>
+  <joint name="head_joint2" type="revolute">
+    <origin rpy="0 0 0" xyz="0.024 0.0 0.0" />
+    <parent link="head_link2" />
+    <child link="head_link3" />
+    <axis xyz="0.0 -1.0 0.0" />
+    <limit effort="30" lower="-1.58" upper="1.58" velocity="3.0" />
+  </joint>
+  <joint name="pantilt_femto_frame_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.055" />
+    <parent link="head_link3" />
+    <child link="head_camera_mount" />
+  </joint>
+  
+  
+  <link name="femto_calib_link"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="femto_calib_joint" type="fixed">
+    <origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.01" />
+    <parent link="head_camera_mount" />
+    <child link="femto_calib_link" />
+  </joint>
+  
+  <joint name="femto_base_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 0" />
+    <parent link="femto_calib_link" />
+    <child link="femto_base_link" />
+  </joint>
+  <link name="femto_base_link">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="orbbec_description__meshes__femto_bolt__femto_bolt.stl" />
+      </geometry>
+      <material name="">
+        <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <geometry>
+        <mesh filename="orbbec_description__meshes__femto_bolt__femto_bolt.stl" />
+      </geometry>
+    </collision>
+    <inertial>
+      
+      <mass value="0.2" />
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001" />
+    </inertial>
+  </link>
+  
+  <joint name="femto_link_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.03645 0.00198 0.021" />
+    <parent link="femto_base_link" />
+    <child link="femto_link" />
+  </joint>
+  <link name="femto_link"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  
+  <joint name="femto_depth_joint" type="fixed">
+    <origin rpy="-0.0063718 0.1061316 0.000231" xyz="0 0 0" />
+    <parent link="femto_link" />
+    <child link="femto_depth_frame" />
+  </joint>
+  <link name="femto_depth_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="femto_depth_optical_joint" type="fixed">
+    <origin rpy="-1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0" />
+    <parent link="femto_depth_frame" />
+    <child link="femto_depth_optical_frame" />
+  </joint>
+  <link name="femto_depth_optical_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  
+  <joint name="femto_ir_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0.0 0" />
+    <parent link="femto_depth_frame" />
+    <child link="femto_ir_frame" />
+  </joint>
+  <link name="femto_ir_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="femto_ir_optical_joint" type="fixed">
+    <origin rpy="-1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0" />
+    <parent link="femto_ir_frame" />
+    <child link="femto_ir_optical_frame" />
+  </joint>
+  <link name="femto_ir_optical_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  
+  <joint name="femto_color_joint" type="fixed">
+    <origin rpy="0.006371800289866152 -0.10613163835054795 -0.00023102465978322808" xyz="-0.0021445322036743163 -0.03267627716064453 -0.0010942233800888062" />
+    <parent link="femto_depth_frame" />
+    <child link="femto_color_frame" />
+  </joint>
+  <link name="femto_color_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="femto_color_optical_joint" type="fixed">
+    <origin rpy="-1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0" />
+    <parent link="femto_color_frame" />
+    <child link="femto_color_optical_frame" />
+  </joint>
+  <link name="femto_color_optical_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="lift_to_head_fix_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.859" />
+    <parent link="lift_base_link" />
+    <child link="head_base" />
+  </joint>
+  <material name="Black">
+    <color rgba="0.0 0.0 0.0 1.0" />
+  </material>
+  <material name="Red">
+    <color rgba="0.8 0.0 0.0 1.0" />
+  </material>
+  <material name="White">
+    <color rgba="1.0 1.0 1.0 1.0" />
+  </material>
+  <material name="Silver">
+    <color rgba="0.753 0.753 0.753 1.0" />
+  </material>
+  <joint name="world_joint" type="fixed">
+    <parent link="arm_base" />
+    <child link="link_base" />
+    <origin rpy="0 0 0" xyz="0 0 0" />
+  </joint>
+  <link name="link_base">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.021131 -0.0016302 0.056488" />
+      <mass value="0.88556" />
+      <inertia ixx="0.0030595" ixy="0.00012259" ixz="-0.00062705" iyy="0.0037783" iyz="0.00027023" izz="0.0020125" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link_base.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link_base.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <link name="link1">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.0002 0.02905 -0.01233" />
+      <mass value="2.382" />
+      <inertia ixx="0.0056905" ixy="-1.579e-05" ixz="5.125e-06" iyy="0.0049566" iyz="-0.000873378" izz="0.003316654" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link1.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link1.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint1" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0.267" />
+    <parent link="link_base" />
+    <child link="link1" />
+    <axis xyz="0 0 1" />
+    <limit effort="163.2" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="10" friction="1" />
+  </joint>
+  <link name="link2">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.00022 -0.12856 0.01735" />
+      <mass value="1.869" />
+      <inertia ixx="0.0095989" ixy="1.541e-06" ixz="5.56e-06" iyy="0.00382472" iyz="-0.00317156" izz="0.007565669" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link2.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link2.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint2" type="revolute">
+    <origin rpy="-1.5708 0 0" xyz="0 0 0" />
+    <parent link="link1" />
+    <child link="link2" />
+    <axis xyz="0 0 1" />
+    <limit effort="163.2" lower="-2.059" upper="2.0944" velocity="3.14" />
+    <dynamics damping="10" friction="1" />
+  </joint>
+  <link name="link3">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.0466 -0.02463 -0.00768" />
+      <mass value="1.6383" />
+      <inertia ixx="0.00310955" ixy="0.00030837" ixz="-0.00058453" iyy="0.00264483" iyz="0.000338893" izz="0.0026624" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link3.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link3.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint3" type="revolute">
+    <origin rpy="1.5708 0 0" xyz="0 -0.293 0" />
+    <parent link="link2" />
+    <child link="link3" />
+    <axis xyz="0 0 1" />
+    <limit effort="81.6" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="5" friction="1" />
+  </joint>
+  <link name="link4">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.07047 -0.11575 0.012" />
+      <mass value="1.7269" />
+      <inertia ixx="0.005889" ixy="0.00137112" ixz="0.00088143" iyy="0.00359703" iyz="-0.001762155" izz="0.00543244" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link4.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link4.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint4" type="revolute">
+    <origin rpy="1.5708 0 0" xyz="0.0525 0 0" />
+    <parent link="link3" />
+    <child link="link4" />
+    <axis xyz="0 0 1" />
+    <limit effort="81.6" lower="-0.19198" upper="3.927" velocity="3.14" />
+    <dynamics damping="5" friction="1" />
+  </joint>
+  <link name="link5">
+    <inertial>
+      <origin rpy="0 0 0" xyz="-0.00032 0.01604 -0.026" />
+      <mass value="1.3203" />
+      <inertia ixx="0.00534665" ixy="1.5117e-05" ixz="-3.69e-07" iyy="0.0049779" iyz="-0.00022132" izz="0.0013624" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link5.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link5.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint5" type="revolute">
+    <origin rpy="1.5708 0 0" xyz="0.0775 -0.3425 0" />
+    <parent link="link4" />
+    <child link="link5" />
+    <axis xyz="0 0 1" />
+    <limit effort="81.6" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="5" friction="1" />
+  </joint>
+  <link name="link6">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0.06469 0.03278 0.02141" />
+      <mass value="1.325" />
+      <inertia ixx="0.0014745" ixy="-0.000488" ixz="0.0002953" iyy="0.0019037" iyz="0.00014749" izz="0.0023652" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link6.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="White" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link6.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint6" type="revolute">
+    <origin rpy="1.5708 0 0" xyz="0 0 0" />
+    <parent link="link5" />
+    <child link="link6" />
+    <axis xyz="0 0 1" />
+    <limit effort="30.6" lower="-1.69297" upper="3.141592653589793" velocity="3.14" />
+    <dynamics damping="2" friction="1" />
+  </joint>
+  <link name="link7">
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 -0.00677 -0.01098" />
+      <mass value="0.17" />
+      <inertia ixx="9.3e-05" ixy="-0.0" ixz="-0.0" iyy="5.87e-05" iyz="-3.6e-06" izz="0.000132" />
+    </inertial>
+    <visual>
+      <geometry>
+        <mesh filename="xarm_description__meshes__xarm7__visual__link7.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="Silver" />
+    </visual>
+    <collision>
+      <geometry>
+        <mesh filename="xarm_description__meshes__end_tool__collision__end_tool.stl" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  </link>
+  <joint name="joint7" type="revolute">
+    <origin rpy="-1.5708 0 0" xyz="0.076 0.097 0" />
+    <parent link="link6" />
+    <child link="link7" />
+    <axis xyz="0 0 1" />
+    <limit effort="30.6" lower="-6.283185307179586" upper="6.283185307179586" velocity="3.14" />
+    <dynamics damping="2" friction="1" />
+  </joint>
+  
+  <link name="link_eef"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="joint_eef" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 0" />
+    <parent link="link7" />
+    <child link="link_eef" />
+  </joint>
+  
+  <link name="hand_base_link">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__tool__visual__hand_base.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="gray" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <mesh filename="kaair_description__meshes__tool__visual__hand_base.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="tooltip_collision_link">
+    <collision>
+      <origin rpy="0 0 0" xyz="0.0 0.0 0.13" />
+      <geometry>
+        <box size="0.028 0.100 0.08" />
+      </geometry>
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="vision_frame_link">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__tool__visual__vision_frame.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="light_gray" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <mesh filename="kaair_description__meshes__tool__visual__vision_frame.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="gripper_body_link">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__tool__visual__gripper_body.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="black" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <mesh filename="kaair_description__meshes__tool__visual__gripper_body.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="left_finger_tip">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__tool__visual__left_finger_tip_50mm.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="orange" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <mesh filename="kaair_description__meshes__tool__visual__left_finger_tip_50mm.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="right_finger_tip">
+    
+    <visual>
+      <geometry>
+        <mesh filename="kaair_description__meshes__tool__visual__right_finger_tip_50mm.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+      <material name="orange" />
+    </visual>
+    
+    <collision>
+      <geometry>
+        <mesh filename="kaair_description__meshes__tool__visual__right_finger_tip_50mm.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <origin rpy="0 0 0" xyz="0 0 0" />
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="virtual_gripper_link"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <link name="tool_tcp_link"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="hand_to_gripper_fix_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.0135" />
+    <parent link="hand_base_link" />
+    <child link="gripper_body_link" />
+  </joint>
+  <joint name="tooltip_dummpy_fix_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
+    <parent link="hand_base_link" />
+    <child link="tooltip_collision_link" />
+  </joint>
+  <joint name="hand_to_vision_frame_fix_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.0" />
+    <parent link="hand_base_link" />
+    <child link="vision_frame_link" />
+  </joint>
+  <joint name="virtual_gripper_joint" type="prismatic">
+    <origin rpy="0 0 0" xyz="0 0 0" />
+    <parent link="hand_base_link" />
+    <child link="virtual_gripper_link" />
+    <axis xyz="0 1 0" />
+    
+    <limit effort="50" lower="0" upper="0.1" velocity="0.05" />
+  </joint>
+  <joint name="gripper_tcp_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.0 0.0 0.191" />
+    <parent link="gripper_body_link" />
+    <child link="tool_tcp_link" />
+  </joint>
+  <joint name="right_finger_tip_joint" type="prismatic">
+    <origin rpy="0 0 0" xyz="0.0 0.0035 0.15325" />
+    <parent link="gripper_body_link" />
+    <child link="right_finger_tip" />
+    <axis xyz="0.0 1.0 0.0" />
+    <limit effort="50" lower="0" upper="0.05" velocity="0.005" />
+    <mimic joint="virtual_gripper_joint" multiplier="0.5" offset="0" />
+  </joint>
+  <joint name="left_finger_tip_joint" type="prismatic">
+    <origin rpy="0 0 0" xyz="0.0 -0.0035 0.15325" />
+    <parent link="gripper_body_link" />
+    <child link="left_finger_tip" />
+    <axis xyz="0.0 -1.0 0.0" />
+    <limit effort="50" lower="0" upper="0.05" velocity="0.005" />
+    <mimic joint="virtual_gripper_joint" multiplier="0.5" offset="0" />
+  </joint>
+  <joint name="arm_to_tool_fix_joint" type="fixed">
+    <origin rpy="0 0 3.1415926535897931" xyz="0.0 0.0 0.0" />
+    <parent link="link_eef" />
+    <child link="hand_base_link" />
+  </joint>
+  <material name="aluminum">
+    <color rgba="0.5 0.5 0.5 1" />
+  </material>
+  <material name="plastic">
+    <color rgba="0.1 0.1 0.1 1" />
+  </material>
+  <link name="hand_camera_calib_link"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="hand_camera_calib_joint" type="fixed">
+    <origin rpy="0.0 0.0 0.0" xyz="0.04428 0.0 0.02185" />
+    <parent link="vision_frame_link" />
+    <child link="hand_camera_calib_link" />
+  </joint>
+  
+  <joint name="camera_joint" type="fixed">
+    <origin rpy="0 -1.5707963267948966 -3.1415926535897931" xyz="0 0 0" />
+    <parent link="hand_camera_calib_link" />
+    <child link="camera_bottom_screw_frame" />
+  </joint>
+  <link name="camera_bottom_screw_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="camera_link_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.01085 0.009 0.021" />
+    <parent link="camera_bottom_screw_frame" />
+    <child link="camera_link" />
+  </joint>
+  <link name="camera_link">
+    <visual>
+      
+      <origin rpy="1.5707963267948966 0 1.5707963267948966" xyz="0.0038 -0.009 0" />
+      <geometry>
+        <mesh filename="realsense2_description__meshes__d405.stl" scale="0.001 0.001 0.001" />
+      </geometry>
+      <material name="aluminum" />
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="-0.0078 -0.009 0" />
+      <geometry>
+        <box size="0.023 0.042 0.042" />
+      </geometry>
+    </collision>
+    <inertial>
+      
+      <mass value="0.072" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="0.003881243" ixy="0.0" ixz="0.0" iyy="0.000498940" iyz="0.0" izz="0.003879257" />
+    </inertial>
+  </link>
+  
+  <joint name="camera_depth_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0 0" />
+    <parent link="camera_link" />
+    <child link="camera_depth_frame" />
+  </joint>
+  <link name="camera_depth_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="camera_depth_optical_joint" type="fixed">
+    <origin rpy="-1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0" />
+    <parent link="camera_depth_frame" />
+    <child link="camera_depth_optical_frame" />
+  </joint>
+  <link name="camera_depth_optical_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  
+  <joint name="camera_infra1_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0.0 0" />
+    <parent link="camera_link" />
+    <child link="camera_infra1_frame" />
+  </joint>
+  <link name="camera_infra1_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="camera_infra1_optical_joint" type="fixed">
+    <origin rpy="-1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0" />
+    <parent link="camera_infra1_frame" />
+    <child link="camera_infra1_optical_frame" />
+  </joint>
+  <link name="camera_infra1_optical_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  
+  <joint name="camera_infra2_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 -0.018 0" />
+    <parent link="camera_link" />
+    <child link="camera_infra2_frame" />
+  </joint>
+  <link name="camera_infra2_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="camera_infra2_optical_joint" type="fixed">
+    <origin rpy="-1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0" />
+    <parent link="camera_infra2_frame" />
+    <child link="camera_infra2_optical_frame" />
+  </joint>
+  <link name="camera_infra2_optical_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  
+  <joint name="camera_color_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0.0 0" />
+    <parent link="camera_link" />
+    <child link="camera_color_frame" />
+  </joint>
+  <link name="camera_color_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="camera_color_optical_joint" type="fixed">
+    <origin rpy="-1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0" />
+    <parent link="camera_color_frame" />
+    <child link="camera_color_optical_frame" />
+  </joint>
+  <link name="camera_color_optical_frame"><inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+  <joint name="camera_usb_plug_joint" type="fixed">
+    <origin rpy="3.141592653589793 0 0" xyz="-0.01238 0.012000000000000002 0" />
+    <parent link="camera_link" />
+    <child link="camera_usb_plug_link" />
+  </joint>
+  <link name="camera_usb_plug_link">
+    <visual>
+      
+      <origin rpy="0 0 1.5707963267948966" xyz="0. -0.022425 0." />
+      <geometry>
+        
+        <mesh filename="realsense2_description__meshes__plug.stl" />
+      </geometry>
+      <material name="plastic" />
+    </visual>
+    <collision>
+      <origin rpy="0 0 1.5707963267948966" xyz="0. -0.022425 0." />
+      <geometry>
+        
+        <mesh filename="realsense2_description__meshes__plug_collision.stl" />
+      </geometry>
+    </collision>
+  <inertial><origin xyz="0 0 0" rpy="0 0 0" /><mass value="0.001" /><inertia ixx="1e-06" iyy="1e-06" izz="1e-06" ixy="0" ixz="0" iyz="0" /></inertial></link>
+<mujoco><compiler meshdir="meshes" balanceinertia="true" discardvisual="false" fusestatic="false" /></mujoco></robot>

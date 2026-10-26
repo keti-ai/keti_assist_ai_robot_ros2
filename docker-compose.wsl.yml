@@ -1,0 +1,69 @@
+# FULL standalone WSL2 + WSLg Compose (not an override).
+# Requires an NVIDIA-compatible Docker runtime configured in WSL.
+# Check the WSL host can run:
+#   GALLIUM_DRIVER=d3d12 MESA_D3D12_DEFAULT_ADAPTER_NAME=NVIDIA glxinfo -B
+services:
+  kaair_container:
+    image: kaair-moveit:${ROS_DISTRO:-humble}
+    container_name: keti_ros2_container_${ROS_DISTRO:-humble}
+    network_mode: host
+    ipc: host
+    privileged: true
+    restart: unless-stopped
+    # user: root
+    runtime: nvidia
+
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - QT_X11_NO_MITSHM=1
+      - TZ=Asia/Seoul
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-30}
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      - CYCLONEDDS_URI=file:///workspace/cyclonedds.xml
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/workspace/fastdds_profile.xml
+      - RMW_FASTRTPS_USE_QOS_FROM_XML=1
+      # WSLg Mesa Direct3D12 hardware renderer
+      - GALLIUM_DRIVER=d3d12
+      - MESA_D3D12_DEFAULT_ADAPTER_NAME=NVIDIA
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY:-wayland-0}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/mnt/wslg/runtime-dir}
+      # Intentionally do NOT replace LD_LIBRARY_PATH here;
+      # ROS 2 overlays append library directories on container startup.
+
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /dev:/dev
+      - /dev/shm:/dev/shm
+      - .:/workspace
+      # WSLg Direct3D integration; must exist on the WSL host
+      - /usr/lib/wsl:/usr/lib/wsl:ro
+      - /mnt/wslg:/mnt/wslg:rw
+
+    devices:
+      - /dev/dxg:/dev/dxg
+
+    group_add:
+      - video
+      - plugdev
+      - sudo
+      - dialout
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, video, graphics, utility, compute]
+
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+    # Export WSL driver path only for this container's shell; preserve existing
+    # ROS/MoveIt workspace LD_LIBRARY_PATH instead of replacing it in Compose.
+    command: >
+      bash -c 'export LD_LIBRARY_PATH="/usr/lib/wsl/lib:$${LD_LIBRARY_PATH:-}"; exec /bin/bash'
