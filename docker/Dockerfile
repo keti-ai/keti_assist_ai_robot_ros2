@@ -137,33 +137,6 @@ RUN (apt-get update || true) && apt-get install -y \
     ros-$ROS_DISTRO-pcl-ros \
     && rm -rf /var/lib/apt/lists/*
 
-# ---------------------------------------------------------
-# 3-5. Navigation 2 관련 플러그인
-# ---------------------------------------------------------
-RUN (apt-get update || true) && apt-get install -y \
-    ros-$ROS_DISTRO-nav2-msgs \
-    ros-$ROS_DISTRO-nav2-rviz-plugins \
-    && rm -rf /var/lib/apt/lists/*
-
-# ---------------------------------------------------------
-# 3-5-1. RViz2 2D Overlay 플러그인 (servo 상태 등 화면 고정 텍스트 HUD)
-# ---------------------------------------------------------
-# Jazzy(noble)의 ros-jazzy-rviz-2d-overlay-plugins 바이너리(.deb)는 apt 미러의
-# 모든 스냅샷(과거~현재)에 걸쳐 librviz_2d_overlay_plugins.so 의
-# OverlayTextDisplay vtable 심볼(_ZTVN23rviz_2d_overlay_plugins18OverlayTextDisplayE)
-# 이 undefined 로 빠져 있어, rviz2 에서 "PluginlibFactory: ... failed to load ...
-# undefined symbol" 로 로드가 실패한다(버전 skew 가 아니라 패키징 자체의 결함 —
-# 동일 소스를 직접 colcon build 하면 vtable 이 정상적으로 나온다).
-# → Jazzy 는 apt 대신 소스 빌드로 대체한다: third_party.jazzy.repos 에
-#   ros2/ros2_ws/src/third_party/rviz_2d_overlay_plugins 로 vcs import 되고,
-#   ros2_ws 를 colcon build 할 때 함께 빌드된다(scripts/import_third_party.sh 참고).
-# Humble 의 apt 패키지는 이 결함이 없으므로 그대로 둔다.
-RUN (apt-get update || true) && apt-get install -y \
-    ros-$ROS_DISTRO-rviz-2d-overlay-msgs \
-    && if [ "$ROS_DISTRO" = "humble" ]; then \
-        apt-get install -y ros-$ROS_DISTRO-rviz-2d-overlay-plugins ; \
-    fi \
-    && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------
 # 3-6. 하드웨어 SDK (Dynamixel, Modbus, RealSense)
@@ -232,6 +205,8 @@ RUN if [ "$ROS_DISTRO" = "humble" ]; then \
 RUN (apt-get update || true) && apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 
+RUN (apt-get update || true) && apt install -y zenoh-bridge-ros2dds \
+    && rm -rf /var/lib/apt/lists/*
 
 ARG USERNAME=admin
 ARG USER_UID=1000
