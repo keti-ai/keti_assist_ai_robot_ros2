@@ -4,7 +4,7 @@
 #   GALLIUM_DRIVER=d3d12 MESA_D3D12_DEFAULT_ADAPTER_NAME=NVIDIA glxinfo -B
 services:
   kaair_container:
-    image: kaair-moveit:${ROS_DISTRO:-humble}
+    image: kaair-moveit-ros2:${ROS_DISTRO:-humble}
     container_name: keti_ros2_container_${ROS_DISTRO:-humble}
     network_mode: host
     ipc: host

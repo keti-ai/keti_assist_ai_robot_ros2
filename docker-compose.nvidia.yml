@@ -12,7 +12,7 @@ services:
     runtime: nvidia
 
     environment:
-      - DISPLAY=${DISPLAY}
+      - DISPLAY=${DISPLAY:-:0}  # GUI를 위한 X11 DISPLAY 환경변수 전달
       - QT_X11_NO_MITSHM=1
       - TZ=Asia/Seoul               # 컨테이너 기본 타임존(UTC)으로 인한 로그 시간 불일치 방지
       - NVIDIA_VISIBLE_DEVICES=all
