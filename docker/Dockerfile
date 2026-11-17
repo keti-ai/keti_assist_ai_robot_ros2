@@ -205,6 +205,22 @@ RUN if [ "$ROS_DISTRO" = "humble" ]; then \
 RUN (apt-get update || true) && apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 
+# zenoh-bridge-ros2dds 는 ROS/Ubuntu 기본 apt 소스에는 없고 Eclipse Zenoh가
+# 직접 운영하는 apt 저장소에만 있다("Unable to locate package" 는 이 저장소가
+# 등록되지 않아서 발생). arm64(Jetson)용 패키지도 같은 저장소에 함께 배포된다.
+RUN set -eux; \
+    mkdir -p /etc/apt/keyrings; \
+    curl -fsSL \
+      https://download.eclipse.org/zenoh/debian-repo/zenoh-public-key \
+      -o /tmp/zenoh-public-key; \
+    gpg --batch --dearmor \
+      -o /etc/apt/keyrings/zenoh-public-key.gpg \
+      /tmp/zenoh-public-key; \
+    chmod 644 /etc/apt/keyrings/zenoh-public-key.gpg; \
+    echo "deb [signed-by=/etc/apt/keyrings/zenoh-public-key.gpg] https://download.eclipse.org/zenoh/debian-repo/ /" \
+      > /etc/apt/sources.list.d/zenoh.list; \
+    rm /tmp/zenoh-public-key
+
 RUN (apt-get update || true) && apt install -y zenoh-bridge-ros2dds \
     && rm -rf /var/lib/apt/lists/*
 
