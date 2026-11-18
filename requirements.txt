@@ -1,4 +1,5 @@
 numpy==1.26.4
 pyserial
 xarm_python_sdk
+eclipse-zenoh
 roslibpy
