@@ -18,6 +18,24 @@
       //// 밀릴 때 오래된 프레임을 버리고 지연이 쌓이지 않게 한다.
       ////
       reliable_routes_blocking: true,
+
+      ////
+      //// pub_max_frequencies: "정규식=최대Hz" 문자열 목록. 토픽 이름(인터페이스 이름)이
+      //// 정규식에 매칭되면 zenoh로 라우팅할 때 지정한 Hz를 넘지 않도록 다운샘플링한다
+      //// (초과분은 버려짐). 무선 구간(zenoh-bridge <-> zenoh_web_app 등 원격 구독자)으로
+      //// 나가는 트래픽 자체를 줄이는 설정이므로, 여기서 막아야 실제 대역폭이 줄어든다
+      //// (구독자 쪽에서 프레임을 버리는 건 이미 수신한 뒤라 대역폭에 영향이 없음).
+      ////
+      //// image_raw, image_rect 등 raw 이미지와 image_transport의 .../compressed 토픽은
+      //// 경로에 항상 "image"가 들어가므로 ".*image.*" 하나로 커버되고, depth 이미지는
+      //// 보통 depth/image_raw 형태라 마찬가지로 매칭된다. 혹시 "image"가 없는 depth
+      //// 토픽(예: .../depth)이 있을 경우를 대비해 depth 패턴도 별도로 추가했다.
+      //// 필요한 Hz 값으로 조정해서 사용. (예: 15Hz 제한)
+      ////
+      pub_max_frequencies: [
+        ".*image.*=15",
+        ".*depth.*=15",
+      ],
     },
   },
 }
