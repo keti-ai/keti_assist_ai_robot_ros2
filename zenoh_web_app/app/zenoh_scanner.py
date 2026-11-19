@@ -7,15 +7,16 @@ Finds image topics on the zenoh bridge in two complementary ways:
    declared ros2_type, even if nothing is published during the scan.
 
 2. Active probing: briefly subscribes to every key ("**") and tries to
-   CDR-decode each payload as sensor_msgs/msg/Image. This is what actually
-   finds flat-named topics published directly over zenoh (bypassing the
-   DDS bridge entirely) - e.g. zenoh_image_view.py's own default topic,
-   "d455_1_rgb_image", never shows up in the admin routes but streams fine.
-   It only finds topics that are actively publishing during the scan.
+   CDR-decode each payload as sensor_msgs/msg/Image or
+   sensor_msgs/msg/CompressedImage. This is what actually finds flat-named
+   topics published directly over zenoh (bypassing the DDS bridge entirely)
+   - e.g. zenoh_image_view.py's own default topic, "d455_1_rgb_image", never
+   shows up in the admin routes but streams fine. It only finds topics that
+   are actively publishing during the scan.
 
 The two are merged by zenoh key expression; a topic is "supported" (can be
-streamed by this app) once either method confirms it decodes as a raw
-sensor_msgs/msg/Image.
+streamed by this app) once either method confirms it decodes as a raw or
+compressed sensor_msgs image.
 """
 
 import json
@@ -24,13 +25,12 @@ import time
 
 import zenoh
 
-from .image_decoder import decode_ros_image
+from .image_decoder import decode_ros_image_any
 
-# sensor_msgs/msg/Image (raw) is what image_decoder.decode_ros_image handles.
-# CompressedImage is reported too (so it shows up in a scan), but marked
-# unsupported since it needs a different decoder.
-SUPPORTED_ROS2_TYPES = {"sensor_msgs/msg/Image"}
-KNOWN_ROS2_IMAGE_TYPES = SUPPORTED_ROS2_TYPES | {"sensor_msgs/msg/CompressedImage"}
+# Both raw (Image) and compressed (CompressedImage) are decodable -
+# image_decoder.decode_ros_image_any tries one then the other.
+SUPPORTED_ROS2_TYPES = {"sensor_msgs/msg/Image", "sensor_msgs/msg/CompressedImage"}
+KNOWN_ROS2_IMAGE_TYPES = SUPPORTED_ROS2_TYPES
 
 
 def _open_session(host, port):
@@ -88,14 +88,14 @@ def _probe_live_keys(session, scan_time):
     topics = {}
     for key_expr, payload in samples.items():
         try:
-            _img, info = decode_ros_image(payload)
+            _img, info = decode_ros_image_any(payload)
         except Exception:
             continue
 
         topics[key_expr] = {
             "key_expr": key_expr,
             "name": key_expr,
-            "type": "sensor_msgs/msg/Image",
+            "type": info["ros2_type"],
             "supported": True,
             "width": info["width"],
             "height": info["height"],

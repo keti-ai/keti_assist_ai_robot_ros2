@@ -1,6 +1,7 @@
 """
-ROS2 CDR deserializer for sensor_msgs/msg/Image, adapted from
-keti_assist_ai_robot_ros2/exercise_python/zenoh_image_view.py.
+ROS2 CDR deserializer for sensor_msgs/msg/Image and sensor_msgs/msg/CompressedImage,
+adapted from keti_assist_ai_robot_ros2/exercise_python/zenoh_image_view.py and
+zenoh_compressed_image_view.py.
 """
 
 import struct
@@ -179,3 +180,61 @@ def decode_ros_image(payload):
         "frame_id": frame_id,
         "timestamp": sec + nanosec * 1e-9,
     }
+
+
+def decode_ros_compressed_image(payload):
+    """sensor_msgs/msg/CompressedImage: header + string format + uint8[] data.
+
+    `data` is already a complete JPEG/PNG byte stream, so cv2.imdecode detects
+    the format itself - no need to inspect the `format` field to decode.
+    """
+    r = CDRReader(payload)
+
+    # std_msgs/Header
+    sec = r.i32()
+    nanosec = r.u32()
+    frame_id = r.string()
+
+    # sensor_msgs/CompressedImage
+    fmt = r.string()
+    data = r.byte_array()
+
+    if len(data) == 0:
+        raise ValueError("Empty compressed image data")
+
+    img = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if img is None:
+        raise ValueError(f"Failed to decode compressed image (format={fmt!r})")
+
+    height, width = img.shape[:2]
+
+    return img, {
+        "width": width,
+        "height": height,
+        "encoding": fmt,
+        "frame_id": frame_id,
+        "timestamp": sec + nanosec * 1e-9,
+    }
+
+
+def decode_ros_image_any(payload):
+    """Try sensor_msgs/msg/Image first, then sensor_msgs/msg/CompressedImage.
+
+    The two layouts diverge right after the header (fixed-size height/width
+    vs. a length-prefixed `format` string), so a payload of one type reliably
+    fails to parse as the other instead of silently decoding into garbage -
+    verified against live /image_raw and /image_raw/compressed payloads.
+
+    `info["ros2_type"]` says which of the two matched.
+    """
+    try:
+        img, info = decode_ros_image(payload)
+        info["ros2_type"] = "sensor_msgs/msg/Image"
+        return img, info
+    except Exception as raw_error:
+        try:
+            img, info = decode_ros_compressed_image(payload)
+            info["ros2_type"] = "sensor_msgs/msg/CompressedImage"
+            return img, info
+        except Exception:
+            raise raw_error

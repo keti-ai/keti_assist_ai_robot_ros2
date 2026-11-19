@@ -11,7 +11,7 @@ import time
 
 import cv2
 
-from .image_decoder import decode_ros_image
+from .image_decoder import decode_ros_image_any
 
 
 class TopicStream:
@@ -79,7 +79,7 @@ class TopicStream:
                                 continue
 
                             try:
-                                img, _info = decode_ros_image(payload)
+                                img, _info = decode_ros_image_any(payload)
                             except Exception as e:
                                 self._last_error = str(e)
                                 continue
