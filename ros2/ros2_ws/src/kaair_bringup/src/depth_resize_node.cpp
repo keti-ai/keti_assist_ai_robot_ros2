@@ -81,21 +81,24 @@ public:
     enable_compressed_depth_ = this->declare_parameter<bool>(
       "enable_compressed_depth", true);
 
-    // RELIABLE QoS로 고정 (구독/발행 모두). 상대측(카메라 드라이버/구독자)의
-    // QoS 도 RELIABLE 이어야 실제로 연결된다.
-    auto qos = rclcpp::QoS(rclcpp::KeepLast(5)).reliable();
+    // 구독/발행 모두 BEST_EFFORT로 고정: femto 드라이버가 color/depth를
+    // SENSOR_DATA(best effort)로 발행하므로 맞춰야 연결되고, 하위에서 이
+    // 토픽을 구독하는 depth_pointcloud_publisher(_filter)/object_marker_server
+    // 쪽도 BEST_EFFORT로 맞춰서 바꾼다.
+    auto input_qos = rclcpp::QoS(rclcpp::KeepLast(5)).best_effort();
+    auto output_qos = rclcpp::QoS(rclcpp::KeepLast(5)).best_effort();
 
     // raw / compressedDepth 각각 별도 콜백 그룹 -> main()의 MultiThreadedExecutor
     // 에서 서로 다른 스레드로 처리된다.
     raw_cb_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
     // ---- raw 경로 ----
-    raw_pub_ = this->create_publisher<Image>(output_topic_, qos);
+    raw_pub_ = this->create_publisher<Image>(output_topic_, output_qos);
 
     rclcpp::SubscriptionOptions raw_sub_opts;
     raw_sub_opts.callback_group = raw_cb_group_;
     raw_sub_ = this->create_subscription<Image>(
-      input_topic_, qos,
+      input_topic_, input_qos,
       std::bind(&DepthResizeNode::rawImageCallback, this, std::placeholders::_1),
       raw_sub_opts);
 
@@ -107,12 +110,12 @@ public:
       compressed_cb_group_ =
         this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
-      compressed_pub_ = this->create_publisher<CompressedImage>(compressed_output_topic, qos);
+      compressed_pub_ = this->create_publisher<CompressedImage>(compressed_output_topic, output_qos);
 
       rclcpp::SubscriptionOptions compressed_sub_opts;
       compressed_sub_opts.callback_group = compressed_cb_group_;
       compressed_sub_ = this->create_subscription<CompressedImage>(
-        compressed_input_topic, qos,
+        compressed_input_topic, input_qos,
         std::bind(&DepthResizeNode::compressedDepthCallback, this, std::placeholders::_1),
         compressed_sub_opts);
     }

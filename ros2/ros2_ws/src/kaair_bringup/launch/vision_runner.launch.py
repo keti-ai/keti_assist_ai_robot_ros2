@@ -52,7 +52,7 @@ def generate_launch_description():
     # rs_launch.py가 지원하는 config_file 인자를 통해 파라미터 yaml을 그대로
     # 노드에 병합시켜 적용한다.
     hand_camera_qos_arg = DeclareLaunchArgument(
-        "hand_camera_qos", default_value="reliable",
+        "hand_camera_qos", default_value="best_effort",
         choices=["reliable", "best_effort"],
         description="핸드 카메라(realsense) color/depth 이미지 스트림 QoS. "
                      "best_effort면 SENSOR_DATA(best effort) 프로파일을, "
@@ -84,8 +84,10 @@ def generate_launch_description():
             'depth_registration': 'true',
             'enable_point_cloud': 'false',
             'enable_colored_point_cloud': 'false',
-            'color_qos': 'default',
-            'depth_qos': 'default',
+            'color_qos': 'SENSOR_DATA',
+            'depth_qos': 'SENSOR_DATA',
+            'color_camera_info_qos': 'SENSOR_DATA',
+            'depth_camera_info_qos': 'SENSOR_DATA',
             'point_cloud_qos': 'default',
             'publish_tf': 'false',
             'output': 'own_log',
@@ -151,6 +153,12 @@ def generate_launch_description():
             'publish_tf': 'false',
             'output': 'own_log',
             'config_file': hand_camera_config_file,
+            # D405는 별도 RGB 센서가 없어 컬러 스트림도 depth module에서 나온다
+            # (rgb_camera.color_profile은 D405에서 적용되지 않음. rs_launch.py
+            # 설명: "Depth module color stream profile for d405").
+            'rgb_camera.color_profile': '640,480,30',
+            'depth_module.color_profile': '640,480,30',
+            'depth_module.depth_profile': '640,480,30',
         }.items(),
         condition=IfCondition(use_hand_camera),
     )

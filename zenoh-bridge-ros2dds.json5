@@ -1,0 +1,23 @@
+////
+//// zenoh-bridge-ros2dds 설정. docker-compose.*.yml 의 zenoh-bridge-ros2dds 가
+//// 이 파일을 -c 옵션으로 읽어서 뜬다 (저장소 루트가 컨테이너 /workspace 로
+//// 마운트되므로 /workspace/zenoh-bridge-ros2dds.json5 경로로 넘긴다).
+////
+//// 전체 옵션 목록은 컨테이너 내부 기본 템플릿 참고:
+////   /etc/zenoh-bridge-ros2dds/conf.json5
+////
+{
+  plugins: {
+    ros2dds: {
+      ////
+      //// reliable_routes_blocking: true(기본값)면 RELIABLE DDS Writer의 publication을
+      //// zenoh로 라우팅할 때 CongestionControl::Block을 쓴다 - 구독자(zenoh_web_app 등)가
+      //// 못 따라가면 라우팅이 블록되고 그게 DDS Reader/Writer까지 거슬러 올라가 막히면서
+      //// 지연이 누적되고 회복되지 않는다 (rqt는 DDS를 직접 봐서 영향 없음).
+      //// false로 두면 BEST_EFFORT Writer와 동일하게 CongestionControl::Drop을 써서
+      //// 밀릴 때 오래된 프레임을 버리고 지연이 쌓이지 않게 한다.
+      ////
+      reliable_routes_blocking: true,
+    },
+  },
+}

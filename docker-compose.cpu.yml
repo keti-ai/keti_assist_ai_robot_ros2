@@ -51,4 +51,4 @@ services:
     tty: true        # docker run -t
     working_dir: /workspace
     command: >
-      bash -c "zenoh-bridge-ros2dds"
+      bash -c "zenoh-bridge-ros2dds -c /workspace/zenoh-bridge-ros2dds.json5"

@@ -247,19 +247,25 @@ def launch_setup(context, *args, **kwargs):
     # [추가] MoveIt Servo 관련 노드
     # ════════════════════════════════════════════════════════════════════════
 
-    # [F] servo_node_main (standalone)
+    # [F] servo_node (standalone)
     #   ComposableNodeContainer 대신 독립 프로세스로 실행.
     #   move_group 기동 후 시작해 planning scene monitor 를 secondary 로 attach.
     #   is_primary_planning_scene_monitor: false (servo config 에 설정됨).
+    #
+    #   실행 파일 이름이 배포판마다 다르다:
+    #     Humble (moveit_servo 2.5.x)  → servo_node_main
+    #     Jazzy  (moveit_servo 2.12.x) → servo_node
+    #   (파라미터/토픽/서비스 인터페이스는 두 배포판에서 동일하다.)
     #
     #   서비스:
     #     /servo_server/start_servo   → SERVO 모드 시작
     #     /servo_server/pause_servo   → 일시정지 (PLANNING 모드 복귀)
     #     /servo_server/unpause_servo → 일시정지에서 재개
     #     /servo_server/stop_servo    → 완전 중지 (재시작 불가)
+    servo_executable = 'servo_node_main' if os.environ.get('ROS_DISTRO') == 'humble' else 'servo_node'
     servo_node = Node(
         package='moveit_servo',
-        executable='servo_node_main',
+        executable=servo_executable,
         name='servo_server',
         output='screen',
         parameters=[

@@ -205,6 +205,9 @@ RUN if [ "$ROS_DISTRO" = "humble" ]; then \
 RUN (apt-get update || true) && apt install -y ros-$ROS_DISTRO-rmw-cyclonedds-cpp \
     && rm -rf /var/lib/apt/lists/*
 
+RUN (apt-get update || true) && apt install -y ros-$ROS_DISTRO-nav2-msgs \
+    && rm -rf /var/lib/apt/lists/*
+
 # zenoh-bridge-ros2dds 는 ROS/Ubuntu 기본 apt 소스에는 없고 Eclipse Zenoh가
 # 직접 운영하는 apt 저장소에만 있다("Unable to locate package" 는 이 저장소가
 # 등록되지 않아서 발생). arm64(Jetson)용 패키지도 같은 저장소에 함께 배포된다.

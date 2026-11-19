@@ -3,8 +3,7 @@ Panels:
     Help Height: 70
     Name: Displays
     Property Tree Widget:
-      Expanded:
-        - /Global Options1
+      Expanded: ~
       Splitter Ratio: 0.5
     Tree Height: 163
   - Class: rviz_common/Help
@@ -37,6 +36,8 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/TF
       Enabled: true
+      Filter (blacklist): ""
+      Filter (whitelist): ""
       Frame Timeout: 15
       Frames:
         All Enabled: true
@@ -48,11 +49,29 @@ Visualization Manager:
           Value: true
         camera_bottom_screw_frame:
           Value: true
+        camera_color_frame:
+          Value: true
+        camera_color_optical_frame:
+          Value: true
+        camera_depth_frame:
+          Value: true
+        camera_depth_optical_frame:
+          Value: true
+        camera_infra1_frame:
+          Value: true
+        camera_infra1_optical_frame:
+          Value: true
+        camera_infra2_frame:
+          Value: true
+        camera_infra2_optical_frame:
+          Value: true
         camera_link:
           Value: true
         camera_usb_plug_link:
           Value: true
         femto_base_link:
+          Value: true
+        femto_calib_link:
           Value: true
         femto_color_frame:
           Value: true
@@ -71,6 +90,8 @@ Visualization Manager:
         gripper_body_link:
           Value: true
         hand_base_link:
+          Value: true
+        hand_camera_calib_link:
           Value: true
         head_base:
           Value: true
@@ -128,6 +149,8 @@ Visualization Manager:
           Value: true
         tool_tcp_link:
           Value: true
+        tooltip_collision_link:
+          Value: true
         virtual_gripper_link:
           Value: true
         vision_frame_link:
@@ -162,17 +185,18 @@ Visualization Manager:
                       head_link2:
                         head_link3:
                           head_camera_mount:
-                            femto_base_link:
-                              femto_link:
-                                femto_depth_frame:
-                                  femto_color_frame:
-                                    femto_color_optical_frame:
+                            femto_calib_link:
+                              femto_base_link:
+                                femto_link:
+                                  femto_depth_frame:
+                                    femto_color_frame:
+                                      femto_color_optical_frame:
+                                        {}
+                                    femto_depth_optical_frame:
                                       {}
-                                  femto_depth_optical_frame:
-                                    {}
-                                  femto_ir_frame:
-                                    femto_ir_optical_frame:
-                                      {}
+                                    femto_ir_frame:
+                                      femto_ir_optical_frame:
+                                        {}
                   lift_link:
                     arm_base:
                       link_base:
@@ -192,13 +216,28 @@ Visualization Manager:
                                               {}
                                             tool_tcp_link:
                                               {}
+                                          tooltip_collision_link:
+                                            {}
                                           virtual_gripper_link:
                                             {}
                                           vision_frame_link:
-                                            camera_bottom_screw_frame:
-                                              camera_link:
-                                                camera_usb_plug_link:
-                                                  {}
+                                            hand_camera_calib_link:
+                                              camera_bottom_screw_frame:
+                                                camera_link:
+                                                  camera_color_frame:
+                                                    camera_color_optical_frame:
+                                                      {}
+                                                  camera_depth_frame:
+                                                    camera_depth_optical_frame:
+                                                      {}
+                                                  camera_infra1_frame:
+                                                    camera_infra1_optical_frame:
+                                                      {}
+                                                  camera_infra2_frame:
+                                                    camera_infra2_optical_frame:
+                                                      {}
+                                                  camera_usb_plug_link:
+                                                    {}
       Update Interval: 0
       Value: true
     - Acceleration_Scaling_Factor: 0.1
@@ -249,6 +288,38 @@ Visualization Manager:
             Alpha: 1
             Show Axes: false
             Show Trail: false
+          camera_color_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          camera_color_optical_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          camera_depth_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          camera_depth_optical_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          camera_infra1_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          camera_infra1_optical_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          camera_infra2_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          camera_infra2_optical_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
           camera_link:
             Alpha: 1
             Show Axes: false
@@ -264,6 +335,10 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
+          femto_calib_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
           femto_color_frame:
             Alpha: 1
             Show Axes: false
@@ -302,6 +377,10 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
+          hand_camera_calib_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
           head_base:
             Alpha: 1
             Show Axes: false
@@ -433,6 +512,11 @@ Visualization Manager:
             Alpha: 1
             Show Axes: false
             Show Trail: false
+          tooltip_collision_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           virtual_gripper_link:
             Alpha: 1
             Show Axes: false
@@ -505,6 +589,38 @@ Visualization Manager:
             Alpha: 1
             Show Axes: false
             Show Trail: false
+          camera_color_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          camera_color_optical_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          camera_depth_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          camera_depth_optical_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          camera_infra1_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          camera_infra1_optical_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          camera_infra2_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          camera_infra2_optical_frame:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
           camera_link:
             Alpha: 1
             Show Axes: false
@@ -520,6 +636,10 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
+          femto_calib_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
           femto_color_frame:
             Alpha: 1
             Show Axes: false
@@ -558,6 +678,10 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
+          hand_camera_calib_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
           head_base:
             Alpha: 1
             Show Axes: false
@@ -689,6 +813,11 @@ Visualization Manager:
             Alpha: 1
             Show Axes: false
             Show Trail: false
+          tooltip_collision_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           virtual_gripper_link:
             Alpha: 1
             Show Axes: false
@@ -703,16 +832,6 @@ Visualization Manager:
         Show Robot Visual: true
       Value: true
       Velocity_Scaling_Factor: 0.1
-    - Class: rviz_2d_overlay_plugins/TextOverlay
-      Enabled: true
-      Name: ServoStatus
-      Topic:
-        Depth: 1
-        Durability Policy: Transient Local
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /servo_mode/status_overlay
-      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -731,25 +850,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 3.0487866401672363
+      Distance: 10
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.39576661586761475
-        Y: -0.07442224025726318
-        Z: 0.47832930088043213
-      Focal Shape Fixed Size: true
+        X: 0
+        Y: 0
+        Z: 0
+      Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.6699998378753662
+      Pitch: 0.7853981852531433
       Target Frame: base_footprint
       Value: Orbit (rviz_default_plugins)
-      Yaw: 5.330188274383545
+      Yaw: 0.7853981852531433
     Saved:
       - Class: rviz_default_plugins/Orbit
         Distance: 3.0487866401672363
