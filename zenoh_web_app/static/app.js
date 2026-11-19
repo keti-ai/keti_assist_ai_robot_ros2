@@ -135,3 +135,139 @@ function closeTile(keyExpr) {
 
 // initial scan on load
 scanTopics();
+
+// Message tab: scan every topic, let the user check boxes to echo their
+// raw payloads live as text (useful for topics with no dedicated viewer).
+const echoScanBtn = document.getElementById("echo-scan-btn");
+const echoScanStatus = document.getElementById("echo-scan-status");
+const echoTopicList = document.getElementById("echo-topic-list");
+const echoGrid = document.getElementById("echo-grid");
+const openEchoTiles = new Map(); // key_expr -> { tile, textarea, ws }
+
+echoScanBtn.addEventListener("click", scanAllTopics);
+
+function scanAllTopics() {
+  echoScanStatus.textContent = "스캔 중...";
+  echoScanBtn.disabled = true;
+
+  fetch("/api/all_topics")
+    .then((r) => r.json())
+    .then((data) => {
+      if (!data.ok) {
+        echoScanStatus.textContent = "스캔 실패: " + data.error;
+        echoTopicList.innerHTML = "";
+        return;
+      }
+      renderEchoTopicList(data.topics);
+      echoScanStatus.textContent = `${data.topics.length}개 토픽 발견`;
+    })
+    .catch((e) => {
+      echoScanStatus.textContent = "스캔 실패: " + e;
+    })
+    .finally(() => {
+      echoScanBtn.disabled = false;
+    });
+}
+
+function renderEchoTopicList(topics) {
+  echoTopicList.innerHTML = "";
+
+  if (topics.length === 0) {
+    const li = document.createElement("li");
+    li.textContent = "토픽을 찾지 못했습니다. zenoh bridge가 실행 중인지 확인하세요.";
+    echoTopicList.appendChild(li);
+    return;
+  }
+
+  topics.forEach((topic) => {
+    const li = document.createElement("li");
+
+    const label = document.createElement("label");
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.dataset.key = topic.key_expr;
+    checkbox.checked = openEchoTiles.has(topic.key_expr);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) {
+        openEchoTile(topic);
+      } else {
+        closeEchoTile(topic.key_expr);
+      }
+    });
+
+    const text = document.createElement("span");
+    text.innerHTML = `${topic.name} <span class="topic-type">(${topic.type})</span>`;
+
+    label.appendChild(checkbox);
+    label.appendChild(text);
+    li.appendChild(label);
+    echoTopicList.appendChild(li);
+  });
+}
+
+function openEchoTile(topic) {
+  if (openEchoTiles.has(topic.key_expr)) return;
+
+  const tile = document.createElement("div");
+  tile.className = "tile echo-tile";
+
+  const header = document.createElement("div");
+  header.className = "tile-header";
+
+  const title = document.createElement("span");
+  title.textContent = topic.name;
+
+  const closeBtn = document.createElement("button");
+  closeBtn.textContent = "✕";
+  closeBtn.title = "닫기";
+  closeBtn.addEventListener("click", () => {
+    closeEchoTile(topic.key_expr);
+    const checkbox = echoTopicList.querySelector(`input[data-key="${topic.key_expr}"]`);
+    if (checkbox) checkbox.checked = false;
+  });
+
+  header.appendChild(title);
+  header.appendChild(closeBtn);
+
+  const textarea = document.createElement("textarea");
+  textarea.className = "echo-box";
+  textarea.readOnly = true;
+  textarea.placeholder = "메시지를 기다리는 중...";
+
+  tile.appendChild(header);
+  tile.appendChild(textarea);
+  echoGrid.appendChild(tile);
+
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const params = new URLSearchParams({ topic: topic.key_expr, type: topic.type });
+  const ws = new WebSocket(`${proto}://${location.host}/ws/topic_echo?${params}`);
+
+  ws.addEventListener("message", (ev) => {
+    const msg = JSON.parse(ev.data);
+    const time = new Date(msg.timestamp * 1000).toLocaleTimeString("ko-KR", { hour12: false });
+    const header = `[${time}] (${msg.size}B)`;
+    const block = msg.text.includes("\n") ? `${header}\n${msg.text}` : `${header} ${msg.text}`;
+    textarea.value += block + "\n\n";
+
+    const lines = textarea.value.split("\n");
+    if (lines.length > 400) {
+      textarea.value = lines.slice(lines.length - 400).join("\n");
+    }
+    textarea.scrollTop = textarea.scrollHeight;
+  });
+
+  ws.addEventListener("error", () => {
+    textarea.value += "[연결 오류]\n";
+  });
+
+  openEchoTiles.set(topic.key_expr, { tile, textarea, ws });
+}
+
+function closeEchoTile(keyExpr) {
+  const entry = openEchoTiles.get(keyExpr);
+  if (!entry) return;
+  entry.ws.close();
+  entry.tile.remove();
+  openEchoTiles.delete(keyExpr);
+}

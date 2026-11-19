@@ -146,3 +146,26 @@ button:hover {
   width: 100%;
   background: #000;
 }
+
+#echo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 12px;
+}
+
+.echo-box {
+  display: block;
+  width: 100%;
+  height: 220px;
+  resize: vertical;
+  box-sizing: border-box;
+  background: #000;
+  color: #9fe29f;
+  border: none;
+  padding: 8px 10px;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

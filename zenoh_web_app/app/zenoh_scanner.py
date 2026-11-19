@@ -104,6 +104,61 @@ def _probe_live_keys(session, scan_time):
     return topics
 
 
+def _scan_admin_routes_all(session, timeout):
+    topics = {}
+
+    for reply in session.get("@/*/ros2/route/topic/pub/**", timeout=timeout):
+        if reply.ok is None:
+            continue
+
+        try:
+            info = json.loads(bytes(reply.ok.payload.to_bytes()))
+        except ValueError:
+            continue
+
+        key_expr = info.get("zenoh_key_expr")
+        if not key_expr:
+            continue
+
+        topics[key_expr] = {
+            "key_expr": key_expr,
+            "name": info.get("ros2_name", key_expr),
+            "type": info.get("ros2_type", "unknown"),
+        }
+
+    return topics
+
+
+def _probe_live_keys_all(session, scan_time):
+    samples = set()
+    lock = threading.Lock()
+
+    def on_sample(sample):
+        with lock:
+            samples.add(str(sample.key_expr))
+
+    with session.declare_subscriber("**", on_sample):
+        time.sleep(scan_time)
+
+    return {key_expr: {"key_expr": key_expr, "name": key_expr, "type": "unknown"} for key_expr in samples}
+
+
+def scan_all_topics(host, port, admin_timeout=3.0, probe_time=2.0):
+    """Lists every topic the bridge knows about (admin route) or that is
+    actively publishing (live probe), with no type filtering - unlike
+    scan_image_topics, which only keeps image-decodable topics."""
+
+    with _open_session(host, port) as session:
+        admin_topics = _scan_admin_routes_all(session, admin_timeout)
+        probed_topics = _probe_live_keys_all(session, probe_time)
+
+    merged = dict(admin_topics)
+    for key_expr, probed in probed_topics.items():
+        merged.setdefault(key_expr, probed)
+
+    return sorted(merged.values(), key=lambda t: t["name"])
+
+
 def scan_image_topics(host, port, admin_timeout=3.0, probe_time=3.5):
     with _open_session(host, port) as session:
         admin_topics = _scan_admin_routes(session, admin_timeout)
