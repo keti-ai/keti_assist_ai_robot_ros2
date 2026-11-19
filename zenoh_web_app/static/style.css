@@ -1,0 +1,148 @@
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #111317;
+  color: #eee;
+  font-family: system-ui, sans-serif;
+}
+
+.tabbar {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  background: #1a1d23;
+  border-bottom: 1px solid #2a2e36;
+}
+
+.tab-btn {
+  background: transparent;
+  color: #aaa;
+  border: none;
+  padding: 10px 18px;
+  font-size: 15px;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+}
+
+.tab-btn.active {
+  background: #2a2e36;
+  color: #fff;
+}
+
+.tab {
+  display: none;
+  padding: 20px 24px;
+}
+
+.tab.active {
+  display: block;
+}
+
+#bridge-info {
+  background: #1a1d23;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+button {
+  background: #3b6fd9;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #4a7ee6;
+}
+
+#scan-status {
+  color: #999;
+  font-size: 13px;
+}
+
+#topic-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#topic-list li {
+  background: #1a1d23;
+  border: 1px solid #2a2e36;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+#topic-list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+#topic-list li.unsupported {
+  opacity: 0.5;
+}
+
+#topic-list li.unsupported label {
+  cursor: not-allowed;
+}
+
+.topic-type {
+  color: #888;
+  font-size: 12px;
+}
+
+#video-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 12px;
+}
+
+.tile {
+  background: #1a1d23;
+  border: 1px solid #2a2e36;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: #22262e;
+  font-size: 13px;
+}
+
+.tile-header button {
+  background: transparent;
+  color: #999;
+  padding: 2px 8px;
+  font-size: 16px;
+}
+
+.tile-header button:hover {
+  color: #fff;
+  background: transparent;
+}
+
+.tile img {
+  display: block;
+  width: 100%;
+  background: #000;
+}

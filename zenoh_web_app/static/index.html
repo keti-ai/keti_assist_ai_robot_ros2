@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zenoh Robot GUI</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <nav class="tabbar">
+    <button class="tab-btn active" data-tab="home">홈</button>
+    <button class="tab-btn" data-tab="video">영상</button>
+  </nav>
+
+  <section id="tab-home" class="tab active">
+    <h1>Zenoh Robot GUI</h1>
+    <p>Zenoh bridge: <code id="bridge-info">확인 중...</code></p>
+    <p>왼쪽 상단의 <b>영상</b> 탭에서 카메라 토픽을 스캔하고 선택하면 실시간 스트리밍을 볼 수 있습니다.</p>
+  </section>
+
+  <section id="tab-video" class="tab">
+    <div class="toolbar">
+      <button id="scan-btn">토픽 스캔</button>
+      <span id="scan-status"></span>
+    </div>
+    <ul id="topic-list"></ul>
+    <div id="video-grid"></div>
+  </section>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

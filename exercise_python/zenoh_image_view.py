@@ -177,7 +177,7 @@ def main():
 
     parser.add_argument(
         "--topic",
-        default="camera/color/image_raw",
+        default="d455_1_rgb_image",
         help="Zenoh key expression"
     )
 
